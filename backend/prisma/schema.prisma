@@ -58,24 +58,36 @@ enum BehaviorEventType {
 }
 
 model User {
-  id           Int                   @id @default(autoincrement())
-  studentId    String                @unique
-  name         String
-  email        String                @unique
-  passwordHash String
-  role         UserRole              @default(USER)
-  creditScore  Int                   @default(60)
-  isVerified   Boolean               @default(false)
-  isBanned     Boolean               @default(false)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  verification StudentVerification?
-  sentMessages Message[]
+  id                          Int                  @id @default(autoincrement())
+  studentId                   String               @unique
+  name                        String
+  email                       String               @unique
+  passwordHash                String
+  role                        UserRole             @default(USER)
+  creditScore                 Int                  @default(60)
+  isVerified                  Boolean              @default(false)
+  isBanned                    Boolean              @default(false)
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  verification                StudentVerification?
+  products                    Product[]            @relation("ProductSeller")
+  favorites                   Favorite[]
+  buyerOrders                 Order[]              @relation("OrderBuyer")
+  sellerOrders                Order[]              @relation("OrderSeller")
+  publishedCampusServiceTasks CampusServiceTask[]  @relation("CampusServicePublisher")
+  acceptedCampusServiceTasks  CampusServiceTask[]  @relation("CampusServiceAccepter")
+  reviews                     Review[]             @relation("ReviewReviewer")
+  sentMessages                Message[]
+  reportsFiled                Report[]             @relation("ReportReporter")
+  reportsTargeted             Report[]             @relation("ReportTargetUser")
+  reportsHandled              Report[]             @relation("ReportHandler")
+  auditLogs                   AuditLog[]           @relation("AuditLogActor")
+  behaviors                   UserBehavior[]
 }
 
 model StudentVerification {
   id        Int      @id @default(autoincrement())
-  userId     Int     @unique
+  userId    Int      @unique
   realName  String
   college   String
   phone     String
@@ -86,46 +98,72 @@ model StudentVerification {
 }
 
 model Product {
-  id          Int           @id @default(autoincrement())
-  sellerId     Int
-  title       String
-  description String
-  price       Decimal       @db.Decimal(10, 2)
-  category    String
-  condition   String
-  tags        String
-  status      ProductStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            Int            @id @default(autoincrement())
+  sellerId      Int
+  title         String
+  description   String
+  price         Decimal        @db.Decimal(10, 2)
+  category      String
+  condition     String
+  tags          String
+  status        ProductStatus  @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  seller        User           @relation("ProductSeller", fields: [sellerId], references: [id])
+  images        ProductImage[]
+  favorites     Favorite[]
+  orders        Order[]
+  conversations Conversation[]
+  reports       Report[]
+  behaviors     UserBehavior[]
+
+  @@index([sellerId])
+  @@index([status, createdAt])
+  @@index([category, status])
 }
 
 model ProductImage {
-  id        Int    @id @default(autoincrement())
-  productId  Int
+  id        Int     @id @default(autoincrement())
+  productId Int
   imageUrl  String
-  sortOrder Int    @default(0)
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([productId, sortOrder])
 }
 
 model Favorite {
   id        Int      @id @default(autoincrement())
-  userId     Int
-  productId  Int
+  userId    Int
+  productId Int
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 
   @@unique([userId, productId])
+  @@index([productId, createdAt])
 }
 
 model Order {
-  id             Int         @id @default(autoincrement())
-  productId       Int
-  buyerId         Int
-  sellerId        Int
-  status         OrderStatus @default(PENDING)
+  id             Int            @id @default(autoincrement())
+  productId      Int
+  buyerId        Int
+  sellerId       Int
+  status         OrderStatus    @default(PENDING)
   meetupLocation String?
   note           String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  product        Product        @relation(fields: [productId], references: [id])
+  buyer          User           @relation("OrderBuyer", fields: [buyerId], references: [id])
+  seller         User           @relation("OrderSeller", fields: [sellerId], references: [id])
   conversations  Conversation[]
+  reviews        Review[]
+
+  @@index([productId])
+  @@index([buyerId, status, updatedAt])
+  @@index([sellerId, status, updatedAt])
+  @@index([status, createdAt])
 }
 
 model CampusServiceTask {
@@ -143,52 +181,81 @@ model CampusServiceTask {
   status           CampusServiceStatus   @default(OPEN)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
+  publisher        User                  @relation("CampusServicePublisher", fields: [publisherId], references: [id])
+  accepter         User?                 @relation("CampusServiceAccepter", fields: [accepterId], references: [id])
   conversations    Conversation[]
+
+  @@index([publisherId, status, createdAt])
+  @@index([accepterId, status, updatedAt])
+  @@index([category, status, createdAt])
 }
 
 model Review {
   id         Int      @id @default(autoincrement())
-  orderId      Int
-  reviewerId   Int
+  orderId    Int
+  reviewerId Int
   rating     Int
   content    String
   createdAt  DateTime @default(now())
+  order      Order    @relation(fields: [orderId], references: [id])
+  reviewer   User     @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+
+  @@index([orderId])
+  @@index([reviewerId, createdAt])
 }
 
 model Conversation {
-  id           Int       @id @default(autoincrement())
-  orderId      Int?
-  productId    Int?
+  id                  Int                @id @default(autoincrement())
+  orderId             Int?
+  productId           Int?
   campusServiceTaskId Int?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  order        Order?    @relation(fields: [orderId], references: [id])
-  campusServiceTask CampusServiceTask? @relation(fields: [campusServiceTaskId], references: [id])
-  messages     Message[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  order               Order?             @relation(fields: [orderId], references: [id])
+  product             Product?           @relation(fields: [productId], references: [id])
+  campusServiceTask   CampusServiceTask? @relation(fields: [campusServiceTaskId], references: [id])
+  messages            Message[]
+
+  @@index([orderId, updatedAt])
+  @@index([productId, updatedAt])
+  @@index([campusServiceTaskId, updatedAt])
 }
 
 model Message {
-  id             Int           @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   conversationId Int
   senderId       Int
-  type           MessageType   @default(TEXT)
+  type           MessageType  @default(TEXT)
   content        String
-  createdAt      DateTime      @default(now())
-  conversation   Conversation  @relation(fields: [conversationId], references: [id])
-  sender         User          @relation(fields: [senderId], references: [id])
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
 }
 
 model Report {
-  id           Int      @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   reporterId     Int
   productId      Int?
   targetUserId   Int?
-  reason       String
-  status       String   @default("OPEN")
+  reason         String
+  status         String   @default("OPEN")
   resolutionNote String?
   handledBy      Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  reporter       User     @relation("ReportReporter", fields: [reporterId], references: [id])
+  product        Product? @relation(fields: [productId], references: [id])
+  targetUser     User?    @relation("ReportTargetUser", fields: [targetUserId], references: [id])
+  handler        User?    @relation("ReportHandler", fields: [handledBy], references: [id])
+
+  @@index([reporterId, createdAt])
+  @@index([productId, status])
+  @@index([targetUserId, status])
+  @@index([handledBy, status])
+  @@index([status, createdAt])
 }
 
 model AuditLog {
@@ -200,6 +267,10 @@ model AuditLog {
   targetId   Int
   detail     String
   createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditLogActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }
 
 model UserBehavior {
@@ -208,6 +279,8 @@ model UserBehavior {
   productId Int
   eventType BehaviorEventType
   createdAt DateTime          @default(now())
+  user      User              @relation(fields: [userId], references: [id])
+  product   Product           @relation(fields: [productId], references: [id])
 
   @@index([userId, createdAt])
   @@index([userId, productId, createdAt])

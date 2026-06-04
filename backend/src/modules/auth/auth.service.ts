@@ -1,9 +1,16 @@
-import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { compareSync, hashSync } from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+
+function isUniqueConstraintError(error: unknown): error is { code: string; meta?: { target?: string[] } } {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === 'P2002';
+}
 
 @Injectable()
 export class AuthService {
@@ -14,39 +21,56 @@ export class AuthService {
 
   async register(payload: RegisterDto) {
     const normalizedStudentId = payload.studentId?.trim() || `2026${String(Date.now()).slice(-6)}`;
+    const normalizedName = payload.name.trim();
+    const normalizedEmail = payload.email.trim().toLowerCase();
     const normalizedCollege = payload.college?.trim() || '待填写';
 
-    const user = await this.prisma.user.create({
-      data: {
-        studentId: normalizedStudentId,
-        name: payload.name,
-        email: payload.email,
-        passwordHash: hashSync(payload.password, 10),
-        role: UserRole.USER,
-        creditScore: 60,
-        isVerified: false,
-        verification: {
-          create: {
-            realName: payload.name,
-            college: normalizedCollege,
-            phone: '待填写',
-            status: 'PENDING'
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          studentId: normalizedStudentId,
+          name: normalizedName,
+          email: normalizedEmail,
+          passwordHash: hashSync(payload.password, 10),
+          role: UserRole.USER,
+          creditScore: 60,
+          isVerified: false,
+          verification: {
+            create: {
+              realName: normalizedName,
+              college: normalizedCollege,
+              phone: '待填写',
+              status: 'PENDING'
+            }
           }
         }
-      }
-    });
+      });
 
-    return {
-      message: '注册成功',
-      user: {
-        id: user.id,
-        studentId: user.studentId,
-        name: user.name,
-        email: user.email,
-        creditScore: user.creditScore,
-        verified: user.isVerified
+      return {
+        message: '注册成功',
+        user: {
+          id: user.id,
+          studentId: user.studentId,
+          name: user.name,
+          email: user.email,
+          creditScore: user.creditScore,
+          verified: user.isVerified
+        }
+      };
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const target = error.meta?.target ?? [];
+        if (target.includes('email')) {
+          throw new ConflictException('邮箱已被注册');
+        }
+        if (target.includes('studentId')) {
+          throw new ConflictException('学号已被注册');
+        }
+        throw new ConflictException('注册信息已存在');
       }
-    };
+
+      throw error;
+    }
   }
 
   async login(payload: LoginDto) {

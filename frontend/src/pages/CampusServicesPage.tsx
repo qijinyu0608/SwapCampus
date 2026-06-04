@@ -53,17 +53,26 @@ const serviceRules = [
 const TASK_PAGE_SIZE = 5;
 
 type CategoryFilter = CampusServiceCategory | 'ALL';
-type StatusFilter = CampusServiceStatus | 'ALL';
+type TaskOwnershipFilter = 'DISCOVER' | 'PUBLISHED' | 'ACCEPTED';
+type TaskStageFilter = CampusServiceStatus | 'ALL';
+
+const ownershipLabelMap: Record<TaskOwnershipFilter, string> = {
+  DISCOVER: '待我接单',
+  PUBLISHED: '我发布的',
+  ACCEPTED: '我已接单'
+};
 
 export function CampusServicesPage() {
   const navigate = useNavigate();
   const currentUser = getDemoUser();
+  const canManageOwnTasks = hasTradingAccess(currentUser);
   const [form] = Form.useForm();
   const [tasks, setTasks] = useState<CampusServiceTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('ALL');
-  const [activeStatus, setActiveStatus] = useState<StatusFilter>('OPEN');
+  const [activeOwnership, setActiveOwnership] = useState<TaskOwnershipFilter>('DISCOVER');
+  const [activeStage, setActiveStage] = useState<TaskStageFilter>('OPEN');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [taskPage, setTaskPage] = useState(1);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
@@ -86,37 +95,87 @@ export function CampusServicesPage() {
     void loadTasks();
   }, []);
 
-  const myPublishedCount = currentUser
+  const myPublishedCount = canManageOwnTasks && currentUser
     ? tasks.filter((task) => task.publisher.id === currentUser.id).length
     : 0;
-  const myAcceptedCount = currentUser
-    ? tasks.filter((task) => task.accepter?.id === currentUser.id && task.status === 'MATCHED').length
+  const myAcceptedCount = canManageOwnTasks && currentUser
+    ? tasks.filter((task) => task.accepter?.id === currentUser.id).length
     : 0;
+  const discoverOpenCount = tasks.filter((task) => task.status === 'OPEN' && task.publisher.id !== currentUser?.id).length;
   const hasPublishedTasks = myPublishedCount > 0;
+  const hasAcceptedTasks = myAcceptedCount > 0;
+
+  function taskMatchesOwnership(task: CampusServiceTask, ownership: TaskOwnershipFilter) {
+    const isOwner = currentUser?.id === task.publisher.id;
+    const isAcceptor = currentUser?.id === task.accepter?.id;
+
+    if (ownership === 'PUBLISHED') {
+      return Boolean(canManageOwnTasks && isOwner);
+    }
+
+    if (ownership === 'ACCEPTED') {
+      return Boolean(canManageOwnTasks && isAcceptor);
+    }
+
+    return task.status === 'OPEN' && !isOwner;
+  }
+
+  const ownershipFilterOptions = canManageOwnTasks
+    ? [
+        { value: 'DISCOVER', label: '待我接单' },
+        { value: 'PUBLISHED', label: '我发布的' },
+        { value: 'ACCEPTED', label: '我已接单' }
+      ]
+    : [
+        { value: 'DISCOVER', label: '待我接单' }
+      ];
+
+  const stageFilterOptions = activeOwnership === 'DISCOVER'
+    ? [
+        { value: 'OPEN', label: '待接单' }
+      ]
+    : activeOwnership === 'PUBLISHED'
+      ? [
+          { value: 'ALL', label: '全部状态' },
+          { value: 'OPEN', label: '待接单' },
+          { value: 'MATCHED', label: '已被接单' },
+          { value: 'DONE', label: '已完成' },
+          { value: 'CANCELED', label: '已取消' }
+        ]
+      : [
+          { value: 'ALL', label: '全部状态' },
+          { value: 'MATCHED', label: '进行中' },
+          { value: 'DONE', label: '已完成' },
+          { value: 'CANCELED', label: '已取消' }
+        ];
 
   useEffect(() => {
-    if (!hasPublishedTasks && activeStatus !== 'OPEN') {
-      setActiveStatus('OPEN');
+    if (!ownershipFilterOptions.some((item) => item.value === activeOwnership)) {
+      setActiveOwnership('DISCOVER');
     }
-  }, [activeStatus, hasPublishedTasks]);
+  }, [activeOwnership, ownershipFilterOptions]);
+
+  useEffect(() => {
+    if (!stageFilterOptions.some((item) => item.value === activeStage)) {
+      setActiveStage(activeOwnership === 'DISCOVER' ? 'OPEN' : 'ALL');
+    }
+  }, [activeOwnership, activeStage, stageFilterOptions]);
 
   useEffect(() => {
     setTaskPage(1);
     setExpandedTaskId(null);
-  }, [activeCategory, activeStatus, searchKeyword]);
+  }, [activeCategory, activeOwnership, activeStage, searchKeyword]);
 
   const visibleTasks = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
 
     return tasks.filter((task) => {
-      const isOwner = currentUser?.id === task.publisher.id;
-      const canSeeTask = task.status === 'OPEN' || isOwner;
-      if (!canSeeTask) {
+      if (!taskMatchesOwnership(task, activeOwnership)) {
         return false;
       }
 
       const matchesCategory = activeCategory === 'ALL' || task.category === activeCategory;
-      const matchesStatus = activeStatus === 'ALL' || task.status === activeStatus;
+      const matchesStage = activeStage === 'ALL' || task.status === activeStage;
       const matchesKeyword = !keyword || [
         task.title,
         task.description,
@@ -127,9 +186,9 @@ export function CampusServicesPage() {
         categoryLabelMap[task.category]
       ].filter(Boolean).join(' ').toLowerCase().includes(keyword);
 
-      return matchesCategory && matchesStatus && matchesKeyword;
+      return matchesCategory && matchesStage && matchesKeyword;
     });
-  }, [activeCategory, activeStatus, currentUser?.id, searchKeyword, tasks]);
+  }, [activeCategory, activeOwnership, activeStage, searchKeyword, tasks]);
 
   const pagedVisibleTasks = useMemo(() => {
     const maxPage = Math.max(1, Math.ceil(visibleTasks.length / TASK_PAGE_SIZE));
@@ -169,20 +228,11 @@ export function CampusServicesPage() {
 
   const compactOpenCount = tasks.filter((task) => task.status === 'OPEN').length;
   const hasOpenTasks = compactOpenCount > 0;
-  const shouldShowDiscovery = hasOpenTasks || hasPublishedTasks || Boolean(searchKeyword.trim()) || activeCategory !== 'ALL' || activeStatus !== 'OPEN';
+  const shouldShowDiscovery = hasOpenTasks || hasPublishedTasks || hasAcceptedTasks || Boolean(searchKeyword.trim()) || activeCategory !== 'ALL' || activeOwnership !== 'DISCOVER' || activeStage !== 'OPEN';
   const currentCategoryLabel = activeCategory === 'ALL' ? '全部类型' : moduleConfig.find((item) => item.key === activeCategory)?.title ?? '全部类型';
-  const statusFilterOptions = hasPublishedTasks
-    ? [
-        { value: 'ALL', label: '我发布 / 待接' },
-        { value: 'OPEN', label: '待接单' },
-        { value: 'MATCHED', label: '我发布的进行中' },
-        { value: 'DONE', label: '我发布的已完成' }
-      ]
-    : [
-        { value: 'OPEN', label: '待接单' }
-      ];
-  const currentStatusLabel = statusFilterOptions.find((item) => item.value === activeStatus)?.label
-    ?? (activeStatus === 'ALL' ? '我发布 / 待接' : statusLabelMap[activeStatus]);
+  const currentOwnershipLabel = ownershipLabelMap[activeOwnership];
+  const currentStageLabel = stageFilterOptions.find((item) => item.value === activeStage)?.label
+    ?? (activeStage === 'ALL' ? '全部状态' : statusLabelMap[activeStage]);
 
   async function handlePublish(values: {
     title: string;
@@ -213,8 +263,9 @@ export function CampusServicesPage() {
         ...values
       });
       await loadTasks();
+      setActiveOwnership('PUBLISHED');
       setActiveCategory(values.category);
-      setActiveStatus('OPEN');
+      setActiveStage('OPEN');
       setMessage({ type: 'success', text: `已发布“${values.title}”，现在其他同学可以直接接单。` });
       form.resetFields();
     } catch (error) {
@@ -286,7 +337,8 @@ export function CampusServicesPage() {
             type="primary"
             onClick={() => {
               if (hasOpenTasks) {
-                setActiveStatus('OPEN');
+                setActiveOwnership('DISCOVER');
+                setActiveStage('OPEN');
                 return;
               }
 
@@ -302,7 +354,8 @@ export function CampusServicesPage() {
             }
 
             setActiveCategory('ALL');
-            setActiveStatus('OPEN');
+            setActiveOwnership('DISCOVER');
+            setActiveStage('OPEN');
             setSearchKeyword('');
           }}>
             {hasOpenTasks ? '清空筛选' : '刷新列表'}
@@ -334,10 +387,9 @@ export function CampusServicesPage() {
                 </button>
                 {moduleConfig.map((item) => {
                   const total = tasks.filter((task) =>
-                    task.category === item.key &&
-                    (task.status === 'OPEN' || task.publisher.id === currentUser?.id)
+                    task.category === item.key && taskMatchesOwnership(task, activeOwnership)
                   ).length;
-                  const open = tasks.filter((task) => task.category === item.key && task.status === 'OPEN').length;
+                  const open = tasks.filter((task) => task.category === item.key && task.status === 'OPEN' && task.publisher.id !== currentUser?.id).length;
                   const isActive = activeCategory === item.key;
 
                   return (
@@ -351,7 +403,7 @@ export function CampusServicesPage() {
                         <strong>{item.title}</strong>
                         <span>{item.subtitle}</span>
                       </div>
-                      <em>{hasPublishedTasks ? `待接 ${open} · 可见 ${total}` : `待接 ${open}`}</em>
+                      <em>{activeOwnership === 'DISCOVER' ? `待接 ${open}` : `${currentOwnershipLabel} ${total}`}</em>
                     </button>
                   );
                 })}
@@ -391,7 +443,7 @@ export function CampusServicesPage() {
               <FoldSection title="发布委托" meta={hasOpenTasks ? '展开填写任务' : '可以先发布一个需求'} defaultOpen={!shouldShowDiscovery} compact>
               <div className="service-compose-head">
                 <strong>发布跑腿服务</strong>
-                <span>{currentUser ? `我发布 ${myPublishedCount} 条 · 我在接 ${myAcceptedCount} 条` : '登录后可发布和接单'}</span>
+                <span>{currentUser ? `我发布 ${myPublishedCount} 条 · 我已接 ${myAcceptedCount} 条` : '登录后可发布和接单'}</span>
               </div>
               <Form form={form} layout="vertical" onFinish={handlePublish} className="form-shell service-publish-form">
                 <div className="service-publish-grid">
@@ -472,7 +524,7 @@ export function CampusServicesPage() {
           <div className="service-list-head">
             <div>
               <strong>服务委托</strong>
-              <span>{`${currentStatusLabel} · ${currentCategoryLabel}`}</span>
+              <span>{`${currentOwnershipLabel} · ${currentStageLabel} · ${currentCategoryLabel}`}</span>
             </div>
             <button
               type="button"
@@ -483,9 +535,11 @@ export function CampusServicesPage() {
             </button>
           </div>
           <div className="service-compact-strip">
-            <span>{`待接 ${compactOpenCount}`}</span>
+            <span>{`待我接 ${discoverOpenCount}`}</span>
+            <span>{`我发布 ${myPublishedCount}`}</span>
+            <span>{`我已接 ${myAcceptedCount}`}</span>
             <span>{`平均 ${stats.avgMinutes} 分钟`}</span>
-            {hasPublishedTasks ? <span>含我发布的进度</span> : <span>仅显示待接任务</span>}
+            <span>{activeOwnership === 'DISCOVER' ? '只看别人发布的待接任务' : activeOwnership === 'PUBLISHED' ? '只看我发布的任务进度' : '只看我接下的任务'}</span>
           </div>
           <Input
             value={searchKeyword}
@@ -493,12 +547,17 @@ export function CampusServicesPage() {
             placeholder="搜索地点、任务、发布者"
             className="service-primary-search"
           />
-          <FoldSection title="筛选" meta={`${currentStatusLabel} / ${currentCategoryLabel}`} compact>
+          <FoldSection title="筛选" meta={`${currentOwnershipLabel} / ${currentStageLabel} / ${currentCategoryLabel}`} compact>
             <div className="service-filter-bar">
               <Select
-                value={activeStatus}
-                onChange={(value) => setActiveStatus(value)}
-                options={statusFilterOptions}
+                value={activeOwnership}
+                onChange={(value) => setActiveOwnership(value)}
+                options={ownershipFilterOptions}
+              />
+              <Select
+                value={activeStage}
+                onChange={(value) => setActiveStage(value)}
+                options={stageFilterOptions}
               />
               <Select
                 value={activeCategory}
@@ -513,7 +572,8 @@ export function CampusServicesPage() {
               />
               <Button onClick={() => {
                 setActiveCategory('ALL');
-                setActiveStatus('OPEN');
+                setActiveOwnership('DISCOVER');
+                setActiveStage('OPEN');
                 setSearchKeyword('');
               }}>重置</Button>
             </div>
