@@ -5,6 +5,7 @@ type ProductSummaryCardProps = {
   item: ProductSummary;
   imageSrc: string;
   signal?: ReactNode;
+  coverActions?: ReactNode;
   secondaryMeta?: ReactNode;
   tertiaryMeta?: ReactNode;
   passiveMeta?: ReactNode;
@@ -16,6 +17,7 @@ export function ProductSummaryCard({
   item,
   imageSrc,
   signal,
+  coverActions,
   secondaryMeta,
   tertiaryMeta,
   passiveMeta,
@@ -41,6 +43,7 @@ export function ProductSummaryCard({
       <div className={item.imageUrl ? 'fish-item-cover has-image' : 'fish-item-cover'}>
         <img className="fish-item-cover-image" src={imageSrc} alt={item.title} />
         {signal ? <span className="fish-item-signal">{signal}</span> : null}
+        {coverActions}
       </div>
       <div className="fish-item-body">
         <h3>{item.title}</h3>

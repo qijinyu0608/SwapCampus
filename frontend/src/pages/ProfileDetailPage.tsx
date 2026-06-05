@@ -2,6 +2,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Button, Empty, Skeleton, Tag } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { EmptyState } from '../components/feedback/EmptyState';
 import {
   fetchUserProfile,
   fetchUserTrustSummary,
@@ -54,9 +55,10 @@ export function ProfileDetailPage() {
   if (!hasTradingAccess(user)) {
     return (
       <div className="page-grid profile-page">
-        <div className="profile-empty-shell">
-          <Empty description={isGuestUser(user) ? '游客模式下暂不支持个人资料详情' : '请使用普通用户账号查看个人资料'} />
-        </div>
+        <EmptyState
+          className="profile-empty-shell"
+          title={isGuestUser(user) ? '游客模式下暂不支持个人资料详情' : '请使用普通用户账号查看个人资料'}
+        />
       </div>
     );
   }
@@ -74,9 +76,7 @@ export function ProfileDetailPage() {
   if (!profile) {
     return (
       <div className="page-grid profile-page">
-        <div className="profile-empty-shell">
-          <Empty description={errorMessage || '个人资料不存在'} />
-        </div>
+        <EmptyState className="profile-empty-shell" title={errorMessage || '个人资料不存在'} />
       </div>
     );
   }
