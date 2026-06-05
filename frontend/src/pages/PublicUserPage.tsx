@@ -1,8 +1,10 @@
-import { Empty, Skeleton } from 'antd';
+import { Skeleton } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SectionHeader } from '../components/layout/SectionHeader';
+import { ProductGrid } from '../components/product/ProductGrid';
 import { ProductSummaryCard } from '../components/product/ProductSummaryCard';
 import { SectionCard } from '../components/ui/SectionCard';
 import {
@@ -112,30 +114,24 @@ export function PublicUserPage() {
       </section>
 
       <SectionCard className="profile-content-panel">
-        <div className="profile-section-header">
-          <div>
-            <strong>正在出售</strong>
-            <span>{`${publishedProducts.length} 件校内闲置`}</span>
-          </div>
-        </div>
-        {publishedProducts.length ? (
-          <div className="profile-fish-grid public-user-products">
-            {publishedProducts.map((item, index) => (
-              <ProductSummaryCard
-                key={item.id}
-                className="profile-fish-card"
-                item={item}
-                imageSrc={getProductImage(item, index)}
-                signal={`${item.category} · ${item.condition}`}
-                secondaryMeta="同校面交"
-                tertiaryMeta={<span>{item.sellerName}</span>}
-                onOpen={() => navigate(`/products/${item.id}`)}
-              />
-            ))}
-          </div>
-        ) : (
-          <Empty description="这个同学暂时没有在售闲置" />
-        )}
+        <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="profile-section-header" />
+        <ProductGrid
+          items={publishedProducts}
+          className="public-user-products"
+          emptyState={<EmptyState title="这个同学暂时没有在售闲置" />}
+          renderItem={(item, index) => (
+            <ProductSummaryCard
+              key={item.id}
+              className="profile-fish-card"
+              item={item}
+              imageSrc={getProductImage(item, index)}
+              signal={`${item.category} · ${item.condition}`}
+              secondaryMeta="同校面交"
+              tertiaryMeta={<span>{item.sellerName}</span>}
+              onOpen={() => navigate(`/products/${item.id}`)}
+            />
+          )}
+        />
       </SectionCard>
     </div>
   );

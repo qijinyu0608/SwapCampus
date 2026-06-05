@@ -67,6 +67,29 @@
   font-size: 12px;
 }
 
+.ui-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ui-section-header-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.ui-section-header-copy strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.ui-section-header-copy span,
+.ui-section-header-aside {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .ui-empty-panel {
   display: grid;
   gap: 8px;
