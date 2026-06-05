@@ -1,0 +1,489 @@
+@media (max-width: 1200px) {
+  .fish-market-layout {
+    grid-template-columns: 154px minmax(0, 1fr);
+  }
+
+  .fish-feed-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .fish-activity-hero-card {
+    grid-template-columns: minmax(0, 1fr) 252px;
+  }
+
+  .fish-activity-card {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-activity-card-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fish-activity-card-copy strong {
+    font-size: 16px;
+  }
+
+  .fish-activity-product strong,
+  .fish-activity-mini-product strong {
+    font-size: 16px;
+  }
+
+  .detail-lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .two-col,
+  .publish-layout,
+  .message-layout,
+  .login-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-head-strip,
+  .message-strip,
+  .profile-strip,
+  .admin-summary-strip,
+  .profile-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-user-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-college-filter {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .app-header-inner,
+  .app-content {
+    width: min(100vw - 20px, 100%);
+  }
+
+  .app-header-inner {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 12px 0;
+  }
+
+  .nav-pills {
+    order: 2;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .fish-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .page-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .page-topbar-tags {
+    justify-content: flex-start;
+  }
+
+  .fish-feed-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fish-market-layout {
+    grid-template-columns: 136px minmax(0, 1fr);
+  }
+
+  .fish-market-category-head {
+    margin-top: 2px;
+  }
+
+  .fish-category-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 4px;
+    padding: 7px 7px;
+  }
+
+  .fish-category-badge {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+  }
+
+  .fish-category-copy strong {
+    font-size: 10px;
+  }
+
+  .fish-activity-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .fish-activity-hero-card {
+    grid-template-columns: minmax(0, 1fr) 148px;
+  }
+
+  .fish-activity-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, auto);
+    height: auto;
+  }
+
+  .fish-activity-card {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+
+  .fish-activity-hero-copy strong {
+    font-size: 22px;
+  }
+
+  .fish-activity-hero-copy p {
+    max-width: none;
+  }
+
+  .fish-activity-card-items {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-activity-product-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fish-activity-product-stack {
+    display: grid;
+  }
+
+  .fish-filter-row {
+    align-items: flex-start;
+  }
+
+  .detail-feed-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fish-utility-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fish-banner-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-banner-teasers {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-shortcuts,
+  .three-col,
+  .detail-info-grid,
+  .detail-signal-list,
+  .detail-trade-signal-list {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-head-strip,
+  .message-strip,
+  .profile-strip,
+  .profile-overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .profile-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-form-grid,
+  .profile-kv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-mini-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .trust-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .fish-market-layout {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+
+  .fish-category-row {
+    grid-template-columns: 18px minmax(0, 1fr);
+    padding: 7px 6px;
+  }
+
+  .fish-category-badge {
+    width: 14px;
+    height: 14px;
+    font-size: 7px;
+  }
+
+  .fish-category-copy strong {
+    font-size: 9px;
+  }
+
+  .fish-market-category-head strong {
+    font-size: 12px;
+  }
+
+  .fish-activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-activity-hero-card {
+    grid-template-columns: 1fr;
+    min-height: 188px;
+  }
+
+  .fish-activity-card {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-activity-card-copy {
+    align-content: start;
+  }
+
+  .fish-activity-card-items {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 500px) {
+  .fish-market-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-market-activity {
+    order: 1;
+    min-height: auto;
+  }
+
+  .fish-market-category-block {
+    order: 2;
+    min-height: auto;
+  }
+
+  .fish-activity-grid,
+  .fish-activity-card-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .fish-activity-hero-card,
+  .fish-activity-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .detail-main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-bottom-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-thumb-column {
+    grid-auto-flow: column;
+    grid-auto-columns: 96px;
+    max-height: none;
+    overflow-y: visible;
+    overflow-x: auto;
+    padding-right: 0;
+    padding-bottom: 2px;
+  }
+
+  .detail-thumb {
+    width: 96px;
+    height: 96px;
+  }
+
+  .detail-main-photo-shell {
+    min-height: 540px;
+  }
+
+  .detail-main-photo {
+    height: min(72vh, 720px);
+  }
+}
+
+@media (max-width: 640px) {
+  .brand-title {
+    font-size: 26px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-sell-button {
+    width: 100%;
+  }
+
+  .app-content {
+    padding: 14px 0 36px;
+  }
+
+  .page-topbar-copy h1 {
+    font-size: 24px;
+  }
+
+  .fish-search-shell {
+    padding: 12px;
+    border-radius: 4px;
+  }
+
+  .fish-feed-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fish-activity-card-items,
+  .fish-activity-product-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-main-layout,
+  .detail-bottom-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-head-strip,
+  .message-strip,
+  .profile-strip,
+  .admin-summary-strip,
+  .profile-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-alert,
+  .admin-state-line,
+  .admin-empty-state {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-user-alert span {
+    text-align: left;
+  }
+
+  .admin-user-governance-head,
+  .admin-user-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-college-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .fish-banner-card {
+    min-height: 178px;
+  }
+
+  .hero-panel {
+    padding: 18px 16px;
+    border-radius: 4px;
+  }
+
+  .detail-main-photo-shell {
+    min-height: 360px;
+    border-radius: 18px;
+  }
+
+  .detail-main-photo {
+    height: 360px;
+  }
+
+  .detail-thumb-column {
+    grid-auto-flow: column;
+    grid-auto-columns: 72px;
+    max-height: none;
+    overflow-y: visible;
+    overflow-x: auto;
+    padding-right: 0;
+    padding-bottom: 2px;
+  }
+
+  .detail-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+  }
+
+  .detail-feed-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-price-line strong {
+    font-size: 32px;
+  }
+
+  .detail-price-line span,
+  .detail-bottom-line,
+  .detail-quiet-action,
+  .detail-seller-strip-meta,
+  .detail-description-block p {
+    font-size: 13px;
+  }
+
+  .detail-card {
+    padding: 14px;
+  }
+
+  .detail-main-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-info-head,
+  .detail-seller-strip,
+  .ui-split-list-row,
+  .message-compose-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .detail-main-title {
+    font-size: 20px;
+  }
+
+  .ui-admin-entity,
+  .admin-user-head,
+  .admin-user-foot {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .ui-admin-entity-side {
+    justify-items: start;
+  }
+
+  .ui-admin-entity-actions {
+    justify-content: flex-start;
+  }
+
+  .ui-split-list-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

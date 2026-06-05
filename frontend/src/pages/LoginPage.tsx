@@ -2,9 +2,7 @@ import { Alert, Button, Form, Input } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginUser, registerUser } from '../services/api';
-import { createAdminDemoUser, saveDemoUser } from '../services/session';
-
-const HIDDEN_ADMIN_ENTRY_PASSWORD = 'SwapCampusAdmin2026';
+import { saveSession } from '../services/session';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -22,7 +20,10 @@ export function LoginPage() {
     setLoading(true);
     try {
       const result = await registerUser(values);
-      saveDemoUser(result.user);
+      saveSession({
+        accessToken: result.accessToken,
+        user: result.user
+      });
       setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.name}` });
       void navigate('/');
     } catch (error: any) {
@@ -38,19 +39,13 @@ export function LoginPage() {
   async function handleLogin(values: { account: string; password: string }) {
     setLoading(true);
     try {
-      if (values.password === HIDDEN_ADMIN_ENTRY_PASSWORD) {
-        saveDemoUser(createAdminDemoUser());
-        setMessage({ type: 'success', text: '已进入管理后台' });
-        void navigate('/admin');
-        return;
-      }
-
       const result = await loginUser(values);
-      if (result.user) {
-        saveDemoUser(result.user);
-      }
+      saveSession({
+        accessToken: result.accessToken,
+        user: result.user
+      });
       setMessage({ type: 'success', text: result.message ?? '登录成功' });
-      void navigate('/');
+      void navigate(result.user.role === 'ADMIN' ? '/admin' : '/');
     } catch (error: any) {
       setMessage({
         type: 'error',

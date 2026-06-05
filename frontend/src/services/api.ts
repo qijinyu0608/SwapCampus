@@ -1,8 +1,30 @@
 import axios from 'axios';
+import { clearDemoUser, getAccessToken } from './session';
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
 });
+
+apiClient.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearDemoUser();
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export function getApiErrorMessage(error: unknown, fallback: string) {
   const maybeMessage = typeof error === 'object' && error && 'response' in error
@@ -35,6 +57,9 @@ export type ProductSummary = {
   recommendationReason?: string;
   imageUrl?: string;
   sellerId?: number;
+  favoriteCount?: number;
+  isFavorited?: boolean;
+  favoritedAt?: string | null;
 };
 
 export type ProductDetail = ProductSummary & {
@@ -66,6 +91,24 @@ export type ProductDetail = ProductSummary & {
   relatedProducts: ProductSummary[];
 };
 
+export type FavoriteItem = ProductSummary & {
+  favoritedAt: string;
+  favoriteCount: number;
+  isFavorited: true;
+};
+
+export type FavoriteListResponse = {
+  items: FavoriteItem[];
+  total: number;
+};
+
+export type FavoriteMutationResponse = {
+  productId: number;
+  isFavorited: boolean;
+  favoritedAt?: string;
+  favoriteCount: number;
+};
+
 export type DashboardStats = {
   userCount: number;
   productCount: number;
@@ -86,8 +129,25 @@ export type LoginPayload = {
   password: string;
 };
 
+export type AuthUser = {
+  id: number;
+  studentId: string;
+  name: string;
+  email: string;
+  role: 'USER' | 'ADMIN';
+  creditScore?: number;
+  verified?: boolean;
+};
+
+export type AuthSessionResponse = {
+  message: string;
+  accessToken: string;
+  expiresIn: string;
+  account?: string;
+  user: AuthUser;
+};
+
 export type ProductCreatePayload = {
-  sellerId: number;
   title: string;
   description: string;
   price: number;
@@ -98,7 +158,6 @@ export type ProductCreatePayload = {
 
 export type OrderPayload = {
   productId: number;
-  buyerId: number;
   meetupLocation?: string;
   note?: string;
 };
@@ -194,13 +253,11 @@ export type ConversationMessage = {
 };
 
 export type SendMessagePayload = {
-  senderId: number;
   content: string;
 };
 
 export type CreateConversationPayload = {
   productId: number;
-  buyerId: number;
   initialMessage?: string;
 };
 
@@ -258,7 +315,6 @@ export type CampusServiceTask = {
 };
 
 export type CampusServiceCreatePayload = {
-  publisherId: number;
   title: string;
   category: CampusServiceCategory;
   description: string;
@@ -452,6 +508,21 @@ export async function fetchProductDetail(id: number, userId?: number) {
   return response.data;
 }
 
+export async function fetchFavoriteList() {
+  const response = await apiClient.get<FavoriteListResponse>('/favorites');
+  return response.data;
+}
+
+export async function addFavorite(productId: number) {
+  const response = await apiClient.post<FavoriteMutationResponse>(`/favorites/${productId}`);
+  return response.data;
+}
+
+export async function removeFavorite(productId: number) {
+  const response = await apiClient.delete<FavoriteMutationResponse>(`/favorites/${productId}`);
+  return response.data;
+}
+
 export async function fetchPublishingRules() {
   const response = await apiClient.get<PublishingRules>('/products/publishing-rules');
   return response.data;
@@ -463,12 +534,17 @@ export async function fetchDashboardStats() {
 }
 
 export async function registerUser(payload: RegisterPayload) {
-  const response = await apiClient.post('/auth/register', payload);
+  const response = await apiClient.post<AuthSessionResponse>('/auth/register', payload);
   return response.data;
 }
 
 export async function loginUser(payload: LoginPayload) {
-  const response = await apiClient.post('/auth/login', payload);
+  const response = await apiClient.post<AuthSessionResponse>('/auth/login', payload);
+  return response.data;
+}
+
+export async function fetchCurrentSession() {
+  const response = await apiClient.get<{ user: AuthUser }>('/auth/me');
   return response.data;
 }
 
@@ -492,7 +568,6 @@ export async function createOrder(payload: OrderPayload) {
 export async function confirmOrderMeetup(
   id: number,
   payload: {
-    userId: number;
     meetupLocation?: string;
     note?: string;
   }
@@ -504,7 +579,6 @@ export async function confirmOrderMeetup(
 export async function cancelOrder(
   id: number,
   payload: {
-    userId: number;
     reason?: string;
   }
 ) {
@@ -512,7 +586,8 @@ export async function cancelOrder(
   return response.data;
 }
 
-export async function completeOrderMeetup(id: number, payload: { userId: number }) {
+export async function completeOrderMeetup(id: number) {
+  const payload = {};
   const response = await apiClient.patch<OrderItem>(`/orders/${id}/complete`, payload);
   return response.data;
 }
@@ -520,7 +595,6 @@ export async function completeOrderMeetup(id: number, payload: { userId: number 
 export async function createOrderReview(
   id: number,
   payload: {
-    reviewerId: number;
     rating: number;
     content?: string;
   }
@@ -529,10 +603,8 @@ export async function createOrderReview(
   return response.data;
 }
 
-export async function fetchConversations(userId?: number) {
-  const response = await apiClient.get<ConversationSummary[]>('/messages/conversations', {
-    params: userId ? { userId } : undefined
-  });
+export async function fetchConversations() {
+  const response = await apiClient.get<ConversationSummary[]>('/messages/conversations');
   return response.data;
 }
 
@@ -552,10 +624,8 @@ export async function hydrateMessageDemos(payload: MessageDemoHydratePayload) {
   return response.data;
 }
 
-export async function fetchConversationMessages(id: number, userId?: number) {
-  const response = await apiClient.get<ConversationMessage[]>(`/messages/conversations/${id}`, {
-    params: userId ? { userId } : undefined
-  });
+export async function fetchConversationMessages(id: number) {
+  const response = await apiClient.get<ConversationMessage[]>(`/messages/conversations/${id}`);
   return response.data;
 }
 
@@ -573,7 +643,6 @@ export async function updateAdminProductStatus(
   id: number,
   status: 'ON_SALE' | 'OFFLINE',
   payload?: {
-    handledBy?: number;
     reason?: string;
   }
 ) {
@@ -593,7 +662,6 @@ export async function updateAdminOrderStatus(
   id: number,
   payload: {
     status: 'PENDING' | 'IN_PROGRESS' | 'WAITING_REVIEW' | 'COMPLETED' | 'CANCELED';
-    handledBy?: number;
     reason?: string;
   }
 ) {
@@ -610,7 +678,6 @@ export async function updateAdminCampusServiceStatus(
   id: number,
   payload: {
     status: CampusServiceStatus;
-    handledBy?: number;
     reason?: string;
   }
 ) {
@@ -656,7 +723,6 @@ export async function updateUserBanStatus(
   id: number,
   payload: {
     banned: boolean;
-    handledBy?: number;
     reason?: string;
   }
 ) {
@@ -665,7 +731,6 @@ export async function updateUserBanStatus(
 }
 
 export async function createReport(payload: {
-  reporterId: number;
   productId?: number;
   targetUserId?: number;
   reason: string;
@@ -680,7 +745,6 @@ export async function fetchReports() {
 }
 
 export async function resolveReport(id: number, payload: {
-  handledBy: number;
   resolutionNote: string;
   nextStatus: 'RESOLVED' | 'REJECTED' | 'OFFLINE_PRODUCT' | 'BAN_USER' | 'UNBAN_USER';
 }) {
@@ -694,7 +758,6 @@ export async function fetchAuditLogs() {
 }
 
 export async function recordRecommendationBehavior(payload: {
-  userId: number;
   productId: number;
   eventType: BehaviorEventType;
 }) {
@@ -717,16 +780,14 @@ export async function createCampusServiceTask(payload: CampusServiceCreatePayloa
 }
 
 export async function acceptCampusServiceTask(taskId: number, payload: {
-  userId: number;
   initialMessage?: string;
 }) {
   const response = await apiClient.post<CampusServiceTask>(`/campus-services/${taskId}/accept`, payload);
   return response.data;
 }
 
-export async function completeCampusServiceTask(taskId: number, payload: {
-  userId: number;
-}) {
+export async function completeCampusServiceTask(taskId: number) {
+  const payload = {};
   const response = await apiClient.post<CampusServiceTask>(`/campus-services/${taskId}/complete`, payload);
   return response.data;
 }

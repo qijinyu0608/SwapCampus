@@ -1,6 +1,9 @@
 import { Button, Form, Input, Modal, Radio, Select, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { KeyValueGrid, MetaList } from '../components/data-display';
+import { SectionHeader } from '../components/layout';
+import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { getBjfuMeetupLabel } from '../constants/campus';
 import {
   createConversation,
@@ -146,13 +149,11 @@ export function ProductDetailPage() {
     setSubmitting('chat');
     try {
       await recordRecommendationBehavior({
-        userId: activeUser.id,
         productId: detail.id,
         eventType: 'CONTACT'
       });
       const conversation = await createConversation({
         productId: detail.id,
-        buyerId: activeUser.id,
         initialMessage: `你好，我对“${detail.title}”感兴趣，还在吗？`
       });
       message.success(conversation.reused ? '已打开原会话' : '已发起新会话');
@@ -180,13 +181,11 @@ export function ProductDetailPage() {
     setSubmitting('order');
     try {
       await recordRecommendationBehavior({
-        userId: activeUser.id,
         productId: detail.id,
         eventType: 'ORDER'
       });
       await createOrder({
         productId: detail.id,
-        buyerId: activeUser.id,
         meetupLocation: getBjfuMeetupLabel(detail.id),
         note: `想约“${detail.title}”当面交易`
       });
@@ -250,7 +249,6 @@ export function ProductDetailPage() {
     setSubmitting('report');
     try {
       await createReport({
-        reporterId: activeUser.id,
         productId: detail.id,
         targetUserId: detail.seller.id,
         reason: buildReportReason(values)
@@ -265,12 +263,12 @@ export function ProductDetailPage() {
     }
   }
 
-  function handleToggleFavorite() {
+  async function handleToggleFavorite() {
     if (!detail) {
       return;
     }
 
-    const nextState = toggleFavorite(detail.id, currentUser);
+    const nextState = await toggleFavorite(detail.id, currentUser);
     syncFavoriteSignal(detail, nextState, currentUser);
     setFavoriteVersion((value) => value + 1);
     message.success(nextState ? '已加入想要' : '已取消想要');
@@ -342,14 +340,7 @@ export function ProductDetailPage() {
               <strong>{detail.seller.name}</strong>
               <span>{sellerIdentity}</span>
             </div>
-            <div className="detail-seller-strip-meta">
-              {sellerStats.map((item, index) => (
-                <span key={item}>
-                  {item}
-                  {index < sellerStats.length - 1 ? <i /> : null}
-                </span>
-              ))}
-            </div>
+            <MetaList items={sellerStats} className="detail-seller-strip-meta" />
           </div>
         </Link>
         <div className="detail-seller-strip-badge">校园号</div>
@@ -411,14 +402,11 @@ export function ProductDetailPage() {
               ) : null}
             </div>
 
-            <div className="detail-info-grid detail-main-meta-grid">
-              {detailMeta.map((item) => (
-                <div key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
+            <KeyValueGrid
+              items={detailMeta.map((item) => ({ key: item.label, label: item.label, value: item.value }))}
+              className="detail-main-meta-grid"
+              emphasizeValue
+            />
 
             <div className="detail-main-actions">
               <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
@@ -497,33 +485,29 @@ export function ProductDetailPage() {
 
       <section className="detail-bottom-layout">
         <div className="detail-card detail-balance-card">
-          <div className="detail-section-head">
-            <strong>对方在售</strong>
-            <span>{sellerMoreItems.length} 件</span>
-          </div>
-          <div className="detail-other-goods">
+          <SectionHeader title="对方在售" description={`${sellerMoreItems.length} 件`} />
+          <div className="ui-split-list">
             {sellerMoreItems.map((item) => (
-              <Link key={item.id} to={`/products/${item.id}`} className="detail-other-good">
-                <div>
+              <Link key={item.id} to={`/products/${item.id}`} className="ui-split-list-row is-link">
+                <div className="ui-split-list-copy">
                   <strong>{item.title}</strong>
                   <span>{item.condition} · {item.category}</span>
                 </div>
-                <em>¥{item.price}</em>
+                <span className="ui-split-list-aside is-highlight">¥{item.price}</span>
               </Link>
             ))}
           </div>
         </div>
 
         <div className="detail-card detail-balance-card">
-          <div className="detail-section-head">
-            <strong>交易保障</strong>
-            <span>{status.label}</span>
-          </div>
-          <div className="detail-flow-list">
+          <SectionHeader title="交易保障" description={status.label} />
+          <div className="ui-split-list">
             {detail.compliance.trustSignals.slice(0, 3).map((signal) => (
-              <div key={signal}>
-                <strong>{signal}</strong>
-                <span>支持校内当面交易</span>
+              <div key={signal} className="ui-split-list-row">
+                <div className="ui-split-list-copy">
+                  <strong>{signal}</strong>
+                  <span>支持校内当面交易</span>
+                </div>
               </div>
             ))}
           </div>
@@ -534,30 +518,22 @@ export function ProductDetailPage() {
         <div className="fish-feed-header">
           <h2>相似推荐</h2>
         </div>
-        <div className="fish-feed-grid detail-feed-grid">
-          {detail.relatedProducts.map((item) => (
-            <Link key={item.id} to={`/products/${item.id}`} className="fish-item-card detail-related-card">
-              <div className={item.imageUrl ? 'fish-item-cover detail-related-cover has-image' : 'fish-item-cover detail-related-cover'}>
-                <img
-                  className="fish-item-cover-image"
-                  src={resolvePrimaryProductImage(item, item.id)}
-                  alt={item.title}
-                />
-                <span className="fish-item-signal">{item.category} · {item.condition}</span>
-              </div>
-              <div className="fish-item-body">
-                <h3>{item.title}</h3>
-                <div className="fish-item-price-row">
-                  <strong>¥{item.price}</strong>
-                  <span>{item.recommendationReason ?? '同校热卖'}</span>
-                </div>
-                <div className="fish-item-meta">
-                  <span>{item.sellerName}</span>
-                </div>
-              </div>
+        <ProductGrid
+          items={detail.relatedProducts}
+          className="fish-feed-grid detail-feed-grid"
+          renderItem={(item) => (
+            <Link key={item.id} to={`/products/${item.id}`} className="detail-related-link">
+              <ProductSummaryCard
+                className="detail-related-card"
+                item={item}
+                imageSrc={resolvePrimaryProductImage(item, item.id)}
+                signal={`${item.category} · ${item.condition}`}
+                secondaryMeta={item.recommendationReason ?? '同校热卖'}
+                tertiaryMeta={<span>{item.sellerName}</span>}
+              />
             </Link>
-          ))}
-        </div>
+          )}
+        />
       </section>
     </div>
   );

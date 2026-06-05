@@ -1,12 +1,15 @@
-import { Input, Skeleton } from 'antd';
+import { Input, Skeleton, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import type { MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FoldSection } from '../components/FoldSection';
+import { FoldSection } from '../components/disclosure';
+import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { getBjfuMeetupLabel } from '../constants/campus';
 import { fetchProducts, fetchRecommendations, ProductSummary } from '../services/api';
 import { getBehaviorProfile, subscribeBehavior } from '../services/behavior';
-import { getDemoUser } from '../services/session';
+import { subscribeFavorites, toggleFavorite } from '../services/favorites';
+import { getDemoUser, subscribeSessionChange } from '../services/session';
 import { getProductImage } from '../utils/productCover';
 
 const shortcutGroups = [
@@ -174,8 +177,9 @@ export function HomePage() {
   const [activeTrade, setActiveTrade] = useState<TradeFilter>('全部方式');
   const [activeShortcutGroup, setActiveShortcutGroup] = useState<string | null>(null);
   const [behaviorVersion, setBehaviorVersion] = useState(0);
+  const [favoriteVersion, setFavoriteVersion] = useState(0);
 
-  const currentUser = useMemo(() => getDemoUser(), []);
+  const [currentUser, setCurrentUser] = useState(() => getDemoUser());
   const behaviorProfile = useMemo(
     () => getBehaviorProfile(currentUser),
     [currentUser, behaviorVersion]
@@ -184,9 +188,8 @@ export function HomePage() {
   useEffect(() => {
     async function load() {
       try {
-        const demoUser = getDemoUser();
-        const productsData = demoUser
-          ? await fetchRecommendations(demoUser.id)
+        const productsData = currentUser
+          ? await fetchRecommendations(currentUser.id)
           : await fetchProducts();
         setProducts(productsData);
       } catch {
@@ -210,9 +213,11 @@ export function HomePage() {
     }
 
     void load();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => subscribeBehavior(() => setBehaviorVersion((value) => value + 1)), []);
+  useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
+  useEffect(() => subscribeSessionChange(() => setCurrentUser(getDemoUser())), []);
 
   function applyKeywordFilter(keyword: string) {
     setSearchKeyword(keyword);
@@ -348,6 +353,43 @@ export function HomePage() {
   const filterSummary = [activeSort, activePrice, activeTrade].filter((item) => item && item !== '不限' && item !== '全部方式');
   const leadPrimaryItem = activityScene.lead.items[0] ?? null;
   const leadSecondaryItem = activityScene.lead.items[1] ?? null;
+
+  function getFavoriteRestriction(item: ProductSummary) {
+    if (item.status === 'SOLD') {
+      return '商品已售出';
+    }
+    if (item.status === 'OFFLINE') {
+      return '商品已下架';
+    }
+    if (item.status === 'PENDING') {
+      return '商品审核中';
+    }
+    if (currentUser?.id && item.sellerId === currentUser.id) {
+      return '这是你发布的商品';
+    }
+    return null;
+  }
+
+  async function handleToggleFavorite(event: MouseEvent<HTMLButtonElement>, item: ProductSummary) {
+    event.stopPropagation();
+
+    const restriction = getFavoriteRestriction(item);
+    if (restriction) {
+      message.info(restriction);
+      return;
+    }
+
+    try {
+      const nextState = await toggleFavorite(item.id, currentUser);
+      setProducts((current) => current.map((product) => product.id === item.id ? {
+        ...product,
+        isFavorited: nextState,
+        favoriteCount: Math.max(0, (product.favoriteCount ?? 0) + (nextState ? 1 : -1))
+      } : product));
+    } catch {
+      return;
+    }
+  }
 
   return (
     <div className="fish-home">
@@ -601,48 +643,53 @@ export function HomePage() {
         {loading ? (
           <Skeleton active paragraph={{ rows: 10 }} />
         ) : (
-          <div className="fish-feed-grid">
-            {recommendedProducts.map((item, index) => {
+          <ProductGrid
+            items={recommendedProducts}
+            className="fish-feed-grid"
+            renderItem={(item, index) => {
               const status = statusMap[item.status] ?? { label: item.status, color: 'default' };
               const meetupLabel = getBjfuMeetupLabel(index);
               const coverSignal = `${item.category} · ${item.condition}`;
+              const isFavorited = Boolean(item.isFavorited);
+              const favoriteRestriction = getFavoriteRestriction(item);
               return (
-                <article
+                <ProductSummaryCard
                   key={item.id}
-                  className={`fish-item-card ${index % 3 === 2 ? 'offset' : ''}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(`/products/${item.id}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      navigate(`/products/${item.id}`);
-                    }
-                  }}
-                >
-                  <div className={item.imageUrl ? 'fish-item-cover has-image' : 'fish-item-cover'}>
-                    <img
-                      className="fish-item-cover-image"
-                      src={getProductImage(item, index)}
-                      alt={item.title}
-                    />
-                    <span className="fish-item-signal">{coverSignal}</span>
-                  </div>
-                  <div className="fish-item-body">
-                    <h3>{item.title}</h3>
-                    <div className="fish-item-price-row">
-                      <strong>¥{item.price}</strong>
-                      {item.status !== 'ON_SALE' ? <span>{status.label}</span> : null}
-                    </div>
-                    <div className="fish-item-meta">
+                  className={index % 3 === 2 ? 'offset' : ''}
+                  item={item}
+                  imageSrc={getProductImage(item, index)}
+                  signal={coverSignal}
+                  coverActions={(
+                    <button
+                      type="button"
+                      className={isFavorited ? 'fish-item-favorite active' : 'fish-item-favorite'}
+                      onClick={(event) => void handleToggleFavorite(event, item)}
+                      aria-label={isFavorited ? '取消收藏' : '收藏商品'}
+                      disabled={Boolean(favoriteRestriction) && !isFavorited}
+                      title={favoriteRestriction ?? undefined}
+                    >
+                      {isFavorited ? '已想要' : favoriteRestriction ?? '想要'}
+                    </button>
+                  )}
+                  secondaryMeta={item.status !== 'ON_SALE' ? status.label : undefined}
+                  tertiaryMeta={(
+                    <>
                       <span>{item.sellerName}</span>
                       <i />
                       <span>{meetupLabel}</span>
-                    </div>
-                  </div>
-                </article>
+                    </>
+                  )}
+                  passiveMeta={(
+                    <>
+                      <span>{item.favoriteCount ?? 0} 人想要</span>
+                      <span>{item.recommendationReason ?? '同校面交'}</span>
+                    </>
+                  )}
+                  onOpen={() => navigate(`/products/${item.id}`)}
+                />
               );
-            })}
-          </div>
+            }}
+          />
         )}
       </section>
     </div>

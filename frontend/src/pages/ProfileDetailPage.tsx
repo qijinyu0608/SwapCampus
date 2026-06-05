@@ -2,7 +2,8 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Button, Empty, Skeleton, Tag } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EmptyState } from '../components/feedback/EmptyState';
+import { KeyValueGrid } from '../components/data-display';
+import { EmptyState } from '../components/feedback';
 import {
   fetchUserProfile,
   fetchUserTrustSummary,
@@ -56,7 +57,7 @@ export function ProfileDetailPage() {
     return (
       <div className="page-grid profile-page">
         <EmptyState
-          className="profile-empty-shell"
+          className="is-shell"
           title={isGuestUser(user) ? '游客模式下暂不支持个人资料详情' : '请使用普通用户账号查看个人资料'}
         />
       </div>
@@ -76,10 +77,25 @@ export function ProfileDetailPage() {
   if (!profile) {
     return (
       <div className="page-grid profile-page">
-        <EmptyState className="profile-empty-shell" title={errorMessage || '个人资料不存在'} />
+        <EmptyState className="is-shell" title={errorMessage || '个人资料不存在'} />
       </div>
     );
   }
+
+  const profileInfoItems = [
+    { key: 'student-id', label: '学号', value: profile.studentId },
+    { key: 'real-name', label: '真实姓名', value: profile.realName },
+    { key: 'college', label: '学院', value: profile.college },
+    { key: 'phone', label: '手机号', value: profile.phone },
+    { key: 'identity-status', label: '实名状态', value: profile.identityStatus },
+    { key: 'credit-level', label: '信用等级', value: trustSummary?.creditLevel ?? '正常' }
+  ];
+  const trustMetricItems = [
+    { key: 'completed-orders', label: '已完成交易', value: trustSummary?.completedOrders ?? 0 },
+    { key: 'active-orders', label: '进行中订单', value: trustSummary?.activeOrders ?? 0 },
+    { key: 'waiting-reviews', label: '待评价', value: trustSummary?.waitingReviews ?? 0 },
+    { key: 'response-rate', label: '消息回复率', value: `${trustSummary?.responseRate ?? '--'}%` }
+  ];
 
   return (
     <div className="page-grid profile-page">
@@ -104,51 +120,8 @@ export function ProfileDetailPage() {
           </div>
         </div>
 
-        <div className="profile-detail-grid">
-          <div>
-            <span>学号</span>
-            <strong>{profile.studentId}</strong>
-          </div>
-          <div>
-            <span>真实姓名</span>
-            <strong>{profile.realName}</strong>
-          </div>
-          <div>
-            <span>学院</span>
-            <strong>{profile.college}</strong>
-          </div>
-          <div>
-            <span>手机号</span>
-            <strong>{profile.phone}</strong>
-          </div>
-          <div>
-            <span>实名状态</span>
-            <strong>{profile.identityStatus}</strong>
-          </div>
-          <div>
-            <span>信用等级</span>
-            <strong>{trustSummary?.creditLevel ?? '正常'}</strong>
-          </div>
-        </div>
-
-        <div className="profile-detail-metrics">
-          <div>
-            <strong>{trustSummary?.completedOrders ?? 0}</strong>
-            <span>已完成交易</span>
-          </div>
-          <div>
-            <strong>{trustSummary?.activeOrders ?? 0}</strong>
-            <span>进行中订单</span>
-          </div>
-          <div>
-            <strong>{trustSummary?.waitingReviews ?? 0}</strong>
-            <span>待评价</span>
-          </div>
-          <div>
-            <strong>{trustSummary?.responseRate ?? '--'}%</strong>
-            <span>消息回复率</span>
-          </div>
-        </div>
+        <KeyValueGrid items={profileInfoItems} className="profile-detail-grid" />
+        <KeyValueGrid items={trustMetricItems} columns={4} className="profile-detail-metrics" />
       </section>
     </div>
   );

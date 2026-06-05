@@ -1,5 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
-import { AppShell } from '../components/layout/AppShell';
+import { AppShell } from '../components/layout';
 import { appRoutes } from './route-config';
 
 export function AppRouter() {

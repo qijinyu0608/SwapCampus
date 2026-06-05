@@ -1,8 +1,9 @@
 import { Button, Input, Pagination, Tag, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { FoldSection } from '../components/FoldSection';
-import { MetricBarChart } from '../components/MetricBarChart';
-import { PageCard } from '../components/PageCard';
+import { AdminEntityActions, AdminEntityItem, MetricBarChart, StatStrip } from '../components/data-display';
+import { FoldSection } from '../components/disclosure';
+import { NoticePanel } from '../components/feedback';
+import { PageCard } from '../components/layout';
 import {
   AdminCampusServiceItem,
   AdminOverview,
@@ -139,6 +140,14 @@ export function AdminPage() {
     { label: '封禁账号', value: bannedUsers, tone: 'blue' as const },
     { label: '实名用户', value: verifiedUsers, tone: 'green' as const }
   ];
+  const summaryItems = [
+    { key: 'pending-products', value: overview.pendingProducts, label: '待处理商品' },
+    { key: 'open-reports', value: openReports, label: '未结举报' },
+    { key: 'banned-users', value: bannedUsers, label: '封禁账号' },
+    { key: 'active-orders', value: overview.activeOrders, label: '活跃订单' },
+    { key: 'active-services', value: overview.activeCampusServices, label: '服务任务' },
+    { key: 'total-users', value: overview.totalUsers || users.length, label: '用户总数' }
+  ];
 
   async function loadOverview(next?: {
     page?: number;
@@ -225,7 +234,6 @@ export function AdminPage() {
 
     try {
       await updateAdminProductStatus(productId, status, {
-        handledBy: currentUser.id,
         reason: resolutionNote
       });
       message.success(status === 'ON_SALE' ? '商品已恢复展示' : '商品已下架');
@@ -247,7 +255,6 @@ export function AdminPage() {
     try {
       await updateAdminOrderStatus(orderId, {
         status,
-        handledBy: currentUser.id,
         reason: resolutionNote
       });
       message.success('订单状态已更新');
@@ -269,7 +276,6 @@ export function AdminPage() {
     try {
       await updateAdminCampusServiceStatus(taskId, {
         status,
-        handledBy: currentUser.id,
         reason: resolutionNote
       });
       message.success('校园服务状态已更新');
@@ -290,7 +296,6 @@ export function AdminPage() {
 
     try {
       await resolveReport(reportId, {
-        handledBy: currentUser.id,
         resolutionNote,
         nextStatus
       });
@@ -310,7 +315,6 @@ export function AdminPage() {
     try {
       await updateUserBanStatus(record.id, {
         banned,
-        handledBy: currentUser.id,
         reason: resolutionNote
       });
       message.success(banned ? '用户已封禁' : '用户已恢复');
@@ -350,49 +354,23 @@ export function AdminPage() {
 
       {loadError ? (
         <PageCard>
-          <div className="admin-state-line error">
-            <strong>数据加载失败</strong>
-            <span>{loadError}</span>
+          <NoticePanel title="数据加载失败" description={loadError} tone="danger" className="admin-state-line">
             <Button size="small" onClick={() => void loadOverview()}>重试</Button>
-          </div>
+          </NoticePanel>
         </PageCard>
       ) : null}
 
       {loading ? (
         <PageCard>
-          <div className="admin-state-line">
-            <strong>正在刷新运营数据</strong>
-            <span>商品、举报、订单、用户治理队列同步加载中</span>
-          </div>
+          <NoticePanel
+            title="正在刷新运营数据"
+            description="商品、举报、订单、用户治理队列同步加载中"
+            className="admin-state-line"
+          />
         </PageCard>
       ) : null}
 
-      <section className="admin-summary-strip">
-        <div className="admin-summary-card">
-          <strong>{overview.pendingProducts}</strong>
-          <span>待处理商品</span>
-        </div>
-        <div className="admin-summary-card">
-          <strong>{openReports}</strong>
-          <span>未结举报</span>
-        </div>
-        <div className="admin-summary-card">
-          <strong>{bannedUsers}</strong>
-          <span>封禁账号</span>
-        </div>
-        <div className="admin-summary-card">
-          <strong>{overview.activeOrders}</strong>
-          <span>活跃订单</span>
-        </div>
-        <div className="admin-summary-card">
-          <strong>{overview.activeCampusServices}</strong>
-          <span>服务任务</span>
-        </div>
-        <div className="admin-summary-card">
-          <strong>{overview.totalUsers || users.length}</strong>
-          <span>用户总数</span>
-        </div>
-      </section>
+      <StatStrip items={summaryItems} columns={6} className="admin-summary-strip" />
 
       <PageCard>
         <div className="dashboard-card compact">
@@ -408,26 +386,29 @@ export function AdminPage() {
         <FoldSection title="商品列表" meta={`${overview.recentProducts.length} 条待审`}>
           <div className="admin-entity-list">
             {overview.recentProducts.map((item) => (
-              <div key={item.id} className="admin-entity-item">
-                <div className="admin-entity-main">
-                  <strong>{item.title}</strong>
-                  <div className="admin-entity-meta">
+              <AdminEntityItem
+                key={item.id}
+                title={item.title}
+                meta={(
+                  <>
                     <span>商品 #{item.id}</span>
                     <span>发布者 #{item.sellerId}</span>
-                  </div>
-                </div>
-                <div className="admin-entity-side">
-                  <Tag color="orange">{productStatusMap[item.status] ?? item.status}</Tag>
-                  <div className="admin-actions">
-                    <Button size="small" type="primary" onClick={() => void handleModeration(item.id, 'ON_SALE')}>
-                      恢复
-                    </Button>
-                    <Button size="small" onClick={() => void handleModeration(item.id, 'OFFLINE')}>
-                      下架
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                  </>
+                )}
+                side={(
+                  <>
+                    <Tag color="orange">{productStatusMap[item.status] ?? item.status}</Tag>
+                    <AdminEntityActions>
+                      <Button size="small" type="primary" onClick={() => void handleModeration(item.id, 'ON_SALE')}>
+                        恢复
+                      </Button>
+                      <Button size="small" onClick={() => void handleModeration(item.id, 'OFFLINE')}>
+                        下架
+                      </Button>
+                    </AdminEntityActions>
+                  </>
+                )}
+              />
             ))}
           </div>
         </FoldSection>
@@ -441,44 +422,48 @@ export function AdminPage() {
             </div>
             <div className="admin-entity-list">
               {orders.map((item) => (
-                <div key={item.id} className="admin-entity-item report">
-                  <div className="admin-entity-main">
-                    <strong>{item.productTitle}</strong>
-                    <div className="admin-entity-meta">
+                <AdminEntityItem
+                  key={item.id}
+                  title={item.productTitle}
+                  variant="report"
+                  meta={(
+                    <>
                       <span>订单 #{item.id}</span>
                       <span>买家 {item.buyerName} #{item.buyerId}</span>
                       <span>卖家 {item.sellerName} #{item.sellerId}</span>
                       {item.meetupLocation ? <span>{item.meetupLocation}</span> : null}
-                    </div>
-                  </div>
-                  <div className="admin-entity-side">
-                    <Tag color={item.status === 'CANCELED' ? 'default' : item.status === 'COMPLETED' ? 'green' : 'orange'}>
-                      {orderStatusMap[item.status] ?? item.status}
-                    </Tag>
-                    {item.status !== 'COMPLETED' && item.status !== 'CANCELED' ? (
-                      <div className="admin-actions wrap">
-                        {item.status === 'PENDING' ? (
-                          <Button size="small" onClick={() => void handleOrderStatus(item.id, 'IN_PROGRESS')}>
-                            进行中
+                    </>
+                  )}
+                  side={(
+                    <>
+                      <Tag color={item.status === 'CANCELED' ? 'default' : item.status === 'COMPLETED' ? 'green' : 'orange'}>
+                        {orderStatusMap[item.status] ?? item.status}
+                      </Tag>
+                      {item.status !== 'COMPLETED' && item.status !== 'CANCELED' ? (
+                        <AdminEntityActions wrap>
+                          {item.status === 'PENDING' ? (
+                            <Button size="small" onClick={() => void handleOrderStatus(item.id, 'IN_PROGRESS')}>
+                              进行中
+                            </Button>
+                          ) : null}
+                          {item.status === 'IN_PROGRESS' ? (
+                            <Button size="small" onClick={() => void handleOrderStatus(item.id, 'WAITING_REVIEW')}>
+                              待评价
+                            </Button>
+                          ) : null}
+                          <Button size="small" type="primary" onClick={() => void handleOrderStatus(item.id, 'COMPLETED')}>
+                            完成
                           </Button>
-                        ) : null}
-                        {item.status === 'IN_PROGRESS' ? (
-                          <Button size="small" onClick={() => void handleOrderStatus(item.id, 'WAITING_REVIEW')}>
-                            待评价
+                          <Button size="small" danger onClick={() => void handleOrderStatus(item.id, 'CANCELED')}>
+                            取消
                           </Button>
-                        ) : null}
-                        <Button size="small" type="primary" onClick={() => void handleOrderStatus(item.id, 'COMPLETED')}>
-                          完成
-                        </Button>
-                        <Button size="small" danger onClick={() => void handleOrderStatus(item.id, 'CANCELED')}>
-                          取消
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="meta-line">已归档</span>
-                    )}
-                  </div>
-                </div>
+                        </AdminEntityActions>
+                      ) : (
+                        <span className="meta-line">已归档</span>
+                      )}
+                    </>
+                  )}
+                />
               ))}
             </div>
           </FoldSection>
@@ -488,36 +473,40 @@ export function AdminPage() {
           <FoldSection title="校园服务" meta={`${campusServices.length} 条`}>
             <div className="admin-entity-list">
               {campusServices.map((item) => (
-                <div key={item.id} className="admin-entity-item report">
-                  <div className="admin-entity-main">
-                    <strong>{item.title}</strong>
-                    <div className="admin-entity-meta">
+                <AdminEntityItem
+                  key={item.id}
+                  title={item.title}
+                  variant="report"
+                  meta={(
+                    <>
                       <span>{campusServiceCategoryMap[item.category] ?? item.category}</span>
                       <span>发布 {item.publisherName} #{item.publisherId}</span>
                       {item.accepterId ? <span>接单 {item.accepterName} #{item.accepterId}</span> : null}
                       <span>{item.locationFrom} 到 {item.locationTo}</span>
-                    </div>
-                  </div>
-                  <div className="admin-entity-side">
-                    <Tag color={item.status === 'CANCELED' ? 'default' : item.status === 'DONE' ? 'green' : 'orange'}>
-                      {campusServiceStatusMap[item.status] ?? item.status}
-                    </Tag>
-                    {item.status === 'OPEN' || item.status === 'MATCHED' ? (
-                      <div className="admin-actions wrap">
-                        {item.status === 'MATCHED' ? (
-                          <Button size="small" type="primary" onClick={() => void handleCampusServiceStatus(item.id, 'DONE')}>
-                            完成
+                    </>
+                  )}
+                  side={(
+                    <>
+                      <Tag color={item.status === 'CANCELED' ? 'default' : item.status === 'DONE' ? 'green' : 'orange'}>
+                        {campusServiceStatusMap[item.status] ?? item.status}
+                      </Tag>
+                      {item.status === 'OPEN' || item.status === 'MATCHED' ? (
+                        <AdminEntityActions wrap>
+                          {item.status === 'MATCHED' ? (
+                            <Button size="small" type="primary" onClick={() => void handleCampusServiceStatus(item.id, 'DONE')}>
+                              完成
+                            </Button>
+                          ) : null}
+                          <Button size="small" danger onClick={() => void handleCampusServiceStatus(item.id, 'CANCELED')}>
+                            取消
                           </Button>
-                        ) : null}
-                        <Button size="small" danger onClick={() => void handleCampusServiceStatus(item.id, 'CANCELED')}>
-                          取消
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="meta-line">已归档</span>
-                    )}
-                  </div>
-                </div>
+                        </AdminEntityActions>
+                      ) : (
+                        <span className="meta-line">已归档</span>
+                      )}
+                    </>
+                  )}
+                />
               ))}
             </div>
           </FoldSection>
@@ -532,45 +521,50 @@ export function AdminPage() {
             </div>
             <div className="admin-entity-list">
               {reports.map((item) => (
-                <div key={item.id} className="admin-entity-item report">
-                  <div className="admin-entity-main">
-                    <div className="admin-report-reason">
-                      {item.reason.split('\n').map((line, index) => (
-                        <span key={`${item.id}-${index}`}>{line}</span>
-                      ))}
-                    </div>
-                    <div className="admin-entity-meta">
+                <AdminEntityItem
+                  key={item.id}
+                  variant="report"
+                  meta={(
+                    <>
                       <span>举报 #{item.id}</span>
                       {item.productId ? <span>{`商品 #${item.productId}`}</span> : null}
                       {item.targetUserId ? <span>{`用户 #${item.targetUserId}`}</span> : null}
-                    </div>
-                  </div>
-                  <div className="admin-entity-side">
-                    <Tag color={item.status === 'OPEN' ? 'orange' : 'green'}>{item.status}</Tag>
-                    {item.status === 'OPEN' ? (
-                      <div className="admin-actions wrap">
-                        {item.productId ? (
-                          <Button size="small" type="primary" onClick={() => void handleResolveReport(item.id, 'OFFLINE_PRODUCT')}>
-                            下架商品
+                    </>
+                  )}
+                  side={(
+                    <>
+                      <Tag color={item.status === 'OPEN' ? 'orange' : 'green'}>{item.status}</Tag>
+                      {item.status === 'OPEN' ? (
+                        <AdminEntityActions wrap>
+                          {item.productId ? (
+                            <Button size="small" type="primary" onClick={() => void handleResolveReport(item.id, 'OFFLINE_PRODUCT')}>
+                              下架商品
+                            </Button>
+                          ) : null}
+                          {item.targetUserId ? (
+                            <Button size="small" type="primary" danger onClick={() => void handleResolveReport(item.id, 'BAN_USER')}>
+                              封禁用户
+                            </Button>
+                          ) : null}
+                          <Button size="small" onClick={() => void handleResolveReport(item.id, 'RESOLVED')}>
+                            已处理
                           </Button>
-                        ) : null}
-                        {item.targetUserId ? (
-                          <Button size="small" type="primary" danger onClick={() => void handleResolveReport(item.id, 'BAN_USER')}>
-                            封禁用户
+                          <Button size="small" onClick={() => void handleResolveReport(item.id, 'REJECTED')}>
+                            驳回
                           </Button>
-                        ) : null}
-                        <Button size="small" onClick={() => void handleResolveReport(item.id, 'RESOLVED')}>
-                          已处理
-                        </Button>
-                        <Button size="small" onClick={() => void handleResolveReport(item.id, 'REJECTED')}>
-                          驳回
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="meta-line">已完成</span>
-                    )}
+                        </AdminEntityActions>
+                      ) : (
+                        <span className="meta-line">已完成</span>
+                      )}
+                    </>
+                  )}
+                >
+                  <div className="admin-report-reason">
+                    {item.reason.split('\n').map((line, index) => (
+                      <span key={`${item.id}-${index}`}>{line}</span>
+                    ))}
                   </div>
-                </div>
+                </AdminEntityItem>
               ))}
             </div>
           </FoldSection>
@@ -645,10 +639,11 @@ export function AdminPage() {
                         <Tag color={item.verified ? 'blue' : 'default'}>{item.verified ? '已实名' : '待实名'}</Tag>
                       </div>
                     </div>
-                    <div className="admin-user-alert">
-                      <strong>{item.suggestedAction}</strong>
-                      <span>最近活跃 {formatDateTime(item.lastActiveAt)} · 注册 {formatDateTime(item.createdAt)}</span>
-                    </div>
+                    <NoticePanel
+                      title={item.suggestedAction}
+                      description={`最近活跃 ${formatDateTime(item.lastActiveAt)} · 注册 ${formatDateTime(item.createdAt)}`}
+                      className="admin-user-alert"
+                    />
                     <div className="admin-user-metrics">
                       <div>
                         <strong>{item.creditScore}</strong>

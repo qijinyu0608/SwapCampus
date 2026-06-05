@@ -223,7 +223,7 @@ export function MessagesPage() {
     }
 
     let resolvedUserId = currentUser.id;
-    let list = await fetchConversations(resolvedUserId);
+    let list = await fetchConversations();
     const shouldHydrate = !list.length || list.length < 6 || list.filter((item) => item.product).length < 4;
     if (shouldHydrate) {
       const hydrated = await hydrateMessageDemos({
@@ -244,7 +244,7 @@ export function MessagesPage() {
           verified: hydrated.user.verified
         });
       }
-      list = await fetchConversations(resolvedUserId);
+      list = await fetchConversations();
     }
     setConversations(list);
     const preferredConversation = preferredId ? list.find((item) => item.id === preferredId) : null;
@@ -270,7 +270,7 @@ export function MessagesPage() {
   }
 
   async function loadMessages(conversationId: number) {
-    const list = await fetchConversationMessages(conversationId, currentUser?.id);
+    const list = await fetchConversationMessages(conversationId);
     setMessages(list);
   }
 
@@ -416,7 +416,6 @@ export function MessagesPage() {
 
     try {
       await sendConversationMessage(activeId, {
-        senderId: activeUser.id,
         content
       });
       await Promise.all([loadMessages(activeId), refreshConversations(activeId)]);

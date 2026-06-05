@@ -1,7 +1,8 @@
 import { Alert, Button, Form, Input, InputNumber, Select } from 'antd';
 import { useEffect, useState } from 'react';
-import { FoldSection } from '../components/FoldSection';
-import { PageCard } from '../components/PageCard';
+import { InfoList, TagList } from '../components/data-display';
+import { FoldSection } from '../components/disclosure';
+import { ActionRow, InlineMeta, PageCard } from '../components/layout';
 import { createProduct, fetchPublishingRules, getApiErrorMessage, PublishingRules } from '../services/api';
 import { getDemoUser, hasTradingAccess, isGuestUser } from '../services/session';
 
@@ -82,6 +83,20 @@ export function ProductPublishPage() {
   const dormElectricalWhitelist = rules?.dormElectricalWhitelist ?? defaultDormElectricalWhitelist;
   const communityNotices = rules?.communityNotices ?? defaultCommunityNotices;
   const ruleHighlights = rules?.ruleHighlights ?? defaultRuleHighlights;
+  const categoryTagItems = allowedCategories.map((item) => ({ key: item, label: item }));
+  const whitelistTagItems = dormElectricalWhitelist.map((item) => ({ key: item, label: item, tone: 'success' as const }));
+  const reviewInfoItems = [
+    {
+      key: 'prohibited',
+      title: '禁售词',
+      detail: (rules?.prohibitedKeywords ?? ['刀具', '代抢', '账号']).slice(0, 5).join(' / ')
+    },
+    {
+      key: 'review-flow',
+      title: '审核流',
+      detail: (rules?.reviewFlow ?? ['实名认证', '内容校验', '人工审核']).join(' · ')
+    }
+  ];
 
   useEffect(() => {
     fetchPublishingRules().then(setRules).catch(() => setRules(null));
@@ -110,7 +125,6 @@ export function ProductPublishPage() {
 
     try {
       const result = await createProduct({
-        sellerId: activeUser.id,
         title: values.title,
         description: values.description,
         price: values.price,
@@ -175,10 +189,9 @@ export function ProductPublishPage() {
                 </Form.Item>
               </div>
             </FoldSection>
-            <div className="publish-submit-row">
-              <span className="meta-line">默认按校内面交发布</span>
+            <ActionRow className="publish-submit-row" leading={<InlineMeta>默认按校内面交发布</InlineMeta>}>
               <Button type="primary" htmlType="submit">发布</Button>
-            </div>
+            </ActionRow>
           </Form>
         </PageCard>
 
@@ -226,11 +239,7 @@ export function ProductPublishPage() {
 
           <PageCard>
             <FoldSection title="规则" meta={`${allowedCategories.length} 类`} compact>
-              <div className="rule-tag-row">
-                {allowedCategories.map((item) => (
-                  <span key={item} className="rule-tag">{item}</span>
-                ))}
-              </div>
+              <TagList items={categoryTagItems} />
               <div className="publish-rule-block">
                 <strong>社区公告</strong>
                 <div className="publish-notice-list">
@@ -241,11 +250,7 @@ export function ProductPublishPage() {
               </div>
               <div className="publish-rule-block">
                 <strong>宿舍电器白名单</strong>
-                <div className="rule-tag-row compact">
-                  {dormElectricalWhitelist.map((item) => (
-                    <span key={item} className="rule-tag dorm">{item}</span>
-                  ))}
-                </div>
+                <TagList items={whitelistTagItems} compact />
               </div>
               <div className="publish-rule-block">
                 <strong>审核说明</strong>
@@ -255,16 +260,7 @@ export function ProductPublishPage() {
                   ))}
                 </div>
               </div>
-              <div className="compact-list" style={{ marginTop: 14 }}>
-                <div className="compact-item">
-                  <strong>禁售词</strong>
-                  <div className="meta-line">{(rules?.prohibitedKeywords ?? ['刀具', '代抢', '账号']).slice(0, 5).join(' / ')}</div>
-                </div>
-                <div className="compact-item">
-                  <strong>审核流</strong>
-                  <div className="meta-line">{(rules?.reviewFlow ?? ['实名认证', '内容校验', '人工审核']).join(' · ')}</div>
-                </div>
-              </div>
+              <InfoList className="compact-list" items={reviewInfoItems} />
             </FoldSection>
           </PageCard>
         </div>

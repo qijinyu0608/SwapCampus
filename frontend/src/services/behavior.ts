@@ -85,7 +85,6 @@ export function recordProductView(product: Pick<ProductDetail, 'id' | 'category'
 
   if (user?.role === 'USER') {
     void recordRecommendationBehavior({
-      userId: user.id,
       productId: product.id,
       eventType: 'VIEW'
     }).catch(() => undefined);
@@ -122,7 +121,6 @@ export function syncFavoriteSignal(
   if (user?.role === 'USER') {
     const eventType: BehaviorEventType = favorited ? 'FAVORITE' : 'UNFAVORITE';
     void recordRecommendationBehavior({
-      userId: user.id,
       productId: product.id,
       eventType
     }).catch(() => undefined);

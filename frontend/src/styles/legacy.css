@@ -1,1 +1,6 @@
-@import '../styles.css';
+@import './legacy/00-core-home.css';
+@import './legacy/01-detail-favorites.css';
+@import './legacy/02-login-admin-service.css';
+@import './legacy/03-profile-page.css';
+@import './legacy/04-responsive.css';
+@import './legacy/05-trade-chat.css';

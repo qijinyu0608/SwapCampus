@@ -1,12 +1,11 @@
 import { Skeleton } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { EmptyState } from '../components/feedback/EmptyState';
-import { PageHeader } from '../components/layout/PageHeader';
-import { SectionHeader } from '../components/layout/SectionHeader';
-import { ProductGrid } from '../components/product/ProductGrid';
-import { ProductSummaryCard } from '../components/product/ProductSummaryCard';
-import { SectionCard } from '../components/ui/SectionCard';
+import { MetaList } from '../components/data-display';
+import { EmptyState } from '../components/feedback';
+import { PageHeader, SectionHeader } from '../components/layout';
+import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { SectionCard } from '../components/ui';
 import {
   fetchProducts,
   fetchUserTrustSummary,
@@ -65,7 +64,7 @@ export function PublicUserPage() {
     return (
       <div className="page-grid public-user-page">
         <EmptyState
-          className="profile-empty-shell"
+          className="is-shell"
           title={error || '用户主页不存在'}
           description="可以返回商品详情页重新打开。"
         />
@@ -100,21 +99,14 @@ export function PublicUserPage() {
                 <span>{`信用${user.creditLevel}`}</span>
               </div>
             </div>
-            <div className="profile-hero-stats">
-              {profileStats.map((item, index) => (
-                <span key={item}>
-                  {item}
-                  {index < profileStats.length - 1 ? <i /> : null}
-                </span>
-              ))}
-            </div>
+            <MetaList items={profileStats} className="profile-hero-stats" />
             <p>公开校园主页，仅展示交易信用和在售闲置。</p>
           </div>
         </div>
       </section>
 
       <SectionCard className="profile-content-panel">
-        <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="profile-section-header" />
+        <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="is-prominent is-spacious" />
         <ProductGrid
           items={publishedProducts}
           className="public-user-products"

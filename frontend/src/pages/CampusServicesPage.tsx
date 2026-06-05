@@ -1,9 +1,10 @@
 import { Alert, Button, Empty, Form, Input, InputNumber, Pagination, Select } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FoldSection } from '../components/FoldSection';
-import { MetricBarChart } from '../components/MetricBarChart';
-import { PageCard } from '../components/PageCard';
+import { MetricBarChart, StatusBadge, TagList } from '../components/data-display';
+import { FoldSection } from '../components/disclosure';
+import { EmptyState } from '../components/feedback';
+import { ActionRow, InlineMeta, PageCard } from '../components/layout';
 import {
   acceptCampusServiceTask,
   CampusServiceCategory,
@@ -148,6 +149,7 @@ export function CampusServicesPage() {
           { value: 'DONE', label: '已完成' },
           { value: 'CANCELED', label: '已取消' }
         ];
+  const serviceRuleTagItems = serviceRules.map((item) => ({ key: item, label: item }));
 
   useEffect(() => {
     if (!ownershipFilterOptions.some((item) => item.value === activeOwnership)) {
@@ -258,10 +260,7 @@ export function CampusServicesPage() {
 
     setSubmitting(true);
     try {
-      await createCampusServiceTask({
-        publisherId: currentUser.id,
-        ...values
-      });
+      await createCampusServiceTask(values);
       await loadTasks();
       setActiveOwnership('PUBLISHED');
       setActiveCategory(values.category);
@@ -289,7 +288,7 @@ export function CampusServicesPage() {
     }
 
     try {
-      await acceptCampusServiceTask(taskId, { userId: currentUser.id });
+      await acceptCampusServiceTask(taskId, {});
       await loadTasks();
       setMessage({ type: 'success', text: '已接单，系统也帮你建立了消息会话。' });
     } catch (error) {
@@ -303,7 +302,7 @@ export function CampusServicesPage() {
     }
 
     try {
-      await completeCampusServiceTask(taskId, { userId: currentUser.id });
+      await completeCampusServiceTask(taskId);
       await loadTasks();
       setMessage({ type: 'success', text: '任务已标记完成。' });
     } catch (error) {
@@ -477,10 +476,9 @@ export function CampusServicesPage() {
                 <Form.Item name="description" label="任务说明" rules={[{ required: true }]}>
                   <Input.TextArea rows={3} placeholder="补充件数、顺路要求、注意事项" />
                 </Form.Item>
-                <div className="publish-submit-row service-submit-row">
-                  <span className="meta-line">发布后进入右侧委托列表</span>
+                <ActionRow className="publish-submit-row service-submit-row" leading={<InlineMeta>发布后进入右侧委托列表</InlineMeta>}>
                   <Button type="primary" htmlType="submit" loading={submitting}>发布委托</Button>
-                </div>
+                </ActionRow>
               </Form>
               <FoldSection title="常用地点" meta="点击填入出发点" compact>
                 <div className="service-location-board">
@@ -509,11 +507,7 @@ export function CampusServicesPage() {
 
           <PageCard>
             <FoldSection title="接单规则" meta={`${serviceRules.length} 条`} compact>
-              <div className="service-rule-strip">
-                {serviceRules.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
+              <TagList items={serviceRuleTagItems} className="service-rule-strip" compact />
             </FoldSection>
           </PageCard>
         </div>
@@ -579,10 +573,7 @@ export function CampusServicesPage() {
             </div>
           </FoldSection>
           {loading ? (
-            <div className="service-empty-state">
-              <strong>正在加载校园服务</strong>
-              <span>请稍等一下，马上就好。</span>
-            </div>
+            <EmptyState className="service-empty-state" title="正在加载校园服务" description="请稍等一下，马上就好。" />
           ) : visibleTasks.length ? (
             <>
             <div className="service-task-list">
@@ -599,7 +590,12 @@ export function CampusServicesPage() {
                     <div className="service-task-copy">
                       <div className="service-task-title-row">
                         <strong>{item.title}</strong>
-                        <span className={`service-status-badge status-${item.status.toLowerCase()}`}>{statusLabelMap[item.status]}</span>
+                        <StatusBadge
+                          tone={item.status === 'DONE' ? 'success' : item.status === 'MATCHED' ? 'info' : 'warning'}
+                          className="service-status-badge"
+                        >
+                          {statusLabelMap[item.status]}
+                        </StatusBadge>
                       </div>
                       <span>{`${categoryLabelMap[item.category]} · ${item.locationFrom} -> ${item.locationTo}`}</span>
                       <div className={isExpanded ? 'service-task-detail' : 'service-task-detail collapsed'}>
