@@ -1,7 +1,9 @@
 import { Empty, Skeleton } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { EmptyState } from '../components/feedback/EmptyState';
 import { PageHeader } from '../components/layout/PageHeader';
+import { ProductSummaryCard } from '../components/product/ProductSummaryCard';
 import { SectionCard } from '../components/ui/SectionCard';
 import {
   fetchProducts,
@@ -60,10 +62,11 @@ export function PublicUserPage() {
   if (!user || error) {
     return (
       <div className="page-grid public-user-page">
-        <div className="profile-empty-shell">
-          <strong>{error || '用户主页不存在'}</strong>
-          <span>可以返回商品详情页重新打开。</span>
-        </div>
+        <EmptyState
+          className="profile-empty-shell"
+          title={error || '用户主页不存在'}
+          description="可以返回商品详情页重新打开。"
+        />
       </div>
     );
   }
@@ -118,33 +121,16 @@ export function PublicUserPage() {
         {publishedProducts.length ? (
           <div className="profile-fish-grid public-user-products">
             {publishedProducts.map((item, index) => (
-              <article
+              <ProductSummaryCard
                 key={item.id}
-                className="fish-item-card profile-fish-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/products/${item.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    navigate(`/products/${item.id}`);
-                  }
-                }}
-              >
-                <div className={item.imageUrl ? 'fish-item-cover has-image' : 'fish-item-cover'}>
-                  <img className="fish-item-cover-image" src={getProductImage(item, index)} alt={item.title} />
-                  <span className="fish-item-signal">{item.category} · {item.condition}</span>
-                </div>
-                <div className="fish-item-body">
-                  <h3>{item.title}</h3>
-                  <div className="fish-item-price-row">
-                    <strong>¥{item.price}</strong>
-                    <span>同校面交</span>
-                  </div>
-                  <div className="fish-item-meta">
-                    <span>{item.sellerName}</span>
-                  </div>
-                </div>
-              </article>
+                className="profile-fish-card"
+                item={item}
+                imageSrc={getProductImage(item, index)}
+                signal={`${item.category} · ${item.condition}`}
+                secondaryMeta="同校面交"
+                tertiaryMeta={<span>{item.sellerName}</span>}
+                onOpen={() => navigate(`/products/${item.id}`)}
+              />
             ))}
           </div>
         ) : (

@@ -1,19 +1,12 @@
 import { Layout } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { navigationItems } from '../../router/route-config';
 import { clearDemoUser, getDemoUser, hasAdminAccess, isGuestUser, subscribeSessionChange } from '../../services/session';
 
 type AppShellProps = {
   children: React.ReactNode;
 };
-
-const navItems = [
-  { key: '/', label: '首页' },
-  { key: '/campus-services', label: '校园服务' },
-  { key: '/favorites', label: '想要' },
-  { key: '/messages', label: '消息' },
-  { key: '/profile', label: '我的' }
-];
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
@@ -43,7 +36,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className="brand-subtitle">同校闲置</div>
           </Link>
           <nav className="nav-pills">
-            {navItems.map((item) => (
+            {navigationItems.map((item) => (
               <Link
                 key={item.key}
                 to={item.key}
