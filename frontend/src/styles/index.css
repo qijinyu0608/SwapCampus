@@ -1,5 +1,5 @@
 @import './tokens.css';
 @import './base.css';
+@import './legacy.css';
 @import './layout.css';
 @import './ui.css';
-@import './legacy.css';

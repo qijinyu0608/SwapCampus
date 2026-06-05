@@ -1,21 +1,106 @@
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --paper: #ffffff;
-  --layout-bg: #f7f8fa;
-  --line: #e7e9ee;
-  --line-strong: #d9dde5;
-  --ink: #111827;
-  --muted: #6b7280;
-  --muted-strong: #52525b;
-  --primary: #ffb000;
-  --primary-hover: #ffbe33;
-  --primary-deep: #ff8a00;
-  --chip: #fff6da;
-  --chip-strong: #ffe9ad;
-  --success: #16a34a;
-  --warning: #c0841a;
-  --danger: #dc2626;
+  /*
+   * Color system
+   * - Brand only: brand / primary family, centered on #fab42d
+   * - Neutral surfaces and borders must come from neutral scale
+   * - Semantic states must use success / info / warning / danger families
+   * - Avoid introducing one-off hex colors in shared UI layers
+   */
+  /* Brand: based on #fab42d */
+  --brand-50: #fffaf0;
+  --brand-100: #fff1d2;
+  --brand-200: #ffe2a3;
+  --brand-300: #ffd06c;
+  --brand-400: #fab42d;
+  --brand-500: #e5a117;
+  --brand-600: #c88808;
+  --brand-700: #9d6908;
+  --brand-800: #714d10;
+  --brand-900: #493416;
+
+  /* Neutral */
+  --neutral-0: #ffffff;
+  --neutral-50: #fbfbfc;
+  --neutral-100: #f6f7f9;
+  --neutral-200: #eef1f4;
+  --neutral-300: #e3e8ee;
+  --neutral-400: #cfd6de;
+  --neutral-500: #8a9099;
+  --neutral-600: #6b7280;
+  --neutral-700: #525866;
+  --neutral-800: #313845;
+  --neutral-900: #111827;
+
+  /* Semantic */
+  --success-50: #edf8f1;
+  --success-100: #d7f0e0;
+  --success-500: #2f8f58;
+  --success-600: #287849;
+
+  --info-50: #edf4ff;
+  --info-100: #d7e7ff;
+  --info-500: #3d74c5;
+  --info-600: #2b5ea8;
+
+  --warning-50: #fff8e8;
+  --warning-100: #ffefc2;
+  --warning-500: #b98918;
+  --warning-600: #8f6810;
+
+  --danger-50: #fff4f3;
+  --danger-100: #ffd9d4;
+  --danger-500: #d45545;
+  --danger-600: #b43f31;
+
+  /* Surface tokens */
+  --bg: var(--neutral-0);
+  --paper: var(--neutral-0);
+  --layout-bg: var(--neutral-100);
+  --line: var(--neutral-200);
+  --line-strong: var(--neutral-300);
+  --ink: var(--neutral-900);
+  --muted: var(--neutral-600);
+  --muted-strong: var(--neutral-700);
+
+  /* Brand usage */
+  --primary: var(--brand-400);
+  --primary-hover: var(--brand-300);
+  --primary-active: color-mix(in srgb, var(--brand-500) 70%, var(--neutral-900) 30%);
+  --primary-deep: color-mix(in srgb, var(--brand-600) 52%, var(--neutral-900) 48%);
+  --primary-ink: color-mix(in srgb, var(--brand-800) 34%, var(--neutral-900) 66%);
+  --primary-soft: var(--brand-50);
+  --primary-soft-strong: var(--brand-100);
+  --primary-border: var(--brand-200);
+
+  /* Brand signature */
+  --signature-ink: color-mix(in srgb, var(--neutral-900) 88%, var(--brand-400) 12%);
+  --signature-ink-hover: color-mix(in srgb, var(--neutral-900) 84%, var(--brand-400) 16%);
+  --signature-glow: rgba(250, 180, 45, 0.08);
+  --signature-highlight-core: rgba(242, 171, 43, 0.88);
+  --signature-highlight-edge: rgba(228, 156, 25, 0.54);
+  --signature-highlight-halo: rgba(250, 180, 45, 0.18);
+
+  /* Semantic usage */
+  --success: var(--success-500);
+  --success-soft: var(--success-50);
+  --success-border: var(--success-100);
+
+  --info: var(--info-500);
+  --info-soft: var(--info-50);
+  --info-border: var(--info-100);
+
+  --warning: var(--warning-500);
+  --warning-soft: var(--warning-50);
+  --warning-border: var(--warning-100);
+
+  --danger: var(--danger-500);
+  --danger-soft: var(--danger-50);
+  --danger-border: var(--danger-100);
+
+  /* Legacy compatibility aliases */
+  --chip: var(--primary-soft);
+  --chip-strong: var(--primary-soft-strong);
   --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
   --soft-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
   --radius-xs: 4px;

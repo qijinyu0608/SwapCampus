@@ -1,189 +1,3 @@
-:root {
-  color-scheme: light;
-  --bg: #ffffff;
-  --paper: #ffffff;
-  --line: #e7e9ee;
-  --ink: #111827;
-  --muted: #6b7280;
-  --primary: #ffb000;
-  --primary-deep: #ff8a00;
-  --chip: #fff6da;
-  --shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-  --soft-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  color: var(--ink);
-  background: #ffffff;
-}
-
-.app-shell {
-  min-height: 100vh;
-  background: #ffffff;
-}
-
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  height: auto;
-  padding: 0 !important;
-  line-height: normal;
-  background: rgba(255, 255, 255, 0.98) !important;
-  border-bottom: 1px solid #eef1f4;
-  backdrop-filter: blur(8px);
-}
-
-.app-header-inner {
-  width: min(1320px, calc(100vw - 32px));
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  padding: 10px 0 9px;
-}
-
-.brand-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 136px;
-  text-decoration: none;
-}
-
-.brand-title {
-  font-size: 26px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  color: #1f2937;
-}
-
-.brand-subtitle {
-  font-size: 10px;
-  color: #a1a1aa;
-}
-
-.nav-pills {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: flex-start;
-}
-
-.nav-pill {
-  position: relative;
-  padding: 8px 0 10px;
-  color: #3f3f46;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: color 0.18s ease;
-}
-
-.nav-pill.active {
-  color: #111827;
-}
-
-.nav-pill.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -10px;
-  height: 2px;
-  background: linear-gradient(90deg, #ffd348, #ff9b00);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.header-account-block {
-  display: grid;
-  justify-items: end;
-  gap: 2px;
-}
-
-.header-account-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.header-quiet-link {
-  color: #52525b;
-  font-size: 10px;
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.header-quiet-button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: #8a9099;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.header-quiet-button:hover,
-.header-quiet-link:hover {
-  color: #111827;
-}
-
-.header-sell-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 11px;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #ffcb45, #ffb316);
-  color: #3f2d00;
-  font-size: 12px;
-  font-weight: 800;
-  text-decoration: none;
-  box-shadow: 0 6px 14px rgba(255, 176, 0, 0.16);
-}
-
-.app-content {
-  width: min(1320px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 14px 0 48px;
-}
-
-.messages-app-content {
-  width: min(1880px, calc(100vw - 96px));
-  height: calc(100dvh - 70px);
-  padding: 8px 0;
-  overflow: hidden;
-}
-
-.page-grid {
-  display: grid;
-  gap: 20px;
-}
-
 .page-topbar {
   display: flex;
   align-items: center;
@@ -1375,35 +1189,36 @@ body {
 
 .fish-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 18px 14px;
 }
 
 .fish-item-card {
-  border-radius: 4px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 102px;
+  gap: 0;
   overflow: hidden;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
   transition:
     transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
+    opacity 0.18s ease;
 }
 
 .fish-item-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08) !important;
-  border-color: #dddfe4 !important;
+  transform: translateY(-3px);
+  opacity: 0.94;
 }
 
 .fish-item-card.offset {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .fish-item-cover {
-  height: 136px;
-  padding: 9px;
+  min-height: 0;
+  aspect-ratio: 1 / 1;
+  padding: 12px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1411,6 +1226,7 @@ body {
   background-position: center;
   background-size: cover;
   position: relative;
+  border-radius: 0;
 }
 
 .fish-item-cover-image {
@@ -1426,7 +1242,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.03), rgba(17, 24, 39, 0.18));
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.01), rgba(15, 23, 42, 0.12));
 }
 
 .fish-item-cover > * {
@@ -1438,14 +1254,19 @@ body {
   margin-left: auto;
   border: 0;
   min-width: 56px;
-  height: 28px;
-  padding: 0 10px;
+  max-width: 84px;
+  height: 26px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #3f3f46;
-  font-size: 11px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  font-size: 10px;
   font-weight: 800;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
 }
 
 .fish-item-favorite.active {
@@ -1489,57 +1310,64 @@ body {
 
 .fish-item-signal {
   margin-top: auto;
-  padding: 4px 8px;
+  max-width: calc(100% - 92px);
+  padding: 4px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  color: #4b5563;
+  background: rgba(255, 255, 255, 0.92);
+  color: #374151;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fish-item-body {
   display: grid;
-  gap: 4px;
-  padding: 7px 8px 7px;
+  grid-template-rows: 38px 24px 20px;
+  gap: 7px;
+  min-height: 0;
+  padding: 10px 0 0;
 }
 
 .fish-item-body h3 {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.28;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.36;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 28px;
-}
-
-.fish-item-body p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.48;
-  min-height: 34px;
+  min-height: 0;
 }
 
 .fish-item-price-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px;
-  min-height: 17px;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .fish-item-price-row strong {
   color: #ff5a10;
-  font-size: 16px;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: 0;
 }
 
-.fish-item-price-row span {
-  color: #9ca3af;
-  font-size: 9px;
-  font-weight: 700;
+.fish-item-price-meta {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fish-item-tags {
@@ -1557,29 +1385,29 @@ body {
   font-weight: 800;
 }
 
-.fish-item-meta {
+.fish-item-tags-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.2;
+  gap: 6px;
   white-space: nowrap;
   overflow: hidden;
 }
 
-.fish-item-meta span {
+.fish-item-tag {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 7px;
+  height: 20px;
+  border-radius: 4px;
+  background: #fff3e7;
+  color: #a35d18;
+  font-size: 11px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.fish-item-meta i {
-  width: 2px;
-  height: 2px;
-  border-radius: 999px;
-  background: #c7cdd6;
-  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .fish-item-link {
@@ -1601,4 +1429,3 @@ body {
   color: #9ca3af;
   cursor: default;
 }
-
