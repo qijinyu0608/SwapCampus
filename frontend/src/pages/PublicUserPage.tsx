@@ -1,6 +1,8 @@
 import { Empty, Skeleton } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { PageHeader } from '../components/layout/PageHeader';
+import { SectionCard } from '../components/ui/SectionCard';
 import {
   fetchProducts,
   fetchUserTrustSummary,
@@ -75,6 +77,11 @@ export function PublicUserPage() {
 
   return (
     <div className="page-grid public-user-page">
+      <PageHeader
+        title={user.name}
+        subtitle="公开校园主页"
+        meta={<span>{`${publishedProducts.length} 件在售闲置`}</span>}
+      />
       <section className="profile-hero-card public-user-hero">
         <div className="profile-hero-copy">
           <div className="profile-avatar-badge">
@@ -101,7 +108,7 @@ export function PublicUserPage() {
         </div>
       </section>
 
-      <section className="profile-content-panel">
+      <SectionCard className="profile-content-panel">
         <div className="profile-section-header">
           <div>
             <strong>正在出售</strong>
@@ -143,7 +150,7 @@ export function PublicUserPage() {
         ) : (
           <Empty description="这个同学暂时没有在售闲置" />
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

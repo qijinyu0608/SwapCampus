@@ -1,11 +1,10 @@
-import { Card, Typography } from 'antd';
-import { PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
+import { SectionCard } from './ui/SectionCard';
 
 export function PageCard({ title, children }: PropsWithChildren<{ title?: string }>) {
   return (
-    <Card className="soft-card">
-      {title ? <Typography.Title level={3} className="section-title">{title}</Typography.Title> : null}
+    <SectionCard title={title} className="soft-card">
       {children}
-    </Card>
+    </SectionCard>
   );
 }

@@ -1,0 +1,89 @@
+.ui-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 1px;
+  border-bottom: 1px solid #eef1f4;
+}
+
+.ui-page-header-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.ui-page-header-copy h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.ui-page-header-copy span,
+.ui-page-header-meta span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ui-page-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ui-section-card {
+  border-radius: var(--radius-md);
+  border-color: var(--line);
+  box-shadow: var(--soft-shadow);
+}
+
+.ui-section-card .ant-card-body {
+  padding: 20px;
+}
+
+.ui-section-card.is-compact .ant-card-body {
+  padding: 16px;
+}
+
+.ui-section-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ui-section-card-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  line-height: 1.2 !important;
+  color: var(--ink) !important;
+}
+
+.ui-section-card-extra {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ui-empty-panel {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  padding: 36px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: #fcfcfd;
+  text-align: center;
+}
+
+.ui-empty-panel strong {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.ui-empty-panel span {
+  font-size: 12px;
+  color: var(--muted);
+}
