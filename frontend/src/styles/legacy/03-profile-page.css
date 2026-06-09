@@ -555,7 +555,7 @@
 
 .credit-badge-preview-row {
   display: grid;
-  grid-template-columns: 88px 120px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 88px 120px repeat(3, minmax(0, 1fr));
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
@@ -591,6 +591,7 @@
 }
 
 .ui-credit-badge-preview-a,
+.ui-credit-badge-preview-a-solid,
 .ui-credit-badge-preview-b {
   display: inline-flex;
   align-items: center;
@@ -616,10 +617,28 @@
   -webkit-text-fill-color: transparent;
 }
 
+.ui-credit-badge-preview-a-solid {
+  font-weight: 760;
+  letter-spacing: 0.03em;
+  text-shadow: none;
+  box-shadow: none;
+  -webkit-text-fill-color: transparent;
+}
+
 .ui-credit-badge-preview-a.is-low {
   background-color: #be9372;
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(180deg, #fff1e6 0%, #f3d1b5 46%, #8b5c39 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
+}
+
+.ui-credit-badge-preview-a-solid.is-low {
+  background-color: #be9372;
+  background-image:
+    linear-gradient(180deg, #be9372 0%, #be9372 100%),
     linear-gradient(180deg, #fff1e6 0%, #f3d1b5 46%, #8b5c39 100%);
   background-origin: border-box;
   background-clip: padding-box, text;
@@ -636,10 +655,30 @@
   -webkit-background-clip: padding-box, text;
 }
 
+.ui-credit-badge-preview-a-solid.is-stable {
+  background-color: #d7d7d4;
+  background-image:
+    linear-gradient(180deg, #d7d7d4 0%, #d7d7d4 100%),
+    linear-gradient(180deg, #ffffff 0%, #eef0f2 48%, #74787f 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
+}
+
 .ui-credit-badge-preview-a.is-good {
   background-color: #d5bb77;
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(180deg, #fff6da 0%, #f9e9b0 45%, #7b5920 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
+}
+
+.ui-credit-badge-preview-a-solid.is-good {
+  background-color: #d5bb77;
+  background-image:
+    linear-gradient(180deg, #d5bb77 0%, #d5bb77 100%),
     linear-gradient(180deg, #fff6da 0%, #f9e9b0 45%, #7b5920 100%);
   background-origin: border-box;
   background-clip: padding-box, text;
@@ -656,6 +695,16 @@
   -webkit-background-clip: padding-box, text;
 }
 
+.ui-credit-badge-preview-a-solid.is-great {
+  background-color: #24262b;
+  background-image:
+    linear-gradient(180deg, #24262b 0%, #24262b 100%),
+    linear-gradient(180deg, #f7e3b2 0%, #e5c27a 50%, #ab7e28 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
+}
+ 
 .ui-credit-badge-preview-a.is-excellent {
   background-color: #1d2127;
   background-image:
@@ -666,6 +715,16 @@
   -webkit-background-clip: padding-box, text;
 }
 
+.ui-credit-badge-preview-a-solid.is-excellent {
+  background-color: #1d2127;
+  background-image:
+    linear-gradient(180deg, #1d2127 0%, #1d2127 100%),
+    linear-gradient(180deg, #f6f8fb 0%, #d7dfe8 52%, #9aa6b5 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
+}
+ 
 .ui-credit-badge-preview-b {
   font-weight: 780;
   letter-spacing: 0.01em;
