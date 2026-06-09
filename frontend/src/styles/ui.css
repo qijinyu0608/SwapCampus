@@ -289,29 +289,29 @@
 
 .ui-credit-badge.is-good {
   background-color: #d5bb77;
-  color: #7b5920;
+  color: #6b4700;
 }
 
 .ui-credit-badge.is-good .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #fff6da 0%, #f9e9b0 45%, #7b5920 100%);
+  background-image: linear-gradient(180deg, #fff8de 0%, #f4d77c 44%, #6b4700 100%);
 }
 
 .ui-credit-badge.is-stable {
   background-color: #d7d7d4;
-  color: #74787f;
+  color: #626b77;
 }
 
 .ui-credit-badge.is-stable .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #ffffff 0%, #eef0f2 48%, #74787f 100%);
+  background-image: linear-gradient(180deg, #ffffff 0%, #dfe4ea 46%, #626b77 100%);
 }
 
 .ui-credit-badge.is-low {
   background-color: #be9372;
-  color: #8b5c39;
+  color: #7a3f28;
 }
 
 .ui-credit-badge.is-low .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #fff1e6 0%, #f3d1b5 46%, #8b5c39 100%);
+  background-image: linear-gradient(180deg, #fff3e8 0%, #e7b287 44%, #7a3f28 100%);
 }
 
 .ui-info-list {
