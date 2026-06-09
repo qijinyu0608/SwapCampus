@@ -1,5 +1,5 @@
-import { PrismaClient, UserRole } from '@prisma/client';
-import { hashSync } from 'bcryptjs';
+import { AccountStatus, PrismaClient, UserRole, VerificationStatus } from '@prisma/client';
+import { ensureSuperTokensRoles, syncSuperTokensUser } from './supertokens-sync';
 
 const prisma = new PrismaClient();
 
@@ -9,75 +9,94 @@ const DEFAULT_USER_PASSWORD = 'SwapCampusUser2026';
 const DEMO_USER_EMAIL = 'qjinyu0608@qq.com';
 const DEMO_USER_PASSWORD = '123456';
 const DEMO_USER_STUDENT_ID = '2026990608';
+const SUPERTOKENS_SYNC_TIMEOUT_MS = 15000;
 
-function isHashedPassword(passwordHash: string) {
-  return passwordHash.startsWith('$2');
+async function withTimeout<T>(task: Promise<T>, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${SUPERTOKENS_SYNC_TIMEOUT_MS}ms`));
+        }, SUPERTOKENS_SYNC_TIMEOUT_MS);
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 async function main() {
-  const demoUser = await prisma.user.findUnique({
-    where: { email: DEMO_USER_EMAIL }
-  });
-
-  if (!demoUser) {
-    await prisma.user.create({
-      data: {
-        studentId: DEMO_USER_STUDENT_ID,
-        name: 'QJinyu',
-        email: DEMO_USER_EMAIL,
-        passwordHash: hashSync(DEMO_USER_PASSWORD, 10),
-        role: UserRole.USER,
-        creditScore: 88,
-        isVerified: true,
-        verification: {
-          create: {
-            realName: 'QJinyu',
-            college: '工学院',
-            phone: '18800000608',
-            status: 'APPROVED'
-          }
-        }
-      }
-    });
-  } else if (!isHashedPassword(demoUser.passwordHash) || demoUser.passwordHash === DEMO_USER_PASSWORD) {
-    await prisma.user.update({
-      where: { id: demoUser.id },
-      data: {
-        passwordHash: hashSync(DEMO_USER_PASSWORD, 10)
-      }
-    });
-  }
+  await ensureSuperTokensRoles();
 
   const users = await prisma.user.findMany({
+    include: {
+      verification: true
+    },
     orderBy: { id: 'asc' }
   });
 
   for (const user of users) {
-    const nextData: Record<string, string> = {};
+    const isAdmin = user.role === UserRole.ADMIN;
+    const email = isAdmin
+      ? DEFAULT_ADMIN_EMAIL
+      : user.email === DEMO_USER_EMAIL || user.studentId === DEMO_USER_STUDENT_ID
+        ? DEMO_USER_EMAIL
+        : /^user\d+@swapcampus\.local$/.test(user.email)
+          ? user.email.replace('@swapcampus.local', '@stu.swapcampus.cn')
+          : user.email;
 
-    if (user.role === UserRole.ADMIN) {
-      if (user.email !== DEFAULT_ADMIN_EMAIL) {
-        nextData.email = DEFAULT_ADMIN_EMAIL;
-      }
+    const password = email === DEMO_USER_EMAIL ? DEMO_USER_PASSWORD : isAdmin ? DEFAULT_ADMIN_PASSWORD : DEFAULT_USER_PASSWORD;
 
-      if (!isHashedPassword(user.passwordHash) || user.passwordHash === 'admin123') {
-        nextData.passwordHash = hashSync(DEFAULT_ADMIN_PASSWORD, 10);
-      }
-    } else {
-      if (/^user\d+@swapcampus\.local$/.test(user.email)) {
-        nextData.email = user.email.replace('@swapcampus.local', '@stu.swapcampus.cn');
-      }
-
-      if (!isHashedPassword(user.passwordHash) || user.passwordHash === '123456') {
-        nextData.passwordHash = hashSync(DEFAULT_USER_PASSWORD, 10);
-      }
+    try {
+      console.log(`[db:sync-default-accounts] syncing ${email}`);
+      await withTimeout(
+        syncSuperTokensUser(prisma, {
+          email,
+          password,
+          displayName: user.displayName,
+          studentId: user.studentId,
+          college: user.verification?.college ?? '待填写',
+          role: user.role,
+          verificationStatus: user.verificationStatus ?? VerificationStatus.PENDING,
+          accountStatus: user.accountStatus ?? AccountStatus.ACTIVE
+        }),
+        `sync user ${email}`
+      );
+      console.log(`[db:sync-default-accounts] synced ${email}`);
+    } catch (error) {
+      console.warn(`[db:sync-default-accounts] skip ${email}:`, error);
     }
+  }
 
-    if (Object.keys(nextData).length > 0) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: nextData
-      });
+  const demoUser = await prisma.user.findUnique({
+    where: { email: DEMO_USER_EMAIL },
+    include: { verification: true }
+  });
+
+  if (!demoUser) {
+    try {
+      console.log(`[db:sync-default-accounts] syncing ${DEMO_USER_EMAIL}`);
+      await withTimeout(
+        syncSuperTokensUser(prisma, {
+          email: DEMO_USER_EMAIL,
+          password: DEMO_USER_PASSWORD,
+          displayName: 'QJinyu',
+          studentId: DEMO_USER_STUDENT_ID,
+          college: '工学院',
+          role: UserRole.USER,
+          verificationStatus: VerificationStatus.APPROVED,
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        `sync user ${DEMO_USER_EMAIL}`
+      );
+      console.log(`[db:sync-default-accounts] synced ${DEMO_USER_EMAIL}`);
+    } catch (error) {
+      console.warn(`[db:sync-default-accounts] skip ${DEMO_USER_EMAIL}:`, error);
     }
   }
 

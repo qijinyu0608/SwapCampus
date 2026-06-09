@@ -1,4 +1,13 @@
-import { CampusServiceCategory, CampusServiceStatus, PrismaClient, UserRole } from '@prisma/client';
+import {
+  AccountStatus,
+  CampusServiceCategory,
+  CampusServiceContactPreference,
+  CampusServiceFulfillmentMode,
+  CampusServiceStatus,
+  CampusServiceUrgency,
+  PrismaClient,
+  UserRole
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +22,11 @@ const openTaskTemplates: Array<{
   locationTo: string;
   deadlineLabel: string;
   estimatedMinutes: number;
+  urgency: CampusServiceUrgency;
+  fulfillmentMode: CampusServiceFulfillmentMode;
+  contactPreference: CampusServiceContactPreference;
+  itemCount: number;
+  trustNote: string;
 }> = [
   {
     title: '东门快递代取到13号公寓',
@@ -22,7 +36,12 @@ const openTaskTemplates: Array<{
     locationFrom: '东门快递点',
     locationTo: '13号公寓',
     deadlineLabel: '今天 19:30 前',
-    estimatedMinutes: 18
+    estimatedMinutes: 18,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '小快递，放楼下后站内确认。'
   },
   {
     title: '学研中心A座打印讲义送主楼',
@@ -32,7 +51,12 @@ const openTaskTemplates: Array<{
     locationFrom: '学研中心A座',
     locationTo: '主楼',
     deadlineLabel: '今晚 20:00 前',
-    estimatedMinutes: 24
+    estimatedMinutes: 24,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '讲义送到主楼一层大厅。'
   },
   {
     title: '学一食堂带饭到图书馆',
@@ -42,7 +66,12 @@ const openTaskTemplates: Array<{
     locationFrom: '学一食堂',
     locationTo: '图书馆',
     deadlineLabel: '约 18:20 送达',
-    estimatedMinutes: 16
+    estimatedMinutes: 16,
+    urgency: CampusServiceUrgency.URGENT,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.PHONE_AFTER_MATCH,
+    itemCount: 1,
+    trustNote: '餐到了请当面交接。'
   },
   {
     title: '6号公寓搬一箱书到11号公寓',
@@ -52,7 +81,12 @@ const openTaskTemplates: Array<{
     locationFrom: '6号公寓',
     locationTo: '11号公寓',
     deadlineLabel: '今晚 21:00 前',
-    estimatedMinutes: 28
+    estimatedMinutes: 28,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.FLEXIBLE,
+    itemCount: 1,
+    trustNote: '纸箱不重，有电梯。'
   },
   {
     title: '行政楼材料送到信息楼',
@@ -62,7 +96,12 @@ const openTaskTemplates: Array<{
     locationFrom: '行政楼',
     locationTo: '信息楼',
     deadlineLabel: '今天 16:30 前',
-    estimatedMinutes: 20
+    estimatedMinutes: 20,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '送到值班室即可。'
   },
   {
     title: '西门取文件送学研中心B座',
@@ -72,7 +111,12 @@ const openTaskTemplates: Array<{
     locationFrom: '西门',
     locationTo: '学研中心B座',
     deadlineLabel: '1 小时内',
-    estimatedMinutes: 22
+    estimatedMinutes: 22,
+    urgency: CampusServiceUrgency.URGENT,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.FLEXIBLE,
+    itemCount: 1,
+    trustNote: '门卫处取文件。'
   },
   {
     title: '田家炳体育馆饮料带到11号公寓',
@@ -82,7 +126,12 @@ const openTaskTemplates: Array<{
     locationFrom: '田家炳体育馆',
     locationTo: '11号公寓',
     deadlineLabel: '今晚 21:30 前',
-    estimatedMinutes: 15
+    estimatedMinutes: 15,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 2,
+    trustNote: '两瓶饮料楼下交接。'
   },
   {
     title: '南门快递柜小件送到6号公寓',
@@ -92,7 +141,12 @@ const openTaskTemplates: Array<{
     locationFrom: '南门快递柜',
     locationTo: '6号公寓',
     deadlineLabel: '今天 18:00 前',
-    estimatedMinutes: 17
+    estimatedMinutes: 17,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '小包裹放宿舍楼下。'
   },
   {
     title: '图书馆帮取预约资料',
@@ -102,7 +156,12 @@ const openTaskTemplates: Array<{
     locationFrom: '图书馆',
     locationTo: '学研中心C座',
     deadlineLabel: '下午 17:20 前',
-    estimatedMinutes: 25
+    estimatedMinutes: 25,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '服务台取资料。'
   },
   {
     title: '学二食堂拼单咖啡送主楼',
@@ -112,7 +171,12 @@ const openTaskTemplates: Array<{
     locationFrom: '学二食堂',
     locationTo: '主楼',
     deadlineLabel: '今天 15:40 前',
-    estimatedMinutes: 14
+    estimatedMinutes: 14,
+    urgency: CampusServiceUrgency.URGENT,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.PHONE_AFTER_MATCH,
+    itemCount: 2,
+    trustNote: '两杯咖啡一起取。'
   },
   {
     title: '信息楼帮交课程作业',
@@ -122,7 +186,12 @@ const openTaskTemplates: Array<{
     locationFrom: '13号公寓',
     locationTo: '信息楼',
     deadlineLabel: '明天 10:00 前',
-    estimatedMinutes: 30
+    estimatedMinutes: 30,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+    itemCount: 1,
+    trustNote: '作业袋送老师办公室。'
   },
   {
     title: '操场看包20分钟',
@@ -132,12 +201,17 @@ const openTaskTemplates: Array<{
     locationFrom: '田家炳体育馆',
     locationTo: '田家炳体育馆',
     deadlineLabel: '今天 19:00 左右',
-    estimatedMinutes: 20
+    estimatedMinutes: 20,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    contactPreference: CampusServiceContactPreference.FLEXIBLE,
+    itemCount: 1,
+    trustNote: '短时看包，结束后当面取回。'
   }
 ];
 
-function looksLikeCurrentDemoUser(user: { name: string; studentId: string; email: string }) {
-  const text = `${user.name} ${user.studentId} ${user.email}`.toLowerCase();
+function looksLikeCurrentDemoUser(user: { displayName: string; studentId: string; email: string }) {
+  const text = `${user.displayName} ${user.studentId} ${user.email}`.toLowerCase();
   return text.includes('qijinyu') || text.includes('qijnyu');
 }
 
@@ -169,10 +243,10 @@ async function main() {
   const users = await prisma.user.findMany({
     where: {
       role: UserRole.USER,
-      isBanned: false
+      accountStatus: AccountStatus.ACTIVE
     },
     orderBy: { id: 'asc' },
-    select: { id: true, name: true, studentId: true, email: true }
+    select: { id: true, displayName: true, studentId: true, email: true }
   });
 
   const publishers = users.filter((user) => !looksLikeCurrentDemoUser(user));
@@ -212,7 +286,7 @@ async function main() {
 
     existingTitles.add(title);
     createdCount += 1;
-    console.log(`[db:ensure-campus-services] created OPEN task: ${title} (publisher ${publisher.name})`);
+    console.log(`[db:ensure-campus-services] created OPEN task: ${title} (publisher ${publisher.displayName})`);
   }
 
   console.log(`[db:ensure-campus-services] open campus services: ${openTaskCount} -> ${openTaskCount + createdCount}`);

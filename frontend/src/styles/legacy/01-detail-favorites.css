@@ -3,6 +3,35 @@
   gap: 18px;
 }
 
+.detail-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-shell-main-card {
+  padding: 18px 22px 20px;
+  border-radius: 28px;
+  background: #fff;
+  border: 1px solid #edf0f4;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+}
+
+.detail-shell-main-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.detail-shell-main-media,
+.detail-shell-side-panel {
+  min-width: 0;
+}
+
+.detail-shell-bottom {
+  display: grid;
+}
+
 .detail-topbar {
   display: flex;
   align-items: center;
@@ -108,18 +137,10 @@
   font-weight: 700;
 }
 
-.detail-main-card {
-  padding: 18px 22px 20px;
-  border-radius: 28px;
-  background: #fff;
-  border: 1px solid #edf0f4;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
-}
-
-.detail-main-layout {
+.detail-main-layout-product {
   display: grid;
   --detail-photo-height: clamp(680px, 72vh, 980px);
-  grid-template-columns: 126px minmax(0, 1.05fr) minmax(420px, 0.95fr);
+  grid-template-columns: 126px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -225,13 +246,6 @@
   padding-top: 10px;
 }
 
-.detail-info-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
 .detail-status-row,
 .detail-tag-row,
 .detail-chip-row,
@@ -254,6 +268,70 @@
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.listing-detail-hero {
+  display: grid;
+  gap: 12px;
+}
+
+.listing-detail-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.listing-detail-status {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.listing-detail-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.listing-detail-amount strong {
+  color: #ff5a10;
+  font-size: 52px;
+  line-height: 1;
+}
+
+.listing-detail-amount span {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.listing-detail-title {
+  margin: 0;
+  color: #111827;
+  font-size: 26px;
+  line-height: 1.45;
+  letter-spacing: -0.03em;
+}
+
+.listing-detail-description {
+  margin: 0;
+  color: #2f3640;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.listing-detail-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.listing-detail-meta-panel.ui-key-value-grid {
+  gap: 12px;
+}
+
+.listing-detail-timeline.ui-key-value-grid {
+  gap: 10px;
 }
 
 .detail-price-line strong {

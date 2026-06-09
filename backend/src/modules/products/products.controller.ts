@@ -1,6 +1,12 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { SearchProductsDto } from './dto/search-products.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import type { SessionRequest } from '../auth/supertokens.types';
 
 @Controller('products')
 export class ProductsController {
@@ -10,13 +16,16 @@ export class ProductsController {
   ) {}
 
   @Get()
-  listProducts() {
-    return this.productsService.listProducts();
+  searchProducts(@Query() query: SearchProductsDto) {
+    return this.productsService.searchProducts(query);
   }
 
-  @Get('recommendations')
-  getRecommendations(@Query('userId') userId?: string) {
-    return this.productsService.getRecommendations(userId ? Number(userId) : undefined);
+  @Get('home-recommendations')
+  getHomeRecommendations(@Req() request: SessionRequest) {
+    const session = request.session;
+    const accessTokenPayload = session?.getAccessTokenPayload();
+    const currentUserId = accessTokenPayload ? Number(accessTokenPayload.userId) : undefined;
+    return this.productsService.getHomeRecommendations(currentUserId);
   }
 
   @Get('publishing-rules')
@@ -37,13 +46,33 @@ export class ProductsController {
   @Get(':id')
   getProductDetail(
     @Param('id', ParseIntPipe) id: number,
-    @Query('userId') userId?: string
+    @Req() request: SessionRequest
   ) {
-    return this.productsService.getProductDetail(id, userId ? Number(userId) : undefined);
+    const session = request.session;
+    const accessTokenPayload = session?.getAccessTokenPayload();
+    const currentUserId = accessTokenPayload ? Number(accessTokenPayload.userId) : undefined;
+
+    if (currentUserId && session) {
+      const currentUser: AuthenticatedUser = {
+        id: currentUserId,
+        supertokensUserId: String(session.getUserId()),
+        studentId: String(accessTokenPayload?.studentId ?? ''),
+        displayName: typeof accessTokenPayload?.displayName === 'string' ? accessTokenPayload.displayName : undefined,
+        email: String(accessTokenPayload?.email ?? ''),
+        role: (accessTokenPayload?.role as UserRole) ?? UserRole.USER
+      };
+      return this.productsService.getProductDetail(id, currentUser.id);
+    }
+
+    return this.productsService.getProductDetail(id);
   }
 
   @Post()
-  createProduct(@Body() payload: CreateProductDto) {
-    return this.productsService.createProduct(payload);
+  @UseGuards(JwtAuthGuard)
+  createProduct(
+    @Body() payload: CreateProductDto,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.productsService.createProduct(payload, user);
   }
 }

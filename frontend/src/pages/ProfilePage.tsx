@@ -1,16 +1,19 @@
 import {
+  AppstoreOutlined,
+  EditOutlined,
   SettingOutlined,
   ShoppingOutlined,
-  StarOutlined,
-  UserOutlined
+  StarOutlined
 } from '@ant-design/icons';
-import { Button, Empty, Form, Input, Modal, Pagination, Rate, Skeleton, Tag, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { Alert, Button, Empty, Form, Input, Modal, Pagination, Rate, Skeleton, Tag, message } from 'antd';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MetaList, MetricBarChart } from '../components/data-display';
+import { MetaList } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { normalizeProductCategoryName } from '../constants/productCategories';
+import { useAuthState } from '../services/auth-state';
 import {
   cancelOrder,
   completeOrderMeetup,
@@ -19,24 +22,19 @@ import {
   fetchFavoriteList,
   fetchOrders,
   fetchProducts,
-  type FavoriteItem,
-  fetchUserProfile,
-  fetchUserTrustSummary,
   getApiErrorMessage,
   OrderItem,
   ProductSummary,
-  UserProfile,
-  UserTrustSummary,
+  type FavoriteItem,
   updateUserProfile
 } from '../services/api';
 import { getFavoriteIds, subscribeFavorites } from '../services/favorites';
+import { useCurrentUserProfileBundle } from '../services/user-profile';
 import {
-  DemoUser,
-  getDemoUser,
   getRoleLabel,
   hasTradingAccess,
   isGuestUser,
-  saveDemoUser
+  type SessionUser
 } from '../services/session';
 import { getProductImage } from '../utils/productCover';
 
@@ -60,7 +58,7 @@ const orderFilterTabs = [
 ] as const;
 
 type ProfileFormValues = {
-  name: string;
+  displayName: string;
   email: string;
   realName: string;
   college: string;
@@ -68,6 +66,7 @@ type ProfileFormValues = {
 };
 
 type ProfileSection = 'items' | 'orders' | 'favorites' | 'profile';
+type SidebarActionKey = ProfileSection | 'profile-edit';
 type OrderScope = 'all' | 'buying' | 'selling';
 type OrderFilter = typeof orderFilterTabs[number]['key'];
 type OrderActionMode = 'meetup' | 'cancel' | 'review';
@@ -79,28 +78,23 @@ type OrderActionFormValues = {
   content?: string;
 };
 
-function getCreditBadge(score: number) {
-  if (score >= 85) {
-    return '卖家信用极好';
-  }
-  if (score >= 70) {
-    return '卖家信用良好';
-  }
-  return '信用稳定';
-}
-
-function formatIdentity(verified?: boolean) {
-  return verified ? '已实名' : '待实名';
-}
+type SidebarGroup = {
+  title: string;
+  icon: ReactNode;
+  items: Array<{
+    key: SidebarActionKey;
+    label: string;
+    count?: number | null;
+  }>;
+};
 
 export function ProfilePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentUser, setCurrentUser } = useAuthState();
   const routeState = location.state as { section?: unknown; orderScope?: unknown } | null;
   const [form] = Form.useForm<ProfileFormValues>();
   const [orderForm] = Form.useForm<OrderActionFormValues>();
-  const [user, setUser] = useState<DemoUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [productLoading, setProductLoading] = useState(true);
@@ -111,7 +105,6 @@ export function ProfilePage() {
     : 'all';
   const [activeSection, setActiveSection] = useState<ProfileSection>(initialSection);
   const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [trustSummary, setTrustSummary] = useState<UserTrustSummary | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -124,12 +117,21 @@ export function ProfilePage() {
   const [activeOrder, setActiveOrder] = useState<OrderItem | null>(null);
   const [orderActionLoading, setOrderActionLoading] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
+  const {
+    profile,
+    trustSummary,
+    presentation: userPresentation,
+    creditScore,
+    loading: profileBundleLoading,
+    errorMessage: profileBundleError,
+    setProfile,
+    setTrustSummary
+  } = useCurrentUserProfileBundle(hasTradingAccess(currentUser) ? currentUser : null);
 
-  async function loadOrders(userId: number, page: number) {
+  async function loadOrders(page: number) {
     setOrdersLoading(true);
     try {
       const result = await fetchOrders({
-        userId,
         page,
         pageSize: ORDER_PAGE_SIZE
       });
@@ -148,42 +150,23 @@ export function ProfilePage() {
   }
 
   useEffect(() => {
-    const currentUser = getDemoUser();
-    setUser(currentUser);
-
     if (!hasTradingAccess(currentUser)) {
-      setProfile(null);
       setProducts([]);
       setOrders([]);
       setOrderPage(1);
       setOrderTotal(0);
       setOrderTotalPages(1);
-      setTrustSummary(null);
       setProductLoading(false);
       return;
     }
 
-    const activeUser = currentUser;
-    if (!activeUser) {
+    if (!currentUser) {
       return;
     }
 
     setProductLoading(true);
-    fetchUserProfile(activeUser.id)
-      .then((result) => {
-        setProfile(result);
-        form.setFieldsValue({
-          name: result.name,
-          email: result.email,
-          realName: result.realName,
-          college: result.college,
-          phone: result.phone
-        });
-      })
-      .catch(() => setProfile(null));
-
-    fetchProducts()
-      .then(setProducts)
+    fetchProducts({ sellerId: currentUser.id, status: 'ALL', page: 1, pageSize: 60 })
+      .then((result) => setProducts(result.items))
       .catch(() => setProducts([]))
       .finally(() => setProductLoading(false));
 
@@ -191,51 +174,64 @@ export function ProfilePage() {
       .then((result) => setFavoriteItems(result.items))
       .catch(() => setFavoriteItems([]));
 
-    void loadOrders(activeUser.id, 1);
-    fetchUserTrustSummary(activeUser.id).then(setTrustSummary).catch(() => setTrustSummary(null));
-  }, [form]);
+    void loadOrders(1);
+  }, [currentUser, form]);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+
+    form.setFieldsValue({
+      displayName: profile.displayName,
+      email: profile.email,
+      realName: profile.realName,
+      college: profile.college,
+      phone: profile.phone
+    });
+  }, [form, profile]);
 
   useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
 
   useEffect(() => {
-    if (user?.role !== 'USER') {
+    if (currentUser?.role !== 'USER') {
       return;
     }
 
     fetchFavoriteList()
       .then((result) => setFavoriteItems(result.items))
       .catch(() => setFavoriteItems([]));
-  }, [favoriteVersion, user]);
+  }, [favoriteVersion, currentUser]);
 
   async function handleSaveProfile(values: ProfileFormValues) {
-    if (!user) {
+    if (!currentUser) {
       return;
     }
 
     setSavingProfile(true);
     try {
-      const updated = await updateUserProfile(user.id, values);
+      const updated = await updateUserProfile(currentUser.id, values);
       setProfile(updated);
       setEditingProfile(false);
       setTrustSummary((current) => current ? {
         ...current,
-        name: updated.name,
+        displayName: updated.displayName,
         email: updated.email,
         college: updated.college,
-        verified: updated.verified,
-        identityStatus: updated.identityStatus
+        verificationStatus: updated.verificationStatus,
+        accountStatus: updated.accountStatus
       } : current);
 
-      const nextUser: DemoUser = {
-        ...user,
-        name: updated.name,
+      const nextUser: SessionUser = {
+        ...currentUser,
+        displayName: updated.displayName,
         email: updated.email,
         studentId: updated.studentId,
         creditScore: updated.creditScore,
-        verified: updated.verified
+        verificationStatus: updated.verificationStatus,
+        accountStatus: updated.accountStatus
       };
-      setUser(nextUser);
-      saveDemoUser(nextUser);
+      setCurrentUser(nextUser);
       message.success('个人资料已更新');
     } catch (error) {
       message.error(getApiErrorMessage(error, '更新失败，请稍后重试'));
@@ -247,7 +243,7 @@ export function ProfilePage() {
   function openProfileEditor() {
     if (profile) {
       form.setFieldsValue({
-        name: profile.name,
+        displayName: profile.displayName,
         email: profile.email,
         realName: profile.realName,
         college: profile.college,
@@ -258,7 +254,7 @@ export function ProfilePage() {
     setEditingProfile(true);
   }
 
-  function openProfileDetail() {
+  function openProfileSummary() {
     setActiveSection('profile');
     setEditingProfile(false);
   }
@@ -292,17 +288,18 @@ export function ProfilePage() {
   }
 
   async function refreshOrderRelatedData(page = orderPage) {
-    if (!user) {
+    if (!currentUser) {
       return;
     }
 
-    await loadOrders(user.id, page);
-    fetchUserTrustSummary(user.id).then(setTrustSummary).catch(() => setTrustSummary(null));
-    fetchProducts().then(setProducts).catch(() => setProducts([]));
+    await loadOrders(page);
+    fetchProducts({ sellerId: currentUser.id, status: 'ALL', page: 1, pageSize: 60 })
+      .then((result) => setProducts(result.items))
+      .catch(() => setProducts([]));
   }
 
   async function handleOrderActionSubmit() {
-    if (!user || !activeOrder || !orderActionMode) {
+    if (!currentUser || !activeOrder || !orderActionMode) {
       return;
     }
 
@@ -342,7 +339,7 @@ export function ProfilePage() {
   }
 
   async function handleCompleteMeetup(order: OrderItem) {
-    if (!user) {
+    if (!currentUser) {
       return;
     }
 
@@ -359,19 +356,19 @@ export function ProfilePage() {
   }
 
   function getOrderCounterpart(order: OrderItem) {
-    if (!user) {
+    if (!currentUser) {
       return '同校同学';
     }
 
-    return order.buyerId === user.id ? order.sellerName : order.buyerName;
+    return order.buyerId === currentUser.id ? order.sellerName : order.buyerName;
   }
 
   function getOrderRoleLabel(order: OrderItem) {
-    if (!user) {
+    if (!currentUser) {
       return '交易订单';
     }
 
-    return order.buyerId === user.id ? '我买到的' : '我卖出的';
+    return order.buyerId === currentUser.id ? '我买到的' : '我卖出的';
   }
 
   function getOrderStatusColor(status: string) {
@@ -391,56 +388,114 @@ export function ProfilePage() {
     return value === null ? '价格待确认' : `¥${value.toFixed(2)}`;
   }
 
-  const roleLabel = user ? getRoleLabel(user.role) : '--';
-  const guestMode = isGuestUser(user);
-  const canEditProfile = !!user && hasTradingAccess(user) && !!profile;
-  const favoriteIds = getFavoriteIds(user);
-  const publishedProducts = user
-    ? products.filter((item) => item.sellerId === user.id || item.sellerName === user.name)
+  function getOrderImage(order: OrderItem, index: number) {
+    if (order.productImageUrl) {
+      return order.productImageUrl;
+    }
+
+    return getProductImage({
+      title: order.productTitle,
+      category: normalizeProductCategoryName(order.productCategory),
+      price: order.productPrice ?? 0,
+      condition: order.productCondition ?? '同校面交',
+      sellerName: getOrderCounterpart(order)
+    }, index);
+  }
+
+  function isSidebarItemActive(key: SidebarActionKey) {
+    if (key === 'profile-edit') {
+      return activeSection === 'profile' && editingProfile;
+    }
+
+    return activeSection === key && (key !== 'profile' || !editingProfile);
+  }
+
+  function handleSidebarAction(key: SidebarActionKey) {
+    if (key === 'profile-edit') {
+      openProfileEditor();
+      return;
+    }
+
+    if (key === 'profile') {
+      openProfileSummary();
+      return;
+    }
+
+    setActiveSection(key);
+    setEditingProfile(false);
+  }
+
+  const roleLabel = currentUser ? getRoleLabel(currentUser.role) : '--';
+  const guestMode = isGuestUser(currentUser);
+  const canEditProfile = !!currentUser && hasTradingAccess(currentUser) && !!profile;
+  const favoriteIds = getFavoriteIds(currentUser);
+  const publishedProducts = currentUser
+    ? products.filter((item) => item.sellerId === currentUser.id || item.sellerName === currentUser.displayName)
     : [];
-  const favoriteProducts = user?.role === 'USER'
+  const favoriteProducts = currentUser?.role === 'USER'
     ? favoriteItems
     : products.filter((item) => favoriteIds.includes(item.id));
-  const creditScore = trustSummary?.creditScore ?? profile?.creditScore ?? user?.creditScore ?? 60;
   const activeOrderCount = trustSummary?.activeOrders ?? orders.filter((item) => item.status === 'IN_PROGRESS' || item.status === 'PENDING').length;
   const completedOrderCount = trustSummary?.completedOrders ?? orders.filter((item) => item.status === 'COMPLETED').length;
-  const latestOrder = orderPage === 1 ? orders[0] : null;
+  const waitingReviewCount = trustSummary?.waitingReviews ?? orders.filter((item) => item.status === 'WAITING_REVIEW').length;
   const scopedOrders = orders.filter((item) => {
-    if (!user || orderScope === 'all') {
+    if (!currentUser || orderScope === 'all') {
       return true;
     }
 
-    return orderScope === 'buying' ? item.buyerId === user.id : item.sellerId === user.id;
+    return orderScope === 'buying' ? item.buyerId === currentUser.id : item.sellerId === currentUser.id;
   });
   const visibleOrders = scopedOrders.filter((item) => orderFilter === 'ALL' || item.status === orderFilter);
-  const identityLabel = formatIdentity(trustSummary?.verified ?? profile?.verified ?? user?.verified);
-  const collegeLabel = profile?.college ?? trustSummary?.college ?? '同校用户';
-  const profileChartItems = !guestMode && user ? [
+  const latestOrder = visibleOrders[0] ?? null;
+  const identityLabel = userPresentation.verificationLabel;
+  const creditBadge = userPresentation.creditBadge;
+  const collegeLabel = userPresentation.collegeLabel;
+  const profileSummary = trustSummary
+    ? `${trustSummary.responseRate}% 回复率 · ${trustSummary.averageRating.toFixed(1)} 分 · ${trustSummary.waitingReviews} 条待评价`
+    : userPresentation.emailLabel;
+  const topTabs = [
+    { key: 'items' as const, label: '宝贝', count: publishedProducts.length },
+    { key: 'orders' as const, label: '信用与订单', count: orderTotal },
+    { key: 'favorites' as const, label: '收藏', count: favoriteProducts.length },
+    { key: 'profile' as const, label: '个人资料', count: null }
+  ];
+  const sidebarGroups: SidebarGroup[] = [
     {
-      label: '信用',
-      value: creditScore,
-      displayValue: String(creditScore),
-      tone: 'amber' as const
+      title: '我的闲置',
+      icon: <AppstoreOutlined />,
+      items: [
+        { key: 'items', label: '我发布的', count: publishedProducts.length }
+      ]
     },
     {
-      label: '进行中',
-      value: activeOrderCount,
-      displayValue: String(activeOrderCount),
-      tone: 'green' as const
+      title: '我的交易',
+      icon: <ShoppingOutlined />,
+      items: [
+        { key: 'orders', label: '我的订单', count: orderTotal }
+      ]
     },
     {
-      label: '已完成',
-      value: completedOrderCount,
-      displayValue: String(completedOrderCount),
-      tone: 'blue' as const
+      title: '我的收藏',
+      icon: <StarOutlined />,
+      items: [
+        { key: 'favorites', label: '收藏宝贝', count: favoriteProducts.length }
+      ]
     },
     {
-      label: '订单',
-      value: orderTotal,
-      displayValue: String(orderTotal),
-      tone: 'amber' as const
+      title: '账户设置',
+      icon: <SettingOutlined />,
+      items: [
+        { key: 'profile', label: '个人资料' },
+        { key: 'profile-edit', label: '编辑资料' }
+      ]
     }
-  ] : [];
+  ];
+  const heroSummaryItems = [
+    { label: '信用分', value: creditScore },
+    { label: '进行中', value: activeOrderCount },
+    { label: '已完成', value: completedOrderCount },
+    { label: '待评价', value: waitingReviewCount }
+  ];
 
   function renderProductGrid(items: ProductSummary[], emptyTitle: string, emptyDescription: string) {
     if (productLoading) {
@@ -457,12 +512,12 @@ export function ProfilePage() {
         renderItem={(item, index) => (
           <ProductSummaryCard
             key={item.id}
-            className={`profile-fish-card${index % 4 === 3 ? ' offset' : ''}`}
+            className="profile-fish-card"
             item={item}
             imageSrc={getProductImage(item, index)}
             signal={`${item.category} · ${item.condition}`}
-            secondaryMeta={item.status === 'ON_SALE' ? '同校面交' : '交易留痕'}
-            tertiaryMeta={<span>{item.sellerName}</span>}
+            priceMeta={item.status === 'ON_SALE' ? '同校面交' : '交易留痕'}
+            tagItems={[item.sellerName, item.status === 'ON_SALE' ? '在售' : item.status]}
             onOpen={() => navigate(`/products/${item.id}`)}
           />
         )}
@@ -470,7 +525,339 @@ export function ProfilePage() {
     );
   }
 
-  if (!hasTradingAccess(user)) {
+  function renderOrdersSection() {
+    return (
+      <section className="profile-section-panel profile-order-board">
+        <SectionHeader
+          title="我的订单"
+          description={`${orderTotal ? `共 ${orderTotal} 条 · 第 ${orderPage}/${orderTotalPages} 页` : '暂无订单'} · 当前仍以线下面交为主`}
+          aside={(
+            <div className="profile-order-scope">
+              {[
+                { key: 'all' as const, label: '全部交易' },
+                { key: 'buying' as const, label: '我买到的' },
+                { key: 'selling' as const, label: '我卖出的' }
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={orderScope === item.key ? 'active' : ''}
+                  onClick={() => setOrderScope(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+          className="is-prominent is-spacious"
+        />
+
+        {trustSummary ? (
+          <div className="profile-order-summary-strip" aria-label="信用与订单指标">
+            <div className="profile-order-summary-item">
+              <span>待评价</span>
+              <strong>{trustSummary.waitingReviews}</strong>
+            </div>
+            <div className="profile-order-summary-item">
+              <span>回复率</span>
+              <strong>{`${trustSummary.responseRate}%`}</strong>
+            </div>
+            <div className="profile-order-summary-item">
+              <span>交易评分</span>
+              <strong>{trustSummary.averageRating.toFixed(1)}</strong>
+            </div>
+            <div className="profile-order-summary-item">
+              <span>完成订单</span>
+              <strong>{trustSummary.completedOrders}</strong>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="profile-order-tabs">
+          {orderFilterTabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={orderFilter === item.key ? 'active' : ''}
+              onClick={() => setOrderFilter(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {latestOrder ? (
+          <div className="profile-order-highlight">
+            <strong>最新订单 #{latestOrder.id}</strong>
+            <span>{orderStatusMap[latestOrder.status] ?? latestOrder.status}</span>
+            <em>{latestOrder.productTitle} · {latestOrder.meetupLocation || '待约定线下面交地点'}</em>
+          </div>
+        ) : null}
+
+        {visibleOrders.length ? (
+          <>
+            <div className="compact-list profile-orders-list">
+              {visibleOrders.map((item, index) => (
+                <article key={item.id} className="profile-order-card">
+                  <div className="profile-order-top">
+                    <div className="profile-order-user">
+                      <span>{getOrderCounterpart(item).slice(0, 1)}</span>
+                      <div className="profile-order-user-copy">
+                        <strong>{getOrderCounterpart(item)}</strong>
+                        <em>{getOrderRoleLabel(item)}</em>
+                      </div>
+                    </div>
+                    <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
+                  </div>
+
+                  <div className="profile-order-product">
+                    <img src={getOrderImage(item, index)} alt={item.productTitle} />
+                    <div>
+                      <h3>{item.productTitle}</h3>
+                      <p>{item.productCategory ?? '校园闲置'} · {item.productCondition ?? '线下面交'}</p>
+                      <strong>{formatOrderPrice(item.productPrice)}</strong>
+                      <span>{item.meetupLocation || '待双方在消息中约定线下面交时间地点'}</span>
+                    </div>
+                  </div>
+
+                  {item.note ? <div className="profile-order-note">{item.note}</div> : null}
+
+                  <div className="profile-order-actions">
+                    <Button size="small" onClick={() => navigate(`/products/${item.productId}`)}>商品详情</Button>
+                    <Button size="small" onClick={() => openOrderConversation(item)}>联系对方</Button>
+                    {item.status === 'PENDING' ? (
+                      <>
+                        <Button size="small" type="primary" onClick={() => openOrderAction('meetup', item)}>确认约定</Button>
+                        <Button size="small" onClick={() => openOrderAction('cancel', item)}>取消订单</Button>
+                      </>
+                    ) : null}
+                    {item.status === 'IN_PROGRESS' ? (
+                      <>
+                        <Button size="small" onClick={() => openOrderAction('meetup', item)}>修改约定</Button>
+                        <Button size="small" type="primary" loading={orderActionLoading} onClick={() => handleCompleteMeetup(item)}>确认完成</Button>
+                        <Button size="small" onClick={() => openOrderAction('cancel', item)}>取消订单</Button>
+                      </>
+                    ) : null}
+                    {item.status === 'WAITING_REVIEW' ? (
+                      <Button size="small" type="primary" onClick={() => openOrderAction('review', item)}>去评价</Button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+            {orderTotal > ORDER_PAGE_SIZE ? (
+              <div className="profile-pagination-row">
+                <Pagination
+                  current={orderPage}
+                  pageSize={ORDER_PAGE_SIZE}
+                  total={orderTotal}
+                  size="small"
+                  showSizeChanger={false}
+                  disabled={ordersLoading}
+                  onChange={(page) => {
+                    if (!currentUser) {
+                      return;
+                    }
+                    void loadOrders(page);
+                  }}
+                />
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <Empty description={ordersLoading ? '订单加载中...' : '当前筛选下暂无订单'} />
+        )}
+
+        <div className="profile-offline-flow">
+          <div><strong>1</strong><span>买家下单后自动生成会话</span></div>
+          <div><strong>2</strong><span>双方确认线下面交时间地点</span></div>
+          <div><strong>3</strong><span>当面验货并完成交易</span></div>
+          <div><strong>4</strong><span>补充评价并沉淀信用记录</span></div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderProfileSection() {
+    return (
+      <section className="profile-section-panel">
+        <SectionHeader
+          title="个人资料"
+          description={`${roleLabel} · ${profile?.studentId ?? currentUser?.studentId ?? '--'}`}
+          aside={canEditProfile ? (
+            <Button
+              type={editingProfile ? 'default' : 'primary'}
+              onClick={() => {
+                if (editingProfile && profile) {
+                  form.setFieldsValue({
+                    displayName: profile.displayName,
+                    email: profile.email,
+                    realName: profile.realName,
+                    college: profile.college,
+                    phone: profile.phone
+                  });
+                }
+                setEditingProfile((current) => !current);
+              }}
+            >
+              {editingProfile ? '取消编辑' : '编辑资料'}
+            </Button>
+          ) : null}
+          className="is-prominent is-spacious"
+        />
+
+        {profileBundleLoading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : editingProfile && profile ? (
+          <Form form={form} layout="vertical" className="profile-edit-form" onFinish={handleSaveProfile}>
+            <div className="profile-form-grid">
+              <Form.Item label="昵称" name="displayName" rules={[{ required: true, message: '请输入昵称' }]}>
+                <Input placeholder="请输入昵称" />
+              </Form.Item>
+              <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入正确邮箱' }]}>
+                <Input placeholder="请输入邮箱" />
+              </Form.Item>
+              <Form.Item label="真实姓名" name="realName" rules={[{ required: true, message: '请输入真实姓名' }]}>
+                <Input placeholder="请输入真实姓名" />
+              </Form.Item>
+              <Form.Item label="学院" name="college" rules={[{ required: true, message: '请输入学院' }]}>
+                <Input placeholder="请输入学院" />
+              </Form.Item>
+              <Form.Item label="手机号" name="phone" rules={[{ required: true, message: '请输入手机号' }]}>
+                <Input placeholder="请输入手机号" />
+              </Form.Item>
+            </div>
+            <div className="profile-form-actions">
+              <Button
+                htmlType="button"
+                onClick={() => {
+                  if (profile) {
+                    form.setFieldsValue({
+                      displayName: profile.displayName,
+                      email: profile.email,
+                      realName: profile.realName,
+                      college: profile.college,
+                      phone: profile.phone
+                    });
+                  }
+                  setEditingProfile(false);
+                }}
+              >
+                取消
+              </Button>
+              <Button type="primary" htmlType="submit" loading={savingProfile}>
+                保存资料
+              </Button>
+            </div>
+          </Form>
+        ) : (
+          <>
+            <div className="profile-kv-grid">
+              <div>
+                <span>学号</span>
+                <strong>{profile?.studentId ?? currentUser?.studentId ?? '--'}</strong>
+              </div>
+              <div>
+                <span>账号类型</span>
+                <strong>{roleLabel}</strong>
+              </div>
+              <div>
+                <span>账号状态</span>
+                <strong>{profile?.accountStatus === 'BANNED' ? '已封禁' : '正常'}</strong>
+              </div>
+              <div>
+                <span>信用分</span>
+                <strong>{creditScore}</strong>
+              </div>
+              <div>
+                <span>校园身份</span>
+                <strong>{identityLabel}</strong>
+              </div>
+              <div>
+                <span>邮箱</span>
+                <strong>{profile?.email ?? currentUser?.email ?? '--'}</strong>
+              </div>
+              <div>
+                <span>真实姓名</span>
+                <strong>{profile?.realName || '--'}</strong>
+              </div>
+              <div>
+                <span>学院</span>
+                <strong>{collegeLabel}</strong>
+              </div>
+              <div>
+                <span>手机号</span>
+                <strong>{profile?.phone || '--'}</strong>
+              </div>
+              <div>
+                <span>信用标签</span>
+                <strong>{creditBadge.label}</strong>
+              </div>
+            </div>
+
+            {trustSummary ? (
+              <div className="profile-profile-summary">
+                <div className="profile-order-summary-item">
+                  <span>回复率</span>
+                  <strong>{`${trustSummary.responseRate}%`}</strong>
+                </div>
+                <div className="profile-order-summary-item">
+                  <span>交易评分</span>
+                  <strong>{trustSummary.averageRating.toFixed(1)}</strong>
+                </div>
+                <div className="profile-order-summary-item">
+                  <span>完成订单</span>
+                  <strong>{trustSummary.completedOrders}</strong>
+                </div>
+                <div className="profile-order-summary-item">
+                  <span>待评价</span>
+                  <strong>{trustSummary.waitingReviews}</strong>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  function renderActiveSection() {
+    if (activeSection === 'items') {
+      return (
+        <section className="profile-section-panel">
+          <SectionHeader
+            title="我发布的宝贝"
+            description="只展示当前账号下已经发布的内容"
+            aside={<Tag color="gold">{publishedProducts.length} 件</Tag>}
+            className="is-prominent is-spacious"
+          />
+          {renderProductGrid(publishedProducts, '还没有发布商品', '去首页或发布页上架第一件校园闲置吧。')}
+        </section>
+      );
+    }
+
+    if (activeSection === 'favorites') {
+      return (
+        <section className="profile-section-panel">
+          <SectionHeader
+            title="我收藏的宝贝"
+            description="这里保留你标记过的商品，方便回看与比较"
+            aside={<Tag color="gold">{favoriteProducts.length} 件</Tag>}
+            className="is-prominent is-spacious"
+          />
+          {renderProductGrid(favoriteProducts, '还没有收藏商品', '看到心动的闲置后点一下想要，就会出现在这里。')}
+        </section>
+      );
+    }
+
+    if (activeSection === 'orders') {
+      return renderOrdersSection();
+    }
+
+    return renderProfileSection();
+  }
+
+  if (!hasTradingAccess(currentUser)) {
     return (
       <div className="page-grid profile-page">
         <EmptyState
@@ -483,105 +870,54 @@ export function ProfilePage() {
 
   return (
     <div className="page-grid profile-page">
+      {profileBundleError ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="profile-status-alert"
+          message={profileBundleError}
+          description="当前仍会优先展示本地会话和已加载内容，部分资料与信用指标可能暂时不完整。"
+        />
+      ) : null}
+
       <div className="profile-shell">
         <aside className="profile-sidebar">
-          <div className="profile-sidebar-panel">
-            <button
-              type="button"
-              className={activeSection === 'items' ? 'profile-side-item active' : 'profile-side-item'}
-              onClick={() => setActiveSection('items')}
-            >
-              <span className="profile-side-icon"><UserOutlined /></span>
-              <strong>我的闲置</strong>
-            </button>
-
-            <div className="profile-side-group">
-              <div className="profile-side-group-title">
-                <span className="profile-side-icon"><ShoppingOutlined /></span>
-                <strong>我的交易</strong>
-              </div>
-              <button
-                type="button"
-                className={activeSection === 'items' ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={() => setActiveSection('items')}
-              >
-                我发布的
-              </button>
-              <button
-                type="button"
-                className={activeSection === 'orders' && orderScope === 'all' ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={() => {
-                  setActiveSection('orders');
-                  setOrderScope('all');
-                }}
-              >
-                我的订单
-              </button>
-              <button
-                type="button"
-                className={activeSection === 'orders' && orderScope === 'selling' ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={() => {
-                  setActiveSection('orders');
-                  setOrderScope('selling');
-                }}
-              >
-                我卖出的
-              </button>
-              <button
-                type="button"
-                className={activeSection === 'orders' && orderScope === 'buying' ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={() => {
-                  setActiveSection('orders');
-                  setOrderScope('buying');
-                }}
-              >
-                我买到的
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className={activeSection === 'favorites' ? 'profile-side-item' + ' active' : 'profile-side-item'}
-              onClick={() => setActiveSection('favorites')}
-            >
-              <span className="profile-side-icon"><StarOutlined /></span>
-              <strong>我的收藏</strong>
-            </button>
-
-            <div className="profile-side-group">
-              <div className="profile-side-group-title">
-                <span className="profile-side-icon"><SettingOutlined /></span>
-                <strong>账户设置</strong>
-              </div>
-              <button
-                type="button"
-                className={activeSection === 'profile' && !editingProfile ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={openProfileDetail}
-              >
-                个人资料
-              </button>
-              <button
-                type="button"
-                className={activeSection === 'profile' && editingProfile ? 'profile-side-subitem active' : 'profile-side-subitem'}
-                onClick={openProfileEditor}
-              >
-                编辑资料
-              </button>
-            </div>
+          <div className="profile-menu-panel">
+            {sidebarGroups.map((group) => (
+              <section key={group.title} className="profile-menu-group">
+                <div className="profile-menu-group-title">
+                  <span className="profile-menu-group-icon">{group.icon}</span>
+                  <strong>{group.title}</strong>
+                </div>
+                <div className="profile-menu-group-items">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={isSidebarItemActive(item.key) ? 'profile-menu-item active' : 'profile-menu-item'}
+                      onClick={() => handleSidebarAction(item.key)}
+                    >
+                      <span>{item.label}</span>
+                      {typeof item.count === 'number' ? <em>{item.count}</em> : null}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         </aside>
 
-        <main className="profile-main">
+        <div className="profile-main">
           <section className="profile-hero-card">
             <div className="profile-hero-copy">
               <div className="profile-avatar-badge">
-                <span>{(profile?.name ?? user?.name ?? '校').slice(0, 1)}</span>
+                <img src="/images/default-avatar.png" alt="默认头像" />
               </div>
               <div className="profile-hero-meta">
                 <div className="profile-hero-title-row">
-                  <h1>{profile?.name ?? user?.name ?? '我的闲置'}</h1>
+                  <h1>{userPresentation.displayName}</h1>
                   <div className="profile-hero-badges">
-                    <span>{getCreditBadge(creditScore)}</span>
+                    <span>{creditBadge.label}</span>
                     <span>{identityLabel}</span>
                   </div>
                 </div>
@@ -593,326 +929,63 @@ export function ProfilePage() {
                   ]}
                   className="profile-hero-stats"
                 />
-                <p>{profile?.email || '完善资料后，交易沟通和信用展示会更完整。'}</p>
+                <p>{profileSummary}</p>
               </div>
             </div>
-            <div className="profile-hero-actions">
-              <Button type="default" className="profile-edit-button" onClick={openProfileEditor} disabled={!canEditProfile}>
-                编辑资料
+
+            <div className="profile-hero-side">
+              <Button
+                className="profile-hero-edit-button"
+                type="primary"
+                icon={<EditOutlined />}
+                disabled={!canEditProfile}
+                onClick={() => {
+                  if (editingProfile) {
+                    openProfileSummary();
+                    return;
+                  }
+                  openProfileEditor();
+                }}
+              >
+                {editingProfile ? '查看资料' : '编辑资料'}
               </Button>
+              <div className="profile-hero-summary">
+                {heroSummaryItems.map((item) => (
+                  <div key={item.label} className="profile-hero-summary-item">
+                    <strong>{item.value}</strong>
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 
-          <section className="profile-tabbar">
-            <button
-              type="button"
-              className={activeSection === 'items' ? 'profile-tab active' : 'profile-tab'}
-              onClick={() => setActiveSection('items')}
-            >
-              <strong>宝贝</strong>
-              <span>{publishedProducts.length}</span>
-            </button>
-            <button
-              type="button"
-              className={activeSection === 'orders' ? 'profile-tab active' : 'profile-tab'}
-              onClick={() => setActiveSection('orders')}
-            >
-              <strong>信用与订单</strong>
-              <span>{orderTotal}</span>
-            </button>
-            <button
-              type="button"
-              className={activeSection === 'favorites' ? 'profile-tab active' : 'profile-tab'}
-              onClick={() => setActiveSection('favorites')}
-            >
-              <strong>收藏</strong>
-              <span>{favoriteProducts.length}</span>
-            </button>
-            <button
-              type="button"
-              className={activeSection === 'profile' ? 'profile-tab active' : 'profile-tab'}
-              onClick={openProfileDetail}
-            >
-              <strong>个人资料</strong>
-            </button>
-          </section>
+          <nav className="profile-top-tabs" aria-label="个人中心主导航">
+            {topTabs.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={activeSection === item.key ? 'profile-top-tab active' : 'profile-top-tab'}
+                onClick={() => {
+                  if (item.key === 'profile') {
+                    openProfileSummary();
+                    return;
+                  }
 
-          {activeSection === 'items' ? (
-            <section className="profile-content-panel">
-              <SectionHeader
-                title="我发布的宝贝"
-                description="延续闲鱼风格展示你当前挂出的商品"
-                aside={<Tag color="gold">{publishedProducts.length} 件</Tag>}
-                className="is-prominent is-spacious"
-              />
-              {renderProductGrid(publishedProducts, '还没有发布商品', '去首页或发布页上架第一件校园闲置吧。')}
-            </section>
-          ) : null}
+                  setActiveSection(item.key);
+                  setEditingProfile(false);
+                }}
+              >
+                <span>{item.label}</span>
+                {item.count !== null ? <em>{item.count}</em> : null}
+              </button>
+            ))}
+          </nav>
 
-          {activeSection === 'favorites' ? (
-            <section className="profile-content-panel">
-              <SectionHeader
-                title="我收藏的宝贝"
-                description="把想要的商品先留在这里，方便回头比较和下单"
-                aside={<Tag color="gold">{favoriteProducts.length} 件</Tag>}
-                className="is-prominent is-spacious"
-              />
-              {renderProductGrid(favoriteProducts, '还没有收藏商品', '看到心动的闲置后点一下想要，就会出现在这里。')}
-            </section>
-          ) : null}
-
-          {activeSection === 'orders' ? (
-            <section className="profile-order-layout expanded">
-              <div className="profile-content-panel profile-order-board">
-                <SectionHeader
-                  title="线下面交订单"
-                  description={`${orderTotal ? `共 ${orderTotal} 条 · 第 ${orderPage}/${orderTotalPages} 页` : '暂无订单'} · 不含线上付款、发货和物流流程`}
-                  aside={(
-                    <div className="profile-order-scope">
-                      {[
-                        { key: 'all' as const, label: '全部交易' },
-                        { key: 'buying' as const, label: '我买到的' },
-                        { key: 'selling' as const, label: '我卖出的' }
-                      ].map((item) => (
-                        <button
-                          key={item.key}
-                          type="button"
-                          className={orderScope === item.key ? 'active' : ''}
-                          onClick={() => setOrderScope(item.key)}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  className="is-prominent is-spacious"
-                />
-
-                <div className="profile-order-tabs">
-                  {orderFilterTabs.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={orderFilter === item.key ? 'active' : ''}
-                      onClick={() => setOrderFilter(item.key)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                {latestOrder ? (
-                  <div className="profile-order-highlight">
-                    <strong>最新订单 #{latestOrder.id}</strong>
-                    <span>{orderStatusMap[latestOrder.status] ?? latestOrder.status}</span>
-                    <em>{latestOrder.productTitle} · {latestOrder.meetupLocation || '待约定线下面交地点'}</em>
-                  </div>
-                ) : null}
-
-                {visibleOrders.length ? (
-                  <>
-                    <div className="compact-list profile-orders-list">
-                      {visibleOrders.map((item, index) => (
-                        <article key={item.id} className="profile-order-card">
-                          <div className="profile-order-top">
-                            <div className="profile-order-user">
-                              <span>{getOrderCounterpart(item).slice(0, 1)}</span>
-                              <strong>{getOrderCounterpart(item)}</strong>
-                              <em>{getOrderRoleLabel(item)}</em>
-                            </div>
-                            <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
-                          </div>
-
-                          <div className="profile-order-product">
-                            <img
-                              src={item.productImageUrl ?? getProductImage({
-                                title: item.productTitle,
-                                category: item.productCategory ?? '宿舍好物',
-                                price: item.productPrice ?? 0,
-                                condition: item.productCondition ?? '同校面交',
-                                sellerName: getOrderCounterpart(item)
-                              }, index)}
-                              alt={item.productTitle}
-                            />
-                            <div>
-                              <h3>{item.productTitle}</h3>
-                              <p>{item.productCategory ?? '校园闲置'} · {item.productCondition ?? '线下面交'}</p>
-                              <strong>{formatOrderPrice(item.productPrice)}</strong>
-                              <span>{item.meetupLocation || '待双方在消息中约定线下面交时间地点'}</span>
-                            </div>
-                          </div>
-
-                          {item.note ? <div className="profile-order-note">{item.note}</div> : null}
-
-                          <div className="profile-order-actions">
-                            <Button size="small" onClick={() => navigate(`/products/${item.productId}`)}>商品详情</Button>
-                            <Button size="small" onClick={() => openOrderConversation(item)}>联系对方</Button>
-                            {item.status === 'PENDING' ? (
-                              <>
-                                <Button size="small" type="primary" onClick={() => openOrderAction('meetup', item)}>确认约定</Button>
-                                <Button size="small" onClick={() => openOrderAction('cancel', item)}>取消订单</Button>
-                              </>
-                            ) : null}
-                            {item.status === 'IN_PROGRESS' ? (
-                              <>
-                                <Button size="small" onClick={() => openOrderAction('meetup', item)}>修改约定</Button>
-                                <Button size="small" type="primary" loading={orderActionLoading} onClick={() => handleCompleteMeetup(item)}>确认完成</Button>
-                                <Button size="small" onClick={() => openOrderAction('cancel', item)}>取消订单</Button>
-                              </>
-                            ) : null}
-                            {item.status === 'WAITING_REVIEW' ? (
-                              <Button size="small" type="primary" onClick={() => openOrderAction('review', item)}>去评价</Button>
-                            ) : null}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    {orderTotal > ORDER_PAGE_SIZE ? (
-                      <div className="profile-pagination-row">
-                        <Pagination
-                          current={orderPage}
-                          pageSize={ORDER_PAGE_SIZE}
-                          total={orderTotal}
-                          size="small"
-                          showSizeChanger={false}
-                          disabled={ordersLoading}
-                          onChange={(page) => {
-                            if (!user) {
-                              return;
-                            }
-                            void loadOrders(user.id, page);
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <Empty description={ordersLoading ? '订单加载中...' : '当前筛选下暂无订单'} />
-                )}
-
-                <div className="profile-offline-flow">
-                  <div><strong>1</strong><span>买家下单后自动生成会话</span></div>
-                  <div><strong>2</strong><span>双方确认线下面交时间地点</span></div>
-                  <div><strong>3</strong><span>当面验货并完成交易</span></div>
-                  <div><strong>4</strong><span>补充评价并沉淀信用记录</span></div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          {activeSection === 'profile' ? (
-            <section className="profile-content-panel">
-              <SectionHeader
-                title="个人资料"
-                description={`${roleLabel} · ${profile?.studentId ?? user?.studentId ?? '--'}`}
-                aside={canEditProfile ? (
-                  <Button
-                    type={editingProfile ? 'default' : 'primary'}
-                    onClick={() => {
-                      if (editingProfile && profile) {
-                        form.setFieldsValue({
-                          name: profile.name,
-                          email: profile.email,
-                          realName: profile.realName,
-                          college: profile.college,
-                          phone: profile.phone
-                        });
-                      }
-                      setEditingProfile((current) => !current);
-                    }}
-                  >
-                    {editingProfile ? '取消编辑' : '编辑资料'}
-                  </Button>
-                ) : null}
-                className="is-prominent is-spacious"
-              />
-
-              {editingProfile && profile ? (
-                <Form form={form} layout="vertical" className="profile-edit-form" onFinish={handleSaveProfile}>
-                  <div className="profile-form-grid">
-                    <Form.Item label="昵称" name="name" rules={[{ required: true, message: '请输入昵称' }]}>
-                      <Input placeholder="请输入昵称" />
-                    </Form.Item>
-                    <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入正确邮箱' }]}>
-                      <Input placeholder="请输入邮箱" />
-                    </Form.Item>
-                    <Form.Item label="真实姓名" name="realName" rules={[{ required: true, message: '请输入真实姓名' }]}>
-                      <Input placeholder="请输入真实姓名" />
-                    </Form.Item>
-                    <Form.Item label="学院" name="college" rules={[{ required: true, message: '请输入学院' }]}>
-                      <Input placeholder="请输入学院" />
-                    </Form.Item>
-                    <Form.Item label="手机号" name="phone" rules={[{ required: true, message: '请输入手机号' }]}>
-                      <Input placeholder="请输入手机号" />
-                    </Form.Item>
-                  </div>
-                  <div className="profile-form-actions">
-                    <Button
-                      htmlType="button"
-                      onClick={() => {
-                        if (profile) {
-                          form.setFieldsValue({
-                            name: profile.name,
-                            email: profile.email,
-                            realName: profile.realName,
-                            college: profile.college,
-                            phone: profile.phone
-                          });
-                        }
-                        setEditingProfile(false);
-                      }}
-                    >
-                      取消
-                    </Button>
-                    <Button type="primary" htmlType="submit" loading={savingProfile}>
-                      保存资料
-                    </Button>
-                  </div>
-                </Form>
-              ) : (
-                <div className="profile-kv-grid">
-                  <div>
-                    <span>学号</span>
-                    <strong>{profile?.studentId ?? user?.studentId ?? '--'}</strong>
-                  </div>
-                  <div>
-                    <span>账号类型</span>
-                    <strong>{roleLabel}</strong>
-                  </div>
-                  <div>
-                    <span>信用分</span>
-                    <strong><Tag color="green">{creditScore}</Tag></strong>
-                  </div>
-                  <div>
-                    <span>校园身份</span>
-                    <strong>{identityLabel}</strong>
-                  </div>
-                  <div>
-                    <span>邮箱</span>
-                    <strong>{profile?.email ?? user?.email ?? '--'}</strong>
-                  </div>
-                  <div>
-                    <span>真实姓名</span>
-                    <strong>{profile?.realName ?? '--'}</strong>
-                  </div>
-                  <div>
-                    <span>学院</span>
-                    <strong>{collegeLabel}</strong>
-                  </div>
-                  <div>
-                    <span>手机号</span>
-                    <strong>{profile?.phone ?? '--'}</strong>
-                  </div>
-                  <div>
-                    <span>信用等级</span>
-                    <strong>{trustSummary?.creditLevel ?? '正常'}</strong>
-                  </div>
-                </div>
-              )}
-            </section>
-          ) : null}
-        </main>
+          {renderActiveSection()}
+        </div>
       </div>
+
       <Modal
         title={
           orderActionMode === 'meetup'
@@ -921,6 +994,7 @@ export function ProfilePage() {
               ? '取消订单'
               : '补充交易评价'
         }
+        wrapClassName="profile-order-modal"
         open={!!orderActionMode}
         onCancel={closeOrderAction}
         onOk={handleOrderActionSubmit}

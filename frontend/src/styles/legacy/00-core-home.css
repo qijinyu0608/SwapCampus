@@ -93,12 +93,11 @@
 
 .fish-search-shell {
   display: grid;
-  gap: 3px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  background: #ffffff;
-  border: 1px solid var(--line);
-  box-shadow: var(--soft-shadow);
+  gap: 0;
+  padding: 2px 0 4px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .fish-utility-row {
@@ -149,31 +148,48 @@
 .fish-search-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
+  gap: 0;
   align-items: center;
 }
 
 .fish-search-box {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 9px;
-  border-radius: 6px;
-  background: #ffffff;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 186, 48, 0.18),
-    0 4px 10px rgba(255, 177, 0, 0.06);
+  gap: 10px;
+  min-height: 42px;
+  padding: 3px 6px 3px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 92%, var(--primary-soft) 8%);
+  border: 1px solid var(--primary-border);
+  box-shadow: none;
 }
 
 .fish-search-box .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
   padding: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
+.fish-search-box .ant-input-affix-wrapper:focus-within,
+.fish-search-box .ant-input-affix-wrapper-focused {
+  box-shadow: none !important;
+}
+
+.fish-search-box .ant-input-prefix {
+  margin-inline-end: 10px;
+  color: var(--primary-ink);
+  font-size: 14px;
+}
+
 .fish-search-box .ant-input {
-  font-size: 12px;
-  color: #111827;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.fish-search-box .ant-input::placeholder {
+  color: var(--muted);
 }
 
 .fish-search-button {
@@ -186,6 +202,24 @@
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.fish-search-button-home {
+  align-self: stretch;
+  min-width: 66px;
+  padding: 0 14px 0 16px;
+  border-left: 1px solid color-mix(in srgb, var(--primary-border) 72%, var(--line) 28%);
+  border-radius: 0;
+  background: transparent;
+  color: var(--primary-ink);
+  font-size: 12px;
+  font-weight: 700;
+  transition: color 0.18s ease;
+}
+
+.fish-search-button-home:hover,
+.fish-search-button-home:focus-visible {
+  color: var(--primary-deep);
 }
 
 .fish-channel-row {
@@ -235,36 +269,53 @@
 }
 
 .fish-market-layout {
+  --fish-home-stage-height: 392px;
   display: grid;
   grid-template-columns: 168px minmax(0, 1fr);
-  gap: 6px;
+  gap: 12px;
   align-items: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .fish-market-category-block {
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 5px;
-  min-height: 472px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  height: var(--fish-home-stage-height);
+  min-height: 0;
   min-width: 0;
+  padding-right: 8px;
+  border-right: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
 }
 
 .fish-market-category-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 20px;
+  gap: 8px;
+  min-height: 22px;
+  padding: 1px 2px 0;
 }
 
 .fish-market-category-head strong {
+  display: inline-block;
   font-size: 13px;
   line-height: 1.2;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .fish-market-category-head span {
-  color: #8a9099;
+  color: var(--muted);
   font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fish-market-inline-card {
@@ -324,8 +375,9 @@
 
 .fish-market-activity {
   display: grid;
-  min-height: 420px;
+  min-height: var(--fish-home-stage-height);
   min-width: 0;
+  align-content: stretch;
 }
 
 .fish-market-activity-stage,
@@ -336,6 +388,503 @@
 
 .fish-market-activity-stage {
   grid-template-rows: 1fr;
+}
+
+.fish-home-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  grid-template-areas:
+    "hero user";
+  gap: 10px;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.fish-home-hero-column,
+.fish-home-user-panel {
+  min-width: 0;
+}
+
+.fish-home-hero-column {
+  grid-area: hero;
+  display: grid;
+}
+
+.fish-home-campaign,
+.fish-home-user-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: var(--soft-shadow);
+}
+
+.fish-home-campaign {
+  display: block;
+  min-height: var(--fish-home-stage-height);
+  height: var(--fish-home-stage-height);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  box-shadow: none;
+  cursor: pointer;
+  aspect-ratio: 16 / 7;
+}
+
+.fish-home-campaign-track {
+  display: grid;
+  grid-template-columns: repeat(3, 100%);
+  width: 100%;
+  height: 100%;
+  transition: transform 0.42s ease;
+}
+
+.fish-home-campaign-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: center;
+}
+
+.fish-home-campaign-nav {
+  position: absolute;
+  inset-inline: 14px;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.fish-home-campaign-nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.32);
+  color: #ffffff;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.fish-home-campaign-nav-button:hover {
+  background: rgba(17, 24, 39, 0.46);
+  transform: scale(1.04);
+}
+
+.fish-home-campaign-dots {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.fish-home-campaign-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.fish-home-campaign-dots span.active {
+  width: 16px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.fish-home-user-panel {
+  grid-area: user;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 8px;
+  height: var(--fish-home-stage-height);
+  min-height: var(--fish-home-stage-height);
+  padding: 12px 10px;
+  align-self: stretch;
+  justify-self: stretch;
+  align-content: start;
+  border-radius: 16px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.fish-home-user-profile {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 68px;
+}
+
+.fish-home-user-head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.fish-home-user-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: block;
+  overflow: hidden;
+  background: transparent;
+}
+
+.fish-home-user-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.32);
+  transform-origin: center;
+}
+
+.fish-home-user-copy {
+  display: grid;
+  grid-template-rows: auto 24px;
+  gap: 6px;
+  justify-items: start;
+  align-content: center;
+  min-width: 0;
+}
+
+.fish-home-user-copy strong {
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fish-home-user-guest {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 6px;
+}
+
+.fish-home-user-guest-top {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.fish-home-user-guest-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: block;
+  overflow: hidden;
+  background: transparent;
+}
+
+.fish-home-user-guest-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.32);
+  transform-origin: center;
+}
+
+.fish-home-user-guest-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fish-home-user-guest-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.fish-home-user-guest-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.fish-home-user-guest-kicker {
+  display: inline-flex;
+  width: 100%;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.08;
+  white-space: nowrap;
+}
+
+.fish-home-user-guest-copy strong {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted-strong);
+  white-space: normal;
+}
+
+.fish-home-user-guest-copy p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted);
+  white-space: normal;
+}
+
+.fish-home-user-guest-login,
+.fish-home-user-guest-register {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.fish-home-user-guest-login {
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.fish-home-user-guest-register {
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  text-align: center;
+  min-height: auto;
+  padding: 0;
+}
+
+.fish-home-user-copy span,
+.fish-home-user-panel-head span {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.fish-home-user-copy .fish-home-user-credit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  width: fit-content;
+  min-width: 72px;
+  max-width: 116px;
+  min-height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 0;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  align-self: start;
+  box-shadow: none;
+}
+
+.fish-home-user-credit-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.fish-home-user-credit.is-excellent {
+  background: #ffe8a3;
+  color: #7a4b00;
+}
+
+.fish-home-user-credit.is-great {
+  background: #dcecff;
+  color: #23558a;
+}
+
+.fish-home-user-credit.is-good {
+  background: #def4e7;
+  color: #27683f;
+}
+
+.fish-home-user-credit.is-stable {
+  background: #eef1f5;
+  color: #596170;
+}
+
+.fish-home-user-credit.is-low {
+  background: #ffe7e7;
+  color: #9a3d3d;
+}
+
+.fish-home-user-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fish-home-user-panel-head strong {
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.fish-home-user-order-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.fish-home-user-order-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.fish-home-user-order-tabs button.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.fish-home-user-order-tabs button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fish-home-user-order-tabs button strong {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fish-home-user-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  align-content: start;
+  padding: 0;
+}
+
+.fish-home-user-stat {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 7px 2px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.56);
+  text-align: center;
+}
+
+.fish-home-user-stat strong {
+  font-size: 15px;
+  line-height: 1;
+  color: #3f3023;
+}
+
+.fish-home-user-stat span:last-child {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.fish-home-user-order-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  min-height: 112px;
+  padding: 10px;
+  border: 1px solid #efdfd5;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  text-align: left;
+  cursor: pointer;
+  align-self: stretch;
+}
+
+.fish-home-user-order-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--neutral-100);
+}
+
+.fish-home-user-order-copy,
+.fish-home-user-order-empty {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fish-home-user-order-empty {
+  grid-column: 1 / -1;
+}
+
+.fish-home-user-order-copy h3 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fish-home-user-order-copy p,
+.fish-home-user-order-empty p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .fish-activity-grid {
@@ -622,7 +1171,9 @@
 }
 
 .fish-feed-shell-home {
-  gap: 6px;
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #ece7dc;
 }
 
 .fish-market-panel {
@@ -777,14 +1328,19 @@
 
 .fish-category-panel {
   display: grid;
-  gap: 0;
-  padding: 2px 0;
-  height: 100%;
+  gap: 2px;
+  padding: 1px 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid #eef1f4;
-  box-shadow: var(--soft-shadow);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary-border) 72%, var(--line) 28%) transparent;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .fish-category-row {
@@ -793,36 +1349,56 @@
   background: transparent;
   text-align: left;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 7px;
   align-items: center;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
 
 .fish-category-row + .fish-category-row {
-  border-top: 1px solid #f2f4f7;
+  border-top: 0;
+}
+
+.fish-category-row:hover,
+.fish-category-row:focus-visible {
+  background: color-mix(in srgb, var(--paper) 72%, var(--primary-soft) 28%);
+  outline: none;
 }
 
 .fish-category-row.active {
-  background: #fff9ea;
+  background: color-mix(in srgb, var(--paper) 58%, var(--primary-soft) 42%);
 }
 
 .fish-category-row.active .fish-category-copy strong {
-  color: #a16207;
+  color: var(--primary-deep);
 }
 
 .fish-category-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: #fff4bf;
-  color: #624500;
-  font-size: 9px;
-  font-weight: 900;
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--primary-ink);
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.18s ease;
+}
+
+.fish-category-row.active .fish-category-badge {
+  color: var(--primary-deep);
+}
+
+.fish-category-badge .anticon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .fish-category-copy {
@@ -832,16 +1408,16 @@
 .fish-category-copy strong {
   font-size: 12px;
   line-height: 1.2;
-  color: #262626;
+  color: var(--ink);
 }
 
 .fish-category-detail-panel {
   height: 100%;
   padding: 12px 16px;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid #eef1f4;
-  box-shadow: var(--soft-shadow);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper) 96%, var(--primary-soft) 4%);
+  border: 1px solid color-mix(in srgb, var(--line) 86%, var(--primary-border) 14%);
+  box-shadow: none;
   overflow: auto;
 }
 
@@ -1135,9 +1711,23 @@
 .fish-feed-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-height: 20px;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  position: relative;
+}
+
+.fish-feed-header::before,
+.fish-feed-header::after {
+  content: none;
+}
+
+.fish-feed-header-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 8px;
 }
 
 .fish-feed-shell.compact-with-category {
@@ -1146,9 +1736,10 @@
 
 .fish-feed-header h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 18px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: #8c5310;
 }
 
 .fish-feed-tabs {
@@ -1195,20 +1786,21 @@
 
 .fish-item-card {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 102px;
+  grid-template-rows: auto 144px;
   gap: 0;
   overflow: hidden;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
   cursor: pointer;
   text-decoration: none;
   color: inherit;
-  transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
+  transition: none;
 }
 
 .fish-item-card:hover {
-  transform: translateY(-3px);
-  opacity: 0.94;
+  transform: none;
+  opacity: 1;
 }
 
 .fish-item-card.offset {
@@ -1218,7 +1810,7 @@
 .fish-item-cover {
   min-height: 0;
   aspect-ratio: 1 / 1;
-  padding: 12px;
+  padding: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1226,7 +1818,8 @@
   background-position: center;
   background-size: cover;
   position: relative;
-  border-radius: 0;
+  overflow: hidden;
+  border-radius: 16px;
 }
 
 .fish-item-cover-image {
@@ -1236,13 +1829,19 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: filter 0.18s ease;
+  filter: brightness(1);
+}
+
+.fish-item-cover:hover .fish-item-cover-image {
+  filter: brightness(1.08);
 }
 
 .fish-item-cover::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.01), rgba(15, 23, 42, 0.12));
+  background: none;
 }
 
 .fish-item-cover > * {
@@ -1266,7 +1865,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
+  margin-top: 10px;
+  margin-right: 10px;
 }
 
 .fish-item-favorite.active {
@@ -1321,17 +1922,34 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-left: 10px;
+  margin-bottom: 10px;
+}
+
+.fish-item-cover-meta {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  max-width: calc(100% - 84px);
 }
 
 .fish-item-body {
-  display: grid;
-  grid-template-rows: 38px 24px 20px;
-  gap: 7px;
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 144px;
+  min-height: 144px;
+  max-height: 144px;
   padding: 10px 0 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .fish-item-body h3 {
+  flex: 0 0 38px;
   margin: 0;
   color: #1f2937;
   font-size: 14px;
@@ -1341,15 +1959,18 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 0;
+  min-height: 38px;
+  max-height: 38px;
 }
 
 .fish-item-price-row {
+  flex: 0 0 28px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 0;
+  min-height: 28px;
+  max-height: 28px;
   overflow: hidden;
 }
 
@@ -1362,12 +1983,26 @@
 }
 
 .fish-item-price-meta {
+  min-width: 0;
   color: #6b7280;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.fish-item-body-meta {
+  flex: 0 0 18px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 18px;
+  max-height: 18px;
 }
 
 .fish-item-tags {
@@ -1386,11 +2021,15 @@
 }
 
 .fish-item-tags-row {
+  flex: 0 0 16px;
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
   white-space: nowrap;
   overflow: hidden;
+  min-height: 16px;
+  max-height: 16px;
 }
 
 .fish-item-tag {
@@ -1398,16 +2037,48 @@
   align-items: center;
   min-width: 0;
   max-width: 100%;
-  padding: 0 7px;
-  height: 20px;
-  border-radius: 4px;
-  background: #fff3e7;
-  color: #a35d18;
+  padding: 0;
+  height: 16px;
+  border-radius: 0;
+  background: transparent;
+  color: #6b7280;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+.fish-item-tag-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.fish-item-tag-content img,
+.fish-item-tag-content svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  max-width: 14px;
+  max-height: 14px;
+  display: block;
+}
+
+.fish-item-tag-content > span,
+.fish-item-tag-content > strong,
+.fish-item-tag-content > em,
+.fish-item-tag-content {
+  min-width: 0;
+}
+
+.fish-item-tag-content img {
+  object-fit: contain;
 }
 
 .fish-item-link {
@@ -1428,4 +2099,15 @@
 .fish-item-link.quiet {
   color: #9ca3af;
   cursor: default;
+}
+
+.fish-item-secondary-row {
+  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  max-height: 24px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }

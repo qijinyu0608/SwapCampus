@@ -1,15 +1,24 @@
 import axios from 'axios';
-import { clearDemoUser, getAccessToken } from './session';
+import Session from 'supertokens-auth-react/recipe/session';
+import { clearCurrentUserStorage, getDevAuthToken, saveDevAuthToken } from './session';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
+  baseURL: API_BASE_URL
 });
 
+const authClient = axios.create({
+  baseURL: API_BASE_URL
+});
+
+Session.addAxiosInterceptors(apiClient);
+
 apiClient.interceptors.request.use((config) => {
-  const token = getAccessToken();
-  if (token) {
+  const devAuthToken = getDevAuthToken();
+  if (devAuthToken) {
     config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
+    config.headers['x-dev-auth-user-id'] = devAuthToken;
   }
 
   return config;
@@ -19,7 +28,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      clearDemoUser();
+      clearCurrentUserStorage();
     }
 
     return Promise.reject(error);
@@ -42,20 +51,52 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-export type ProductSummary = {
+export type ListingSummary = {
   id: number;
   title: string;
-  category: string;
+  description: string;
   price: number;
-  condition: string;
+  imageUrl?: string;
   tags: string[];
   status: string;
-  description: string;
+};
+
+export type ListingParticipantBase = {
+  id: number;
+  displayName: string;
+  creditScore: number;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus: 'ACTIVE' | 'BANNED';
+};
+
+export type ListingDetailMetaItem = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+export type ListingTimelineItem = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+export type ListingDetailBase = ListingSummary & {
+  type: 'PRODUCT' | 'CAMPUS_SERVICE';
+  amountLabel: string;
+  statusLabel: string;
+  publisher: ListingParticipantBase;
+  summaryTags: string[];
+  metaItems: ListingDetailMetaItem[];
+  timeline: ListingTimelineItem[];
+};
+
+export type ProductSummary = ListingSummary & {
+  category: string;
+  condition: string;
   sellerName: string;
   sellerCreditScore?: number;
   sellerVerified?: boolean;
-  recommendationReason?: string;
-  imageUrl?: string;
   sellerId?: number;
   favoriteCount?: number;
   isFavorited?: boolean;
@@ -65,13 +106,9 @@ export type ProductSummary = {
 export type ProductDetail = ProductSummary & {
   images: string[];
   publishedAt: string;
-  seller: {
-    id: number;
-    name: string;
+  seller: ListingParticipantBase & {
     creditScore: number;
     creditLevel: string;
-    verified: boolean;
-    identityStatus: string;
     college: string;
     responseRate: number;
     averageRating: number;
@@ -89,6 +126,10 @@ export type ProductDetail = ProductSummary & {
     reviewFlow: string[];
   };
   relatedProducts: ProductSummary[];
+};
+
+export type ProductDetailView = ProductDetail & {
+  detailBase: ListingDetailBase;
 };
 
 export type FavoriteItem = ProductSummary & {
@@ -109,6 +150,31 @@ export type FavoriteMutationResponse = {
   favoriteCount: number;
 };
 
+export type ProductSearchParams = {
+  q?: string;
+  category?: string;
+  condition?: string;
+  sellerId?: number;
+  ids?: number[];
+  status?: 'ALL' | 'PENDING' | 'ON_SALE' | 'SOLD' | 'OFFLINE';
+  trade?: 'all' | 'meetup' | 'dorm_pickup' | 'available_today';
+  sort?: 'relevance' | 'newest' | 'price_asc' | 'price_desc';
+  minPrice?: number;
+  maxPrice?: number;
+  page?: number;
+  pageSize?: number;
+};
+
+export type PaginatedProductsResponse = {
+  items: ProductSummary[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 export type DashboardStats = {
   userCount: number;
   productCount: number;
@@ -118,7 +184,7 @@ export type DashboardStats = {
 
 export type RegisterPayload = {
   studentId?: string;
-  name: string;
+  displayName: string;
   email: string;
   college?: string;
   password: string;
@@ -132,18 +198,18 @@ export type LoginPayload = {
 export type AuthUser = {
   id: number;
   studentId: string;
-  name: string;
+  displayName: string;
   email: string;
   role: 'USER' | 'ADMIN';
   creditScore?: number;
-  verified?: boolean;
+  verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus?: 'ACTIVE' | 'BANNED';
 };
 
 export type AuthSessionResponse = {
   message: string;
-  accessToken: string;
-  expiresIn: string;
   account?: string;
+  devAuthToken?: string;
   user: AuthUser;
 };
 
@@ -153,7 +219,7 @@ export type ProductCreatePayload = {
   price: number;
   category: string;
   condition: string;
-  tags: string;
+  tags: string[];
 };
 
 export type OrderPayload = {
@@ -188,7 +254,6 @@ export type OrderItem = {
 };
 
 export type OrderListParams = {
-  userId?: number;
   page?: number;
   pageSize?: number;
 };
@@ -227,7 +292,7 @@ export type ConversationSummary = {
   selfRole: 'buyer' | 'seller' | null;
   participant: {
     id: number | null;
-    name: string;
+    displayName: string;
     college: string | null;
     isSeller: boolean;
   };
@@ -261,13 +326,6 @@ export type CreateConversationPayload = {
   initialMessage?: string;
 };
 
-export type MessageDemoHydratePayload = {
-  userId: number;
-  studentId?: string;
-  name?: string;
-  email?: string;
-};
-
 export type MessageDemoHydrateResponse = {
   hydrated: boolean;
   userId: number;
@@ -275,43 +333,140 @@ export type MessageDemoHydrateResponse = {
   user: {
     id: number;
     studentId: string;
-    name: string;
+    displayName: string;
     email: string;
     role: 'USER' | 'ADMIN';
     creditScore?: number;
-    verified?: boolean;
+    verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    accountStatus?: 'ACTIVE' | 'BANNED';
   };
 };
 
 export type CampusServiceCategory = 'ERRAND' | 'AGENCY' | 'GROUP_BUY' | 'HELP';
 export type CampusServiceStatus = 'OPEN' | 'MATCHED' | 'DONE' | 'CANCELED';
+export type CampusServiceUrgency = 'NORMAL' | 'TODAY' | 'URGENT';
+export type CampusServiceFulfillmentMode = 'DROP_OFF' | 'FACE_TO_FACE' | 'FLEXIBLE';
+export type CampusServiceContactPreference = 'CHAT_ONLY' | 'PHONE_AFTER_MATCH' | 'FLEXIBLE';
 
-export type CampusServiceTask = {
+export type CampusServiceViewerContext = {
+  role: 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'ACCEPTER' | 'OTHER';
+  canAccept: boolean;
+  canComplete: boolean;
+  canCancel: boolean;
+  canOpenConversation: boolean;
+};
+
+export type CampusServiceActionState = {
+  isPublisher: boolean;
+  isAccepter: boolean;
+  canAccept: boolean;
+  canComplete: boolean;
+  canCancel: boolean;
+  canOpenConversation: boolean;
+};
+
+export type CampusServiceActionLabels = {
+  accept: string | null;
+  complete: string | null;
+  cancel: string | null;
+  conversation: string | null;
+};
+
+export type CampusServiceParticipant = ListingParticipantBase;
+
+export type CampusServiceListItem = ListingSummary & {
   id: number;
   title: string;
   category: CampusServiceCategory;
-  description: string;
+  categoryLabel: string;
+  serviceType: {
+    key: CampusServiceCategory;
+    label: string;
+  };
+  imageUrl?: string;
+  price: number;
   reward: number;
-  locationFrom: string;
-  locationTo: string;
+  rewardLabel: string;
+  route: {
+    from: string;
+    to: string;
+    label: string;
+  };
   deadlineLabel: string;
   estimatedMinutes: number;
+  urgency: CampusServiceUrgency;
+  urgencyLabel: string;
+  fulfillmentMode: CampusServiceFulfillmentMode;
+  fulfillmentModeLabel: string;
+  schedule: {
+    deadlineLabel: string;
+    estimatedMinutes: number;
+    urgency: CampusServiceUrgency;
+    urgencyLabel: string;
+    summary: string;
+  };
   status: CampusServiceStatus;
+  statusLabel: string;
+  tags: string[];
+  summaryTags: string[];
+  participantSummary: {
+    publisherLabel: string;
+    accepterLabel: string | null;
+  };
+  viewerContext: CampusServiceViewerContext;
+  actionState: CampusServiceActionState;
+  actionLabels: CampusServiceActionLabels;
   createdAt: string;
   updatedAt: string;
   conversationId: number | null;
-  publisher: {
-    id: number;
-    name: string;
-    creditScore: number;
-    verified: boolean;
+  publisher: CampusServiceParticipant;
+  accepter: CampusServiceParticipant | null;
+};
+
+export type CampusServiceDetail = CampusServiceListItem & {
+  preview: {
+    title: string;
+    subtitle: string;
+    metrics: Array<{
+      label: string;
+      value: string;
+    }>;
   };
-  accepter: {
-    id: number;
-    name: string;
-    creditScore: number;
-    verified: boolean;
-  } | null;
+  locationFrom: string;
+  locationTo: string;
+  contactPreference: CampusServiceContactPreference;
+  contactPreferenceLabel: string;
+  itemCount: number;
+  trustNote: string | null;
+  timeline: ListingTimelineItem[];
+  fulfillment: {
+    routeLabel: string;
+    deadlineLabel: string;
+    estimatedMinutes: number;
+    rewardLabel: string;
+    mode: CampusServiceFulfillmentMode;
+    modeLabel: string;
+    contactPreference: CampusServiceContactPreference;
+    contactPreferenceLabel: string;
+    itemCount: number;
+    trustNote: string | null;
+    cancelReason: string | null;
+    canceledById: number | null;
+  };
+};
+
+export type CampusServiceDetailView = CampusServiceDetail & {
+  detailBase: ListingDetailBase;
+};
+
+export type PaginatedCampusServicesResponse = {
+  items: CampusServiceListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 export type CampusServiceCreatePayload = {
@@ -323,6 +478,11 @@ export type CampusServiceCreatePayload = {
   locationTo: string;
   deadlineLabel: string;
   estimatedMinutes: number;
+  urgency?: CampusServiceUrgency;
+  fulfillmentMode?: CampusServiceFulfillmentMode;
+  contactPreference?: CampusServiceContactPreference;
+  itemCount?: number;
+  trustNote?: string;
 };
 
 export type AdminOverview = {
@@ -358,13 +518,13 @@ export type PublishingRules = {
 
 export type UserTrustSummary = {
   id: number;
-  name: string;
+  displayName: string;
   studentId: string;
   email: string;
   creditScore: number;
   creditLevel: string;
-  verified: boolean;
-  identityStatus: string;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus: 'ACTIVE' | 'BANNED';
   college: string;
   completedOrders: number;
   activeOrders: number;
@@ -376,13 +536,13 @@ export type UserTrustSummary = {
 
 export type UserProfile = {
   id: number;
-  name: string;
+  displayName: string;
   studentId: string;
   email: string;
   role: 'USER' | 'ADMIN';
   creditScore: number;
-  verified: boolean;
-  identityStatus: string;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus: 'ACTIVE' | 'BANNED';
   realName: string;
   college: string;
   phone: string;
@@ -413,11 +573,12 @@ export type AuditLogItem = {
 
 export type ModerationUserItem = {
   id: number;
-  name: string;
+  displayName: string;
   email: string;
   studentId: string;
   creditScore: number;
-  verified: boolean;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus: 'ACTIVE' | 'BANNED';
   isBanned: boolean;
   college: string;
   reportCount: number;
@@ -487,24 +648,23 @@ export type AdminCampusServiceItem = {
   updatedAt: string;
 };
 
-export type BehaviorEventType = 'VIEW' | 'FAVORITE' | 'UNFAVORITE' | 'CONTACT' | 'ORDER';
-
-export async function fetchProducts() {
-  const response = await apiClient.get<ProductSummary[]>('/products');
-  return response.data;
-}
-
-export async function fetchRecommendations(userId?: number) {
-  const response = await apiClient.get<ProductSummary[]>('/products/recommendations', {
-    params: userId ? { userId } : undefined
+export async function fetchProducts(params?: ProductSearchParams) {
+  const response = await apiClient.get<PaginatedProductsResponse>('/products', {
+    params: {
+      ...params,
+      ids: params?.ids?.length ? params.ids.join(',') : undefined
+    }
   });
   return response.data;
 }
 
-export async function fetchProductDetail(id: number, userId?: number) {
-  const response = await apiClient.get<ProductDetail>(`/products/${id}`, {
-    params: userId ? { userId } : undefined
-  });
+export async function fetchHomeRecommendations() {
+  const response = await apiClient.get<ProductSummary[]>('/products/home-recommendations');
+  return response.data;
+}
+
+export async function fetchProductDetail(id: number) {
+  const response = await apiClient.get<ProductDetailView>(`/products/${id}`);
   return response.data;
 }
 
@@ -534,17 +694,27 @@ export async function fetchDashboardStats() {
 }
 
 export async function registerUser(payload: RegisterPayload) {
-  const response = await apiClient.post<AuthSessionResponse>('/auth/register', payload);
+  clearCurrentUserStorage();
+  const response = await authClient.post<AuthSessionResponse>('/auth/register', payload);
+  saveDevAuthToken(response.data.devAuthToken ?? null);
   return response.data;
 }
 
 export async function loginUser(payload: LoginPayload) {
-  const response = await apiClient.post<AuthSessionResponse>('/auth/login', payload);
+  clearCurrentUserStorage();
+  const response = await authClient.post<AuthSessionResponse>('/auth/login', payload);
+  saveDevAuthToken(response.data.devAuthToken ?? null);
   return response.data;
 }
 
 export async function fetchCurrentSession() {
   const response = await apiClient.get<{ user: AuthUser }>('/auth/me');
+  return response.data;
+}
+
+export async function logoutUser() {
+  const response = await apiClient.post<{ message: string }>('/auth/logout');
+  saveDevAuthToken(null);
   return response.data;
 }
 
@@ -611,14 +781,6 @@ export async function fetchConversations() {
 export async function createConversation(payload: CreateConversationPayload) {
   const response = await apiClient.post<{ id: number; productId: number; reused: boolean }>(
     '/messages/conversations',
-    payload
-  );
-  return response.data;
-}
-
-export async function hydrateMessageDemos(payload: MessageDemoHydratePayload) {
-  const response = await apiClient.post<MessageDemoHydrateResponse>(
-    '/messages/demo-hydrate',
     payload
   );
   return response.data;
@@ -698,7 +860,7 @@ export async function fetchUserProfile(id: number) {
 export async function updateUserProfile(
   id: number,
   payload: {
-    name: string;
+    displayName: string;
     email: string;
     realName: string;
     college: string;
@@ -757,37 +919,45 @@ export async function fetchAuditLogs() {
   return response.data;
 }
 
-export async function recordRecommendationBehavior(payload: {
-  productId: number;
-  eventType: BehaviorEventType;
-}) {
-  const response = await apiClient.post('/recommendations/behavior', payload);
-  return response.data;
-}
-
 export async function fetchCampusServiceTasks(params?: {
   category?: CampusServiceCategory;
   status?: CampusServiceStatus;
   keyword?: string;
+  sort?: 'composite' | 'price_asc' | 'price_desc' | 'newest';
+  minReward?: number;
+  maxReward?: number;
+  credit?: 'ALL' | 'HIGH' | 'VERIFIED';
+  page?: number;
+  pageSize?: number;
 }) {
-  const response = await apiClient.get<CampusServiceTask[]>('/campus-services', { params });
+  const response = await apiClient.get<PaginatedCampusServicesResponse>('/campus-services', { params });
+  return response.data;
+}
+
+export async function fetchCampusServiceDetail(id: number) {
+  const response = await apiClient.get<CampusServiceDetailView>(`/campus-services/${id}`);
   return response.data;
 }
 
 export async function createCampusServiceTask(payload: CampusServiceCreatePayload) {
-  const response = await apiClient.post<CampusServiceTask>('/campus-services', payload);
+  const response = await apiClient.post<CampusServiceDetailView>('/campus-services', payload);
   return response.data;
 }
 
 export async function acceptCampusServiceTask(taskId: number, payload: {
   initialMessage?: string;
 }) {
-  const response = await apiClient.post<CampusServiceTask>(`/campus-services/${taskId}/accept`, payload);
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/accept`, payload);
   return response.data;
 }
 
 export async function completeCampusServiceTask(taskId: number) {
   const payload = {};
-  const response = await apiClient.post<CampusServiceTask>(`/campus-services/${taskId}/complete`, payload);
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/complete`, payload);
+  return response.data;
+}
+
+export async function cancelCampusServiceTask(taskId: number, payload?: { reason?: string }) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/cancel`, payload ?? {});
   return response.data;
 }

@@ -1,30 +1,28 @@
 import { Button, Form, Input, Modal, Radio, Select, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { KeyValueGrid, MetaList } from '../components/data-display';
-import { SectionHeader } from '../components/layout';
+import { MetaList } from '../components/data-display';
+import {
+  ListingDetailHero,
+  ListingDetailMetaPanel
+} from '../components/listing';
+import { DetailShell, SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { getBjfuMeetupLabel } from '../constants/campus';
+import { useAuthState } from '../services/auth-state';
 import {
   createConversation,
   createOrder,
   createReport,
   fetchProductDetail,
   getApiErrorMessage,
-  ProductDetail,
-  recordRecommendationBehavior
+  type ProductDetailView
 } from '../services/api';
-import { recordProductView, syncFavoriteSignal } from '../services/behavior';
 import { isFavorite, subscribeFavorites, toggleFavorite } from '../services/favorites';
-import { clearDemoUser, getDemoUser, hasTradingAccess, isGuestUser } from '../services/session';
+import { hasTradingAccess, isGuestUser } from '../services/session';
 import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/productCover';
-
-const statusMap: Record<string, { label: string; color: string }> = {
-  ON_SALE: { label: '在售', color: 'green' },
-  PENDING: { label: '审核中', color: 'orange' },
-  SOLD: { label: '已售', color: 'default' },
-  OFFLINE: { label: '已下架', color: 'red' }
-};
+import { getListingStatusPresentation } from '../utils/listingStatus';
+import { getUserPresentation } from '../utils/userPresentation';
 
 const reportTypeOptions = [
   '商品描述与实物不符',
@@ -47,7 +45,8 @@ type ReportFormValues = {
 export function ProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [detail, setDetail] = useState<ProductDetail | null>(null);
+  const { currentUser, clearCurrentUser } = useAuthState();
+  const [detail, setDetail] = useState<ProductDetailView | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<'chat' | 'order' | 'report' | null>(null);
   const [activeImage, setActiveImage] = useState(0);
@@ -64,8 +63,7 @@ export function ProductDetailPage() {
       }
 
       try {
-        const currentUser = getDemoUser();
-        const data = await fetchProductDetail(Number(id), currentUser?.id);
+        const data = await fetchProductDetail(Number(id));
         setDetail(data);
         setActiveImage(0);
         setDescriptionExpanded(false);
@@ -81,23 +79,16 @@ export function ProductDetailPage() {
 
   useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
 
-  const currentUser = useMemo(() => getDemoUser(), []);
   const favorited = useMemo(
     () => (detail ? isFavorite(detail.id, currentUser) : false),
     [detail, currentUser, favoriteVersion]
   );
 
-  useEffect(() => {
-    if (detail) {
-      recordProductView(detail, currentUser);
-    }
-  }, [detail, currentUser]);
-
   function handleAuthExpired(error: unknown) {
     const maybeMessage = getApiErrorMessage(error, '');
 
     if (maybeMessage?.includes('登录状态已失效')) {
-      clearDemoUser();
+      clearCurrentUser();
       message.error('登录状态已失效，请重新登录');
       void navigate('/login');
       return true;
@@ -148,10 +139,6 @@ export function ProductDetailPage() {
     }
     setSubmitting('chat');
     try {
-      await recordRecommendationBehavior({
-        productId: detail.id,
-        eventType: 'CONTACT'
-      });
       const conversation = await createConversation({
         productId: detail.id,
         initialMessage: `你好，我对“${detail.title}”感兴趣，还在吗？`
@@ -180,10 +167,6 @@ export function ProductDetailPage() {
     }
     setSubmitting('order');
     try {
-      await recordRecommendationBehavior({
-        productId: detail.id,
-        eventType: 'ORDER'
-      });
       await createOrder({
         productId: detail.id,
         meetupLocation: getBjfuMeetupLabel(detail.id),
@@ -210,7 +193,7 @@ export function ProductDetailPage() {
     reportForm.setFieldsValue({
       type: reportTypeOptions[0],
       detail: '',
-      identityMode: currentUser?.verified ? 'REAL_NAME' : 'ANONYMOUS',
+      identityMode: currentUser?.verificationStatus === 'APPROVED' ? 'REAL_NAME' : 'ANONYMOUS',
       contactConsent: 'YES'
     });
     setReportModalOpen(true);
@@ -219,7 +202,7 @@ export function ProductDetailPage() {
   function buildReportReason(values: ReportFormValues) {
     const activeUser = currentUser;
     const identityLabel = values.identityMode === 'REAL_NAME'
-      ? `实名举报（${activeUser?.name ?? '未知用户'} / ${activeUser?.studentId || '无学号'}）`
+      ? `实名举报（${activeUser?.displayName ?? '未知用户'} / ${activeUser?.studentId || '无学号'}）`
       : '匿名展示（平台保留账号记录用于核查）';
     const contactLabel = values.contactConsent === 'YES' ? '愿意配合管理员补充材料' : '仅提交当前举报信息';
 
@@ -269,7 +252,6 @@ export function ProductDetailPage() {
     }
 
     const nextState = await toggleFavorite(detail.id, currentUser);
-    syncFavoriteSignal(detail, nextState, currentUser);
     setFavoriteVersion((value) => value + 1);
     message.success(nextState ? '已加入想要' : '已取消想要');
   }
@@ -292,11 +274,10 @@ export function ProductDetailPage() {
     );
   }
 
-  const status = statusMap[detail.status] ?? { label: detail.status, color: 'default' };
   const detailImages = resolveProductGallery(
     {
       ...detail,
-      sellerName: detail.seller.name
+      sellerName: detail.seller.displayName
     },
     detail.id,
     4
@@ -305,18 +286,12 @@ export function ProductDetailPage() {
   const primaryMeetup = getBjfuMeetupLabel(detail.id);
   const secondaryMeetup = getBjfuMeetupLabel(detail.id + 1);
   const sellerMoreItems = detail.relatedProducts.slice(0, 3);
-  const detailMeta = [
-    { label: '品牌', value: detail.category },
-    { label: '成色', value: detail.condition },
-    { label: '卖家状态', value: detail.seller.verified ? '实名认证' : '普通账号' },
-    { label: '信用等级', value: detail.seller.creditLevel },
-    { label: '交易地点', value: `${primaryMeetup} / ${secondaryMeetup}` },
-    { label: '发布时间', value: new Date(detail.publishedAt).toLocaleDateString() }
-  ];
-  const detailDescription = descriptionExpanded || detail.description.length <= 88
-    ? detail.description
-    : `${detail.description.slice(0, 88)}...`;
-  const sellerIdentity = detail.seller.verified ? '卖家信用优秀' : '卖家信用良好';
+  const sellerPresentation = getUserPresentation(detail.seller);
+  const detailDescription = descriptionExpanded || detail.detailBase.description.length <= 88
+    ? detail.detailBase.description
+    : `${detail.detailBase.description.slice(0, 88)}...`;
+  const sellerIdentity = sellerPresentation.creditBadge.label;
+  const statusPresentation = getListingStatusPresentation(detail.detailBase.status, detail.detailBase.statusLabel);
   const sellerStats = [
     detail.seller.college,
     `${detail.seller.responseRate}% 回复率`,
@@ -332,12 +307,12 @@ export function ProductDetailPage() {
           target="_blank"
           rel="noopener noreferrer"
           className="detail-seller-strip-main detail-seller-link"
-          aria-label={`打开${detail.seller.name}的主页`}
+          aria-label={`打开${detail.seller.displayName}的主页`}
         >
-          <div className="detail-seller-avatar">{detail.seller.name.slice(0, 1)}</div>
+          <div className="detail-seller-avatar">{detail.seller.displayName.slice(0, 1)}</div>
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
-              <strong>{detail.seller.name}</strong>
+              <strong>{detail.seller.displayName}</strong>
               <span>{sellerIdentity}</span>
             </div>
             <MetaList items={sellerStats} className="detail-seller-strip-meta" />
@@ -346,66 +321,66 @@ export function ProductDetailPage() {
         <div className="detail-seller-strip-badge">校园号</div>
       </section>
 
-      <section className="detail-main-card">
-        <div className="detail-main-layout">
-          <div className="detail-thumb-column">
-            {detailImages.map((image, index) => (
-              <button
-                key={`${detail.id}-${index}`}
-                type="button"
-                className={index === activeImage ? 'detail-thumb active' : 'detail-thumb'}
-                onClick={() => setActiveImage(index)}
-              >
-                <img src={image} alt={`${detail.title}-${index + 1}`} />
-              </button>
-            ))}
-          </div>
-
-          <div className="detail-main-photo-shell">
-            <img
-              className="detail-main-photo"
-              src={currentImage}
-              alt={detail.title}
-            />
-            <div className="detail-photo-overlay">
-              <span>{detail.category}</span>
-              <strong>{activeImage + 1} / {detailImages.length}</strong>
+      <DetailShell
+        mainMedia={(
+          <div className="detail-main-layout-product">
+            <div className="detail-thumb-column">
+              {detailImages.map((image, index) => (
+                <button
+                  key={`${detail.id}-${index}`}
+                  type="button"
+                  className={index === activeImage ? 'detail-thumb active' : 'detail-thumb'}
+                  onClick={() => setActiveImage(index)}
+                >
+                  <img src={image} alt={`${detail.title}-${index + 1}`} />
+                </button>
+              ))}
             </div>
-          </div>
 
-          <aside className="detail-info-panel">
-            <div className="detail-info-head">
-              <div className="detail-price-line">
-                <strong>¥{detail.price}</strong>
-                <span>同校面交</span>
+            <div className="detail-main-photo-shell">
+              <img
+                className="detail-main-photo"
+                src={currentImage}
+                alt={detail.title}
+              />
+              <div className="detail-photo-overlay">
+                <span>{detail.category}</span>
+                <strong>{activeImage + 1} / {detailImages.length}</strong>
               </div>
-              <div className="detail-condition-mark">{detail.condition}</div>
             </div>
-
+          </div>
+        )}
+        sidePanel={(
+          <div className="detail-info-panel">
             <div className="detail-heat-line">
               <span>{detail.stats.wantCount} 人想要</span>
               <span>{detail.stats.viewCount} 浏览</span>
             </div>
 
-            <h1 className="detail-main-title">{detail.title}</h1>
-
-            <div className="detail-description-block">
-              <p>{detailDescription}</p>
-              {detail.description.length > 88 ? (
-                <button
-                  type="button"
-                  className="detail-expand-button"
-                  onClick={() => setDescriptionExpanded((current) => !current)}
-                >
-                  {descriptionExpanded ? '收起' : '展开'}
-                </button>
-              ) : null}
-            </div>
-
-            <KeyValueGrid
-              items={detailMeta.map((item) => ({ key: item.label, label: item.label, value: item.value }))}
+            <ListingDetailHero
+              detail={{
+                ...detail.detailBase,
+                description: detailDescription
+              }}
+              statusTone={statusPresentation.tone}
+              amountAside="同校面交"
+            />
+            {detail.detailBase.description.length > 88 ? (
+              <button
+                type="button"
+                className="detail-expand-button"
+                onClick={() => setDescriptionExpanded((current) => !current)}
+              >
+                {descriptionExpanded ? '收起' : '展开'}
+              </button>
+            ) : null}
+            <div className="detail-condition-mark">{detail.condition}</div>
+            <ListingDetailMetaPanel
+              detail={detail.detailBase}
+              extraItems={[
+                { key: 'meetup', label: '交易地点', value: `${primaryMeetup} / ${secondaryMeetup}` }
+              ]}
               className="detail-main-meta-grid"
-              emphasizeValue
             />
 
             <div className="detail-main-actions">
@@ -426,9 +401,41 @@ export function ProductDetailPage() {
                 {submitting === 'report' ? '提交中...' : '举报'}
               </button>
             </div>
-          </aside>
-        </div>
-      </section>
+          </div>
+        )}
+        bottomContent={(
+          <div className="detail-bottom-layout">
+            <div className="detail-card detail-balance-card">
+              <SectionHeader title="对方在售" description={`${sellerMoreItems.length} 件`} />
+              <div className="ui-split-list">
+                {sellerMoreItems.map((item) => (
+                  <Link key={item.id} to={`/products/${item.id}`} className="ui-split-list-row is-link">
+                    <div className="ui-split-list-copy">
+                      <strong>{item.title}</strong>
+                      <span>{item.condition} · {item.category}</span>
+                    </div>
+                    <span className="ui-split-list-aside is-highlight">¥{item.price}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="detail-card detail-balance-card">
+              <SectionHeader title="交易保障" description={statusPresentation.label} />
+              <div className="ui-split-list">
+                {detail.compliance.trustSignals.slice(0, 3).map((signal) => (
+                  <div key={signal} className="ui-split-list-row">
+                    <div className="ui-split-list-copy">
+                      <strong>{signal}</strong>
+                      <span>支持校内当面交易</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      />
 
       <Modal
         title="提交举报"
@@ -446,7 +453,7 @@ export function ProductDetailPage() {
           className="detail-report-form"
           initialValues={{
             type: reportTypeOptions[0],
-            identityMode: currentUser?.verified ? 'REAL_NAME' : 'ANONYMOUS',
+            identityMode: currentUser?.verificationStatus === 'APPROVED' ? 'REAL_NAME' : 'ANONYMOUS',
             contactConsent: 'YES'
           }}
         >
@@ -483,37 +490,6 @@ export function ProductDetailPage() {
         </Form>
       </Modal>
 
-      <section className="detail-bottom-layout">
-        <div className="detail-card detail-balance-card">
-          <SectionHeader title="对方在售" description={`${sellerMoreItems.length} 件`} />
-          <div className="ui-split-list">
-            {sellerMoreItems.map((item) => (
-              <Link key={item.id} to={`/products/${item.id}`} className="ui-split-list-row is-link">
-                <div className="ui-split-list-copy">
-                  <strong>{item.title}</strong>
-                  <span>{item.condition} · {item.category}</span>
-                </div>
-                <span className="ui-split-list-aside is-highlight">¥{item.price}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="detail-card detail-balance-card">
-          <SectionHeader title="交易保障" description={status.label} />
-          <div className="ui-split-list">
-            {detail.compliance.trustSignals.slice(0, 3).map((signal) => (
-              <div key={signal} className="ui-split-list-row">
-                <div className="ui-split-list-copy">
-                  <strong>{signal}</strong>
-                  <span>支持校内当面交易</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="detail-related">
         <div className="fish-feed-header">
           <h2>相似推荐</h2>
@@ -528,8 +504,8 @@ export function ProductDetailPage() {
                 item={item}
                 imageSrc={resolvePrimaryProductImage(item, item.id)}
                 signal={`${item.category} · ${item.condition}`}
-                secondaryMeta={item.recommendationReason ?? '同校热卖'}
-                tertiaryMeta={<span>{item.sellerName}</span>}
+                priceMeta="同校在售"
+                tagItems={[item.sellerName, '相似推荐']}
               />
             </Link>
           )}

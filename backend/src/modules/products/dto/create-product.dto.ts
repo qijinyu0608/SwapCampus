@@ -1,9 +1,7 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { PRODUCT_CONDITION_VALUES } from '../product-conditions';
 
 export class CreateProductDto {
-  @IsNumber()
-  sellerId!: number;
-
   @IsString()
   @IsNotEmpty()
   title!: string;
@@ -22,9 +20,11 @@ export class CreateProductDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsIn(PRODUCT_CONDITION_VALUES)
   condition!: string;
 
-  @IsString()
+  @IsArray()
   @IsOptional()
-  tags?: string;
+  @IsString({ each: true })
+  tags?: string[];
 }

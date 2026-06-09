@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client';
+import { PRODUCT_CATEGORY_NAMES } from './product-category-migration';
 
 const prisma = new PrismaClient();
-
-const categories = ['教材', '数码', '生活用品', '运动器材', '宿舍好物', '自行车', '文具', '小家电', '鞋服', '考研资料'] as const;
+const categories = [...PRODUCT_CATEGORY_NAMES];
 
 async function main() {
   const grouped = await prisma.product.groupBy({

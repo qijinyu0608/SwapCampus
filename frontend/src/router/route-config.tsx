@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react';
 import { AdminPage } from '../pages/AdminPage';
+import { CampusServiceDetailPage } from '../pages/CampusServiceDetailPage';
+import { CampusServicePublishPage } from '../pages/CampusServicePublishPage';
 import { CampusServicesPage } from '../pages/CampusServicesPage';
 import { FavoritesPage } from '../pages/FavoritesPage';
 import { HomePage } from '../pages/HomePage';
@@ -10,6 +12,8 @@ import { ProductPublishPage } from '../pages/ProductPublishPage';
 import { ProfileDetailPage } from '../pages/ProfileDetailPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { PublicUserPage } from '../pages/PublicUserPage';
+import { SearchPage } from '../pages/SearchPage';
+import { RequireAdmin, RequireUser } from './guards';
 
 export type AppRouteDefinition = {
   path: string;
@@ -19,15 +23,18 @@ export type AppRouteDefinition = {
 
 export const appRoutes: AppRouteDefinition[] = [
   { path: '/', element: <HomePage />, navigationLabel: '首页' },
-  { path: '/campus-services', element: <CampusServicesPage />, navigationLabel: '校园服务' },
+  { path: '/search', element: <RequireUser><SearchPage /></RequireUser> },
+  { path: '/campus-services', element: <RequireUser><CampusServicesPage /></RequireUser>, navigationLabel: '校园服务' },
+  { path: '/campus-services/:id', element: <RequireUser><CampusServiceDetailPage /></RequireUser> },
+  { path: '/campus-services/publish', element: <RequireUser><CampusServicePublishPage /></RequireUser> },
   { path: '/favorites', element: <FavoritesPage />, navigationLabel: '想要' },
   { path: '/products/:id', element: <ProductDetailPage /> },
   { path: '/users/:id', element: <PublicUserPage /> },
-  { path: '/publish', element: <ProductPublishPage /> },
-  { path: '/messages', element: <MessagesPage />, navigationLabel: '消息' },
-  { path: '/profile', element: <ProfilePage />, navigationLabel: '我的' },
-  { path: '/profile/detail', element: <ProfileDetailPage /> },
-  { path: '/admin', element: <AdminPage /> },
+  { path: '/publish', element: <RequireUser><ProductPublishPage /></RequireUser> },
+  { path: '/messages', element: <RequireUser><MessagesPage /></RequireUser>, navigationLabel: '消息' },
+  { path: '/profile', element: <RequireUser><ProfilePage /></RequireUser>, navigationLabel: '我的' },
+  { path: '/profile/detail', element: <RequireUser><ProfileDetailPage /></RequireUser> },
+  { path: '/admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
   { path: '/login', element: <LoginPage /> }
 ];
 

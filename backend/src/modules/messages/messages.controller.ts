@@ -1,7 +1,10 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/auth.types';
 
 @Controller('messages')
 export class MessagesController {
@@ -11,40 +14,33 @@ export class MessagesController {
   ) {}
 
   @Get('conversations')
-  listConversations(@Query('userId') userId?: string) {
-    return this.messagesService.listConversations(userId ? Number(userId) : undefined);
+  @UseGuards(JwtAuthGuard)
+  listConversations(@CurrentUser() user: AuthenticatedUser) {
+    return this.messagesService.listConversations(user);
   }
 
   @Post('conversations')
-  createConversation(@Body() dto: CreateConversationDto) {
-    return this.messagesService.createConversation(dto);
-  }
-
-  @Post('demo-hydrate')
-  hydrateDemoConversations(
-    @Body() dto: {
-      userId: number;
-      studentId?: string;
-      name?: string;
-      email?: string;
-    }
-  ) {
-    return this.messagesService.hydrateDemoConversations(dto);
+  @UseGuards(JwtAuthGuard)
+  createConversation(@Body() dto: CreateConversationDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.messagesService.createConversation(dto, user);
   }
 
   @Get('conversations/:id')
+  @UseGuards(JwtAuthGuard)
   getConversationMessages(
     @Param('id', ParseIntPipe) id: number,
-    @Query('userId') userId?: string
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.messagesService.getConversationMessages(id, userId ? Number(userId) : undefined);
+    return this.messagesService.getConversationMessages(id, user);
   }
 
   @Post('conversations/:id')
+  @UseGuards(JwtAuthGuard)
   sendMessage(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: SendMessageDto
+    @Body() dto: SendMessageDto,
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.messagesService.sendMessage(id, dto);
+    return this.messagesService.sendMessage(id, dto, user);
   }
 }

@@ -4,6 +4,7 @@ import { AdminEntityActions, AdminEntityItem, MetricBarChart, StatStrip } from '
 import { FoldSection } from '../components/disclosure';
 import { NoticePanel } from '../components/feedback';
 import { PageCard } from '../components/layout';
+import { useAuthState } from '../services/auth-state';
 import {
   AdminCampusServiceItem,
   AdminOverview,
@@ -24,9 +25,9 @@ import {
   updateAdminProductStatus,
   updateUserBanStatus
 } from '../services/api';
-import { getDemoUser, hasAdminAccess } from '../services/session';
+import { hasAdminAccess } from '../services/session';
 
-const fallbackOverview: AdminOverview = {
+const emptyOverview: AdminOverview = {
   pendingProducts: 0,
   totalUsers: 0,
   reportCount: 0,
@@ -110,8 +111,8 @@ function getCollegeCount(stats: Array<{ college: string; count: number }>, colle
 }
 
 export function AdminPage() {
-  const currentUser = getDemoUser();
-  const [overview, setOverview] = useState<AdminOverview>(fallbackOverview);
+  const { currentUser } = useAuthState();
+  const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [users, setUsers] = useState<ModerationUserItem[]>([]);
@@ -128,7 +129,7 @@ export function AdminPage() {
   const [loadError, setLoadError] = useState('');
   const openReports = reports.filter((item) => item.status === 'OPEN').length;
   const bannedUsers = users.filter((item) => item.isBanned).length;
-  const verifiedUsers = users.filter((item) => item.verified).length;
+  const verifiedUsers = users.filter((item) => item.verificationStatus === 'APPROVED').length;
   const highRiskUsers = users.filter((item) => item.riskLevel === 'HIGH').length;
   const watchedUsers = users.filter((item) => item.riskLevel === 'MEDIUM').length;
   const userActionSummary = `${highRiskUsers} 高风险 / ${watchedUsers} 观察`;
@@ -186,7 +187,7 @@ export function AdminPage() {
       setOrders(orderList);
       setCampusServices(campusServiceList);
     } catch (error) {
-      setOverview(fallbackOverview);
+      setOverview(emptyOverview);
       setReports([]);
       setLogs([]);
       setUsers([]);
@@ -630,13 +631,15 @@ export function AdminPage() {
                   <div key={item.id} className={`admin-user-card risk-${item.riskLevel.toLowerCase()}`}>
                     <div className="admin-user-head">
                       <div>
-                        <strong>{item.name}</strong>
+                        <strong>{item.displayName}</strong>
                         <span>{item.college} · {item.studentId} · 用户 #{item.id}</span>
                       </div>
                       <div className="admin-user-tags">
                         <Tag color={risk.color}>{risk.label} {item.riskScore}</Tag>
                         <Tag color={item.isBanned ? 'red' : 'green'}>{item.isBanned ? '已封禁' : '正常'}</Tag>
-                        <Tag color={item.verified ? 'blue' : 'default'}>{item.verified ? '已实名' : '待实名'}</Tag>
+                        <Tag color={item.verificationStatus === 'APPROVED' ? 'blue' : 'default'}>
+                          {item.verificationStatus === 'APPROVED' ? '已实名' : '待实名'}
+                        </Tag>
                       </div>
                     </div>
                     <NoticePanel

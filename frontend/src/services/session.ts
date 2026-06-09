@@ -1,29 +1,23 @@
+import type { AuthUser } from './api';
+
 const SESSION_KEY = 'swapcampus-session';
 const SESSION_EVENT = 'swapcampus-session-change';
+const DEV_AUTH_TOKEN_KEY = 'swapcampus-dev-auth-token';
 
-export type AppRole = 'GUEST' | 'USER' | 'ADMIN';
-
-export type DemoUser = {
-  id: number;
-  studentId: string;
-  name: string;
-  email: string;
-  role: AppRole;
-  creditScore?: number;
-  verified?: boolean;
+export type SessionRole = 'GUEST' | 'USER' | 'ADMIN';
+export type SessionUser = Omit<AuthUser, 'role'> & {
+  role: SessionRole;
 };
 
 export type AppSession = {
-  accessToken: string | null;
-  user: DemoUser;
+  user: SessionUser;
 };
 
 type StoredSession = {
-  accessToken: string | null;
-  user: DemoUser;
+  user: SessionUser;
 };
 
-function normalizeRole(role?: string): AppRole {
+function normalizeRole(role?: string): SessionRole {
   if (role === 'ADMIN') {
     return 'ADMIN';
   }
@@ -35,19 +29,20 @@ function normalizeRole(role?: string): AppRole {
   return 'USER';
 }
 
-function normalizeUser(user: Partial<DemoUser>): DemoUser | null {
-  if (!user.id || !user.name) {
+function normalizeUser(user: Partial<SessionUser>): SessionUser | null {
+  if (!user.id || !user.displayName) {
     return null;
   }
 
   return {
     id: user.id,
     studentId: user.studentId ?? '',
-    name: user.name,
+    displayName: user.displayName,
     email: user.email ?? '',
     role: normalizeRole(user.role),
     creditScore: user.creditScore,
-    verified: user.verified
+    verificationStatus: user.verificationStatus,
+    accountStatus: user.accountStatus
   };
 }
 
@@ -55,14 +50,13 @@ function dispatchSessionChange() {
   window.dispatchEvent(new Event(SESSION_EVENT));
 }
 
-export function saveSession(session: { accessToken?: string | null; user: DemoUser }) {
+export function saveSession(session: { user: SessionUser }) {
   const normalizedUser = normalizeUser(session.user);
   if (!normalizedUser) {
     return;
   }
 
   const nextSession: StoredSession = {
-    accessToken: session.accessToken?.trim() || null,
     user: normalizedUser
   };
 
@@ -70,12 +64,8 @@ export function saveSession(session: { accessToken?: string | null; user: DemoUs
   dispatchSessionChange();
 }
 
-export function saveDemoUser(user: DemoUser) {
-  const current = getSession();
-  saveSession({
-    accessToken: current?.accessToken ?? null,
-    user
-  });
+export function saveCurrentUser(user: SessionUser) {
+  saveSession({ user });
 }
 
 export function getSession(): AppSession | null {
@@ -91,44 +81,38 @@ export function getSession(): AppSession | null {
       return null;
     }
 
-    return {
-      accessToken: typeof parsed.accessToken === 'string' && parsed.accessToken.trim()
-        ? parsed.accessToken
-        : null,
-      user
-    };
+    return { user };
   } catch {
     return null;
   }
 }
 
-export function getDemoUser(): DemoUser | null {
+export function getCurrentUser(): SessionUser | null {
   return getSession()?.user ?? null;
 }
 
-export function getAccessToken() {
-  return getSession()?.accessToken ?? null;
-}
-
-export function clearDemoUser() {
+export function clearCurrentUserStorage() {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(DEV_AUTH_TOKEN_KEY);
   dispatchSessionChange();
 }
 
-export function createGuestUser(): DemoUser {
-  const guestId = Date.now();
-  return {
-    id: guestId,
-    studentId: `guest-${String(guestId).slice(-6)}`,
-    name: '游客',
-    email: '',
-    role: 'GUEST',
-    creditScore: 0,
-    verified: false
-  };
+export function saveDevAuthToken(token?: string | null) {
+  if (!token) {
+    localStorage.removeItem(DEV_AUTH_TOKEN_KEY);
+    dispatchSessionChange();
+    return;
+  }
+
+  localStorage.setItem(DEV_AUTH_TOKEN_KEY, token);
+  dispatchSessionChange();
 }
 
-export function getRoleLabel(role?: AppRole) {
+export function getDevAuthToken() {
+  return localStorage.getItem(DEV_AUTH_TOKEN_KEY);
+}
+
+export function getRoleLabel(role?: SessionRole) {
   if (role === 'ADMIN') {
     return '管理员';
   }
@@ -140,15 +124,15 @@ export function getRoleLabel(role?: AppRole) {
   return '普通用户';
 }
 
-export function hasTradingAccess(user: DemoUser | null) {
+export function hasTradingAccess(user: SessionUser | null) {
   return user?.role === 'USER';
 }
 
-export function hasAdminAccess(user: DemoUser | null) {
+export function hasAdminAccess(user: SessionUser | null) {
   return user?.role === 'ADMIN';
 }
 
-export function isGuestUser(user: DemoUser | null) {
+export function isGuestUser(user: SessionUser | null) {
   return user?.role === 'GUEST';
 }
 

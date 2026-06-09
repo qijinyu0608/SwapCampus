@@ -1,6 +1,9 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
+import { AccountStatus, CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { requireAdminUser } from '../auth/auth.utils';
+import { SearchService } from '../search/search.service';
 import { UpdateAdminCampusServiceStatusDto } from './dto/update-admin-campus-service-status.dto';
 import { UpdateAdminOrderStatusDto } from './dto/update-admin-order-status.dto';
 import { UpdateAdminProductStatusDto } from './dto/update-admin-product-status.dto';
@@ -15,18 +18,21 @@ const activeOrderStatuses: OrderStatus[] = [
 export class AdminService {
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(SearchService)
+    private readonly searchService: SearchService
   ) {}
 
-  private getActorName(handledBy?: number) {
-    return handledBy ? `管理员#${handledBy}` : '管理员';
+  private getActorName(user: AuthenticatedUser) {
+    return `管理员#${user.id}`;
   }
 
   private getDetail(reason: string | undefined, fallback: string) {
     return reason?.trim() || fallback;
   }
 
-  async getOverview() {
+  async getOverview(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
     const [pendingProducts, totalUsers, reportCount, activeOrders, activeCampusServices] = await Promise.all([
       this.prisma.product.count({ where: { status: ProductStatus.PENDING } }),
       this.prisma.user.count(),
@@ -72,14 +78,15 @@ export class AdminService {
     };
   }
 
-  async updateProductStatus(productId: number, payload: UpdateAdminProductStatusDto) {
+  async updateProductStatus(productId: number, payload: UpdateAdminProductStatusDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
     const normalized = payload.status;
 
     if (normalized !== ProductStatus.ON_SALE && normalized !== ProductStatus.OFFLINE) {
       throw new BadRequestException('仅支持恢复上架或下架商品');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.product.findUnique({
         where: { id: productId },
         select: { id: true, title: true, sellerId: true, status: true }
@@ -96,10 +103,10 @@ export class AdminService {
       if (normalized === ProductStatus.ON_SALE) {
         const seller = await tx.user.findUnique({
           where: { id: current.sellerId },
-          select: { isBanned: true }
+          select: { accountStatus: true }
         });
 
-        if (seller?.isBanned) {
+        if (seller?.accountStatus === AccountStatus.BANNED) {
           throw new BadRequestException('卖家已被封禁，不能恢复商品展示');
         }
       }
@@ -121,8 +128,8 @@ export class AdminService {
 
       await tx.auditLog.create({
         data: {
-          actorId: payload.handledBy,
-          actorName: this.getActorName(payload.handledBy),
+          actorId: adminUser.id,
+          actorName: this.getActorName(adminUser),
           action: normalized === ProductStatus.OFFLINE ? 'OFFLINE_PRODUCT' : 'RESTORE_PRODUCT',
           targetType: 'PRODUCT',
           targetId: productId,
@@ -136,9 +143,13 @@ export class AdminService {
         title: product.title
       };
     });
+
+    await this.searchService.syncProduct(productId);
+    return result;
   }
 
-  async listOrders() {
+  async listOrders(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
     const orders = await this.prisma.order.findMany({
       orderBy: { updatedAt: 'desc' },
       take: 30
@@ -148,14 +159,14 @@ export class AdminService {
     const [users, products] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, name: true }
+        select: { id: true, displayName: true }
       }),
       this.prisma.product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, title: true, status: true }
       })
     ]);
-    const userMap = new Map(users.map((user) => [user.id, user.name]));
+    const userMap = new Map(users.map((user) => [user.id, user.displayName]));
     const productMap = new Map(products.map((product) => [product.id, product]));
 
     return orders.map((order) => ({
@@ -175,7 +186,8 @@ export class AdminService {
     }));
   }
 
-  async updateOrderStatus(orderId: number, payload: UpdateAdminOrderStatusDto) {
+  async updateOrderStatus(orderId: number, payload: UpdateAdminOrderStatusDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
     const supportedStatuses = [
       OrderStatus.PENDING,
       OrderStatus.IN_PROGRESS,
@@ -188,7 +200,7 @@ export class AdminService {
       throw new BadRequestException('订单状态不支持');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
@@ -236,7 +248,7 @@ export class AdminService {
           }),
           tx.user.findUnique({
             where: { id: product.sellerId },
-            select: { isBanned: true }
+            select: { accountStatus: true }
           })
         ]);
 
@@ -248,7 +260,7 @@ export class AdminService {
         } else if (
           activeOrderStatuses.includes(order.status) &&
           !otherActiveOrder &&
-          !seller?.isBanned &&
+          seller?.accountStatus !== AccountStatus.BANNED &&
           product.status !== ProductStatus.PENDING &&
           product.status !== ProductStatus.SOLD
         ) {
@@ -266,8 +278,8 @@ export class AdminService {
 
       await tx.auditLog.create({
         data: {
-          actorId: payload.handledBy,
-          actorName: this.getActorName(payload.handledBy),
+          actorId: adminUser.id,
+          actorName: this.getActorName(adminUser),
           action: 'UPDATE_ORDER_STATUS',
           targetType: 'ORDER',
           targetId: orderId,
@@ -281,9 +293,13 @@ export class AdminService {
         productId: updated.productId
       };
     });
+
+    await this.searchService.syncProduct(result.productId);
+    return result;
   }
 
-  async listCampusServices() {
+  async listCampusServices(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
     const tasks = await this.prisma.campusServiceTask.findMany({
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
       take: 30
@@ -295,9 +311,9 @@ export class AdminService {
     )];
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, name: true }
+      select: { id: true, displayName: true }
     });
-    const userMap = new Map(users.map((user) => [user.id, user.name]));
+    const userMap = new Map(users.map((user) => [user.id, user.displayName]));
 
     return tasks.map((task) => ({
       id: task.id,
@@ -317,7 +333,12 @@ export class AdminService {
     }));
   }
 
-  async updateCampusServiceStatus(taskId: number, payload: UpdateAdminCampusServiceStatusDto) {
+  async updateCampusServiceStatus(
+    taskId: number,
+    payload: UpdateAdminCampusServiceStatusDto,
+    currentUser: AuthenticatedUser
+  ) {
+    const adminUser = requireAdminUser(currentUser);
     const supportedStatuses = [
       CampusServiceStatus.OPEN,
       CampusServiceStatus.MATCHED,
@@ -352,8 +373,8 @@ export class AdminService {
 
       await tx.auditLog.create({
         data: {
-          actorId: payload.handledBy,
-          actorName: this.getActorName(payload.handledBy),
+          actorId: adminUser.id,
+          actorName: this.getActorName(adminUser),
           action: 'UPDATE_CAMPUS_SERVICE_STATUS',
           targetType: 'CAMPUS_SERVICE',
           targetId: taskId,

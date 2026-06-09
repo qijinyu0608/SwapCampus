@@ -1,10 +1,12 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
-import { CampusServiceCategory } from '@prisma/client';
+import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  CampusServiceCategory,
+  CampusServiceContactPreference,
+  CampusServiceFulfillmentMode,
+  CampusServiceUrgency
+} from '@prisma/client';
 
 export class CreateCampusServiceDto {
-  @IsInt()
-  publisherId!: number;
-
   @IsString()
   @IsNotEmpty()
   title!: string;
@@ -35,4 +37,25 @@ export class CreateCampusServiceDto {
   @IsInt()
   @Min(5)
   estimatedMinutes!: number;
+
+  @IsEnum(CampusServiceUrgency)
+  @IsOptional()
+  urgency?: CampusServiceUrgency;
+
+  @IsEnum(CampusServiceFulfillmentMode)
+  @IsOptional()
+  fulfillmentMode?: CampusServiceFulfillmentMode;
+
+  @IsEnum(CampusServiceContactPreference)
+  @IsOptional()
+  contactPreference?: CampusServiceContactPreference;
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  itemCount?: number;
+
+  @IsString()
+  @IsOptional()
+  trustNote?: string;
 }

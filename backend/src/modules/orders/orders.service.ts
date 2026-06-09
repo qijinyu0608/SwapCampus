@@ -1,6 +1,9 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { OrderStatus, Prisma, ProductStatus } from '@prisma/client';
+import { AccountStatus, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { SearchService } from '../search/search.service';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CompleteOrderDto } from './dto/complete-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -17,17 +20,20 @@ const activeOrderStatuses = [
 export class OrdersService {
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(SearchService)
+    private readonly searchService: SearchService
   ) {}
 
-  async createOrder(payload: CreateOrderDto) {
+  async createOrder(payload: CreateOrderDto, currentUser: AuthenticatedUser) {
+    const buyerUser = requireAuthenticatedUser(currentUser);
     const [product, buyer] = await Promise.all([
       this.prisma.product.findUnique({
         where: { id: payload.productId }
       }),
       this.prisma.user.findUnique({
-        where: { id: payload.buyerId },
-        select: { id: true, isBanned: true }
+        where: { id: buyerUser.id },
+        select: { id: true, accountStatus: true }
       })
     ]);
 
@@ -39,11 +45,11 @@ export class OrdersService {
       throw new BadRequestException('登录状态已失效，请重新登录');
     }
 
-    if (buyer.isBanned) {
+    if (buyer.accountStatus === AccountStatus.BANNED) {
       throw new ForbiddenException('账号已被封禁，无法下单');
     }
 
-    if (product.sellerId === payload.buyerId) {
+    if (product.sellerId === buyerUser.id) {
       throw new BadRequestException('不能购买自己发布的商品');
     }
 
@@ -51,11 +57,11 @@ export class OrdersService {
       throw new BadRequestException('商品当前不可下单');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
           productId: product.id,
-          buyerId: payload.buyerId,
+          buyerId: buyerUser.id,
           sellerId: product.sellerId,
           meetupLocation: payload.meetupLocation?.trim() || null,
           note: payload.note?.trim() || null,
@@ -78,28 +84,30 @@ export class OrdersService {
       await tx.message.create({
         data: {
           conversationId: conversation.id,
-          senderId: payload.buyerId,
+          senderId: buyerUser.id,
           content: payload.note?.trim() || `你好，我想买“${product.title}”，可以约线下面交吗？`
         }
       });
 
       return order;
     });
+
+    await this.searchService.syncProduct(payload.productId);
+    return result;
   }
 
   async listOrders(params?: {
-    userId?: number;
+    currentUser?: AuthenticatedUser;
     page?: number;
     pageSize?: number;
   }) {
+    const authUser = requireAuthenticatedUser(params?.currentUser);
     const page = params?.page ?? 1;
     const pageSize = Math.min(params?.pageSize ?? 6, 20);
     const skip = (page - 1) * pageSize;
-    const where = params?.userId
-      ? {
-          OR: [{ buyerId: params.userId }, { sellerId: params.userId }]
-        }
-      : undefined;
+    const where = {
+      OR: [{ buyerId: authUser.id }, { sellerId: authUser.id }]
+    };
 
     const [orders, total] = await this.prisma.$transaction([
       this.prisma.order.findMany({
@@ -138,7 +146,7 @@ export class OrdersService {
       userIds.length
         ? this.prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, name: true, creditScore: true, isVerified: true }
+            select: { id: true, displayName: true, creditScore: true, verificationStatus: true }
           })
         : [],
       orderIds.length
@@ -174,12 +182,12 @@ export class OrdersService {
           productStatus: product?.status ?? null,
           productImageUrl: firstImageMap.get(order.productId) ?? null,
           conversationId: conversationMap.get(order.id) ?? null,
-          buyerName: buyer?.name ?? `用户#${order.buyerId}`,
+          buyerName: buyer?.displayName ?? `用户#${order.buyerId}`,
           buyerCreditScore: buyer?.creditScore ?? null,
-          buyerVerified: buyer?.isVerified ?? false,
-          sellerName: seller?.name ?? `用户#${order.sellerId}`,
+          buyerVerified: buyer?.verificationStatus === VerificationStatus.APPROVED,
+          sellerName: seller?.displayName ?? `用户#${order.sellerId}`,
           sellerCreditScore: seller?.creditScore ?? null,
-          sellerVerified: seller?.isVerified ?? false
+          sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED
         };
       }),
       pagination: {
@@ -191,8 +199,9 @@ export class OrdersService {
     };
   }
 
-  async confirmMeetup(orderId: number, payload: UpdateMeetupDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async confirmMeetup(orderId: number, payload: UpdateMeetupDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
@@ -201,7 +210,7 @@ export class OrdersService {
         throw new NotFoundException('订单不存在');
       }
 
-      this.assertParticipant(order, payload.userId);
+      this.assertParticipant(order, authUser.id);
 
       if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.IN_PROGRESS) {
         throw new BadRequestException('当前订单状态不能修改面交约定');
@@ -218,7 +227,7 @@ export class OrdersService {
         }
       });
 
-      await this.appendOrderMessage(tx, orderId, payload.userId, [
+      await this.appendOrderMessage(tx, orderId, authUser.id, [
         '已确认线下面交安排。',
         nextLocation ? `面交地点：${nextLocation}` : null,
         nextNote ? `备注：${nextNote}` : null
@@ -226,10 +235,14 @@ export class OrdersService {
 
       return updated;
     });
+
+    await this.searchService.syncProduct(result.productId);
+    return result;
   }
 
-  async cancelOrder(orderId: number, payload: CancelOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async cancelOrder(orderId: number, payload: CancelOrderDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
@@ -238,7 +251,7 @@ export class OrdersService {
         throw new NotFoundException('订单不存在');
       }
 
-      this.assertParticipant(order, payload.userId);
+      this.assertParticipant(order, authUser.id);
 
       if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.CANCELED) {
         throw new BadRequestException('当前订单不能取消');
@@ -277,16 +290,20 @@ export class OrdersService {
       await this.appendOrderMessage(
         tx,
         orderId,
-        payload.userId,
+        authUser.id,
         `订单已取消。${payload.reason?.trim() ? `原因：${payload.reason.trim()}` : '双方可重新沟通后再次下单。'}`
       );
 
       return updated;
     });
+
+    await this.searchService.syncProduct(result.productId);
+    return result;
   }
 
-  async completeMeetup(orderId: number, payload: CompleteOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async completeMeetup(orderId: number, _payload: CompleteOrderDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
@@ -295,7 +312,7 @@ export class OrdersService {
         throw new NotFoundException('订单不存在');
       }
 
-      this.assertParticipant(order, payload.userId);
+      this.assertParticipant(order, authUser.id);
 
       if (order.status !== OrderStatus.IN_PROGRESS) {
         throw new BadRequestException('只有已约定面交的订单才能确认完成');
@@ -311,13 +328,17 @@ export class OrdersService {
         data: { status: ProductStatus.SOLD }
       });
 
-      await this.appendOrderMessage(tx, orderId, payload.userId, '线下面交已完成，订单进入待评价。');
+      await this.appendOrderMessage(tx, orderId, authUser.id, '线下面交已完成，订单进入待评价。');
 
       return updated;
     });
+
+    await this.searchService.syncProduct(result.productId);
+    return result;
   }
 
-  async createReview(orderId: number, payload: CreateReviewDto) {
+  async createReview(orderId: number, payload: CreateReviewDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
@@ -327,7 +348,7 @@ export class OrdersService {
         throw new NotFoundException('订单不存在');
       }
 
-      this.assertParticipant(order, payload.reviewerId);
+      this.assertParticipant(order, authUser.id);
 
       if (order.status !== OrderStatus.WAITING_REVIEW && order.status !== OrderStatus.COMPLETED) {
         throw new BadRequestException('当前订单还不能评价');
@@ -336,7 +357,7 @@ export class OrdersService {
       const existing = await tx.review.findFirst({
         where: {
           orderId,
-          reviewerId: payload.reviewerId
+          reviewerId: authUser.id
         },
         select: { id: true }
       });
@@ -348,7 +369,7 @@ export class OrdersService {
       const review = await tx.review.create({
         data: {
           orderId,
-          reviewerId: payload.reviewerId,
+          reviewerId: authUser.id,
           rating: payload.rating,
           content: payload.content?.trim() || '线下面交顺利完成'
         }
@@ -359,7 +380,7 @@ export class OrdersService {
         data: { status: OrderStatus.COMPLETED }
       });
 
-      await this.appendOrderMessage(tx, orderId, payload.reviewerId, `已完成评价：${payload.rating} 星。`);
+      await this.appendOrderMessage(tx, orderId, authUser.id, `已完成评价：${payload.rating} 星。`);
 
       return {
         order: updated,

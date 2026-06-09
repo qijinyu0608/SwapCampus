@@ -9,8 +9,8 @@
 
 ## 当前已完成功能
 - 认证与角色
-  - 支持游客、普通用户、管理员三类入口
-  - 支持邮箱或学号登录、普通用户注册、封禁账号拦截
+  - 支持普通用户、管理员两类认证账号，以及未登录浏览态
+  - 已接入 `SuperTokens`，支持邮箱或学号登录、普通用户注册、封禁账号拦截
 - 商品浏览、筛选、发布、审核
   - 首页支持真实商品流、搜索、分类、折叠筛选和推荐流
   - 发布页支持分类、成色、价格、描述、规则提示和审核拦截
@@ -24,7 +24,7 @@
   - 订单创建后会自动生成关联会话，形成完整交易留痕
 - 消息会话与演示级实时推送
   - 支持会话列表、消息明细、文本发送
-  - 支持基于 Socket.IO 的演示级实时追加
+  - 支持基于 Socket.IO 的实时追加，握手与会话订阅已接入认证校验
 - 校园服务子模块
   - 独立支持跑腿、代办、拼单、临时帮忙
   - 已实现任务发布、接单、完成和消息联动
@@ -38,7 +38,7 @@
 ## 当前不成熟 / 已知边界
 - Socket.IO 目前只是演示级实时推送，缺少已读回执、在线状态、断线补偿等完整 IM 能力
 - “想要/收藏”页面当前以前端本地存储为主，数据库中的 `Favorite` 表仍属于后续启用能力
-- 登录返回的 JWT 仍是 `mock token` 口径，未形成完整守卫、刷新和权限校验体系
+- 当前认证已统一到 `SuperTokens session`，但仍未补 refresh / rotation 等更完整的会话治理策略
 - MinIO 已进入基础设施编排，但图片上传、桶初始化和完整对象存储闭环尚未完全落地
 - 自动化验证目前以后端 Jest 和前端 build 为主，前端交互级测试还不充分
 
@@ -161,38 +161,62 @@ SwapCampus
 
 ### 启动
 ```bash
-docker compose up -d --build
+make init
+make start
 ```
 
 说明：
-- 首次启动会自动执行 `db-init`
-- `db-init` 会完成 `prisma db push` 和默认数据初始化
-- 当前 Compose 会拉起 `mysql`、`minio`、`db-init`、`backend`、`frontend`
+- `db-init` 现在是一次性初始化任务，放在 `init` profile 下
+- 首次启动或需要重置数据时，先执行 `db-init`
+- 日常开发重启 `backend` / `frontend` 不会再重复触发数据库 reset 和 seed
+- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens`、`backend`、`frontend`
 - 前端生产镜像使用 `nginx` 托管静态资源
+- 默认认证 Core 使用容器内自托管 `http://supertokens:3567`
+- SuperTokens 默认使用官方 PostgreSQL Core 镜像的内存存储，适合本地开发和演示；需要持久化认证数据时再接 PostgreSQL
+- `backend` 会等待 `supertokens` 健康后再启动，避免认证接口在默认开发环境下处于不可用状态
+- `make start` / `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
+
+### 测试账号
+```bash
+cd backend
+DATABASE_URL=mysql://swapcampus:swapcampus@127.0.0.1:3306/swapcampus \
+SUPERTOKENS_CONNECTION_URI=http://127.0.0.1:3567 \
+npm run db:sync-test-account
+```
+
+- 账号：`admin`
+- 密码：`admin`
 
 ### 访问地址
-- Frontend：`http://localhost:5178`
-- Backend Health：`http://localhost:3001/api/health`
-- Socket.IO：`http://localhost:3001`
+- Frontend：`http://10.66.0.11:5178`
+- Backend Health：`http://10.66.0.11:3001/api/health`
+- Socket.IO：`http://10.66.0.11:3001`
 - MinIO Console：`http://localhost:9001`
 
 ### 重置数据
 ```bash
 docker compose down -v
-docker compose up -d --build
+make init
+make start
 ```
 
 ### 基本验证命令
 ```bash
 docker compose ps
 docker compose logs backend --tail=50
-curl http://localhost:3001/api/health
+curl http://10.66.0.11:3001/api/health
 ```
 
 ### 常用命令
 ```bash
 make install
+make init
 make up
+make start
+make restart-auth
+make restart-backend
+make status
+make health
 make down
 make logs
 make backend-test

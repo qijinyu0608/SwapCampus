@@ -12,21 +12,22 @@ import { Empty, Input, message } from 'antd';
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { io, type Socket } from 'socket.io-client';
+import { useAuthState } from '../services/auth-state';
+import Session from 'supertokens-auth-react/recipe/session';
 import {
   ConversationMessage,
   ConversationSummary,
   fetchConversationMessages,
   fetchConversations,
   getApiErrorMessage,
-  hydrateMessageDemos,
   sendConversationMessage
 } from '../services/api';
-import { getDemoUser, hasTradingAccess, isGuestUser, saveDemoUser } from '../services/session';
-import { getProductImage } from '../utils/productCover';
+import { normalizeProductCategoryName } from '../constants/productCategories';
+import { hasTradingAccess, isGuestUser } from '../services/session';
+import { DEMO_PRODUCT_IMAGE, getProductImage } from '../utils/productCover';
 
 const READ_STORAGE_PREFIX = 'swapcampus-message-read-map:';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-
 type NewMessageEvent = {
   conversationId: number;
   message: ConversationMessage;
@@ -125,13 +126,13 @@ function readStoredReadMap(userId?: number) {
 
 function getSessionImage(session: ConversationSummary) {
   if (session.product?.imageUrl) {
-    return session.product.imageUrl;
+    return DEMO_PRODUCT_IMAGE;
   }
 
   if (!session.product) {
     return getProductImage({
-      title: session.participant.name,
-      category: '宿舍好物',
+      title: session.participant.displayName,
+      category: '其他',
       price: 0,
       condition: '同校私聊'
     });
@@ -139,10 +140,10 @@ function getSessionImage(session: ConversationSummary) {
 
   return getProductImage({
     title: session.product.title,
-    category: session.product.category,
+    category: normalizeProductCategoryName(session.product.category),
     price: session.product.price,
     condition: session.product.condition,
-    sellerName: session.participant.name
+    sellerName: session.participant.displayName
   });
 }
 
@@ -173,7 +174,7 @@ function getSessionMetaLabel(session: ConversationSummary, unread: boolean) {
 }
 
 export function MessagesPage() {
-  const currentUser = getDemoUser();
+  const { currentUser } = useAuthState();
   const canTrade = hasTradingAccess(currentUser);
   const navigate = useNavigate();
   const location = useLocation();
@@ -222,30 +223,7 @@ export function MessagesPage() {
       return [];
     }
 
-    let resolvedUserId = currentUser.id;
     let list = await fetchConversations();
-    const shouldHydrate = !list.length || list.length < 6 || list.filter((item) => item.product).length < 4;
-    if (shouldHydrate) {
-      const hydrated = await hydrateMessageDemos({
-        userId: currentUser.id,
-        studentId: currentUser.studentId,
-        name: currentUser.name,
-        email: currentUser.email
-      });
-      resolvedUserId = hydrated.user.id;
-      if (hydrated.user.id !== currentUser.id) {
-        saveDemoUser({
-          id: hydrated.user.id,
-          studentId: hydrated.user.studentId,
-          name: hydrated.user.name,
-          email: hydrated.user.email,
-          role: hydrated.user.role,
-          creditScore: hydrated.user.creditScore,
-          verified: hydrated.user.verified
-        });
-      }
-      list = await fetchConversations();
-    }
     setConversations(list);
     const preferredConversation = preferredId ? list.find((item) => item.id === preferredId) : null;
     if (preferredConversation) {
@@ -388,7 +366,7 @@ export function MessagesPage() {
     const optimisticMessage: ConversationMessage = {
       id: -Date.now(),
       senderId: activeUser.id,
-      senderName: activeUser.name,
+      senderName: activeUser.displayName,
       content,
       type: 'TEXT',
       createdAt: optimisticTimestamp
@@ -459,17 +437,33 @@ export function MessagesPage() {
       return;
     }
 
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling']
-    });
-    socketRef.current = socket;
-    socket.on('connect', () => joinVisibleConversations(socket));
-    socket.on('message:new', applyRealtimeMessage);
+    let active = true;
+
+    async function connectSocket() {
+      const accessToken = await Session.getAccessToken();
+      if (!active || !accessToken) {
+        return;
+      }
+
+      const socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        auth: {
+          authorization: `Bearer ${accessToken}`
+        }
+      });
+      socketRef.current = socket;
+      socket.on('connect', () => joinVisibleConversations(socket));
+      socket.on('message:new', applyRealtimeMessage);
+    }
+
+    void connectSocket();
 
     return () => {
-      socket.off('connect');
-      socket.off('message:new', applyRealtimeMessage);
-      socket.disconnect();
+      active = false;
+      const socket = socketRef.current;
+      socket?.off('connect');
+      socket?.off('message:new', applyRealtimeMessage);
+      socket?.disconnect();
       socketRef.current = null;
     };
   }, [canTrade, currentUser?.id]);
@@ -678,7 +672,7 @@ export function MessagesPage() {
 
             <div className="trade-chat-session-list">
               {visibleConversations.length ? visibleConversations.map((session) => {
-                const avatar = getAvatarMeta(session.participant.name);
+                const avatar = getAvatarMeta(session.participant.displayName);
                 const unread = isUnreadConversation(session);
                 const isCampusServiceSession = Boolean(session.campusServiceTaskId);
                 const metaLabel = getSessionMetaLabel(session, unread);
@@ -695,7 +689,7 @@ export function MessagesPage() {
                     </div>
                     <div className="trade-chat-session-copy">
                       <div className="trade-chat-session-top">
-                        <strong>{session.participant.name}</strong>
+                        <strong>{session.participant.displayName}</strong>
                         <span>{formatSessionTime(session.updatedAt)}</span>
                       </div>
                       <div className="trade-chat-session-preview">{session.preview}</div>
@@ -712,7 +706,7 @@ export function MessagesPage() {
                     ) : (
                       <img
                         src={getSessionImage(session)}
-                        alt={session.product?.title ?? session.participant.name}
+                        alt={session.product?.title ?? session.participant.displayName}
                         className="trade-chat-session-thumb"
                       />
                     )}
@@ -732,7 +726,7 @@ export function MessagesPage() {
                 <div className="trade-chat-main-head">
                   <div className="trade-chat-main-user">
                     <div className="trade-chat-main-title-row">
-                      <strong>{activeConversation.participant.name}</strong>
+                      <strong>{activeConversation.participant.displayName}</strong>
                       <span className="trade-chat-role-tag">
                         {activeConversation.campusServiceTaskId
                           ? activeConversation.selfRole === 'buyer' ? '接单方' : '发布方'
@@ -817,7 +811,7 @@ export function MessagesPage() {
                 <div className="trade-chat-thread" ref={threadRef}>
                   {messages.length ? messages.map((entry, index) => {
                     const isSelf = entry.senderId === currentUser?.id;
-                    const avatar = getAvatarMeta(isSelf ? currentUser?.name ?? entry.senderName : entry.senderName);
+                    const avatar = getAvatarMeta(isSelf ? currentUser?.displayName ?? entry.senderName : entry.senderName);
                     const showDivider = index === 0 || !isSameDay(messages[index - 1].createdAt, entry.createdAt);
                     const isLatestSelfMessage = isSelf && index === messages.length - 1 && activeConversation.latestMessageSenderId === currentUser?.id;
 
@@ -836,7 +830,7 @@ export function MessagesPage() {
                             </div>
                           ) : null}
                           <div className="trade-chat-bubble-wrap">
-                            <span className="trade-chat-speaker">{isSelf ? currentUser?.name ?? '我' : entry.senderName}</span>
+                            <span className="trade-chat-speaker">{isSelf ? currentUser?.displayName ?? '我' : entry.senderName}</span>
                             <div className={isSelf ? 'trade-chat-bubble self' : 'trade-chat-bubble other'}>
                               {entry.content}
                             </div>

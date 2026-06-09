@@ -34,7 +34,7 @@
 .topbar-cluster {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 38px;
   min-width: 0;
 }
@@ -54,9 +54,17 @@
   min-height: 38px;
 }
 
+.topbar-logo-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 276px;
+  max-width: 100%;
+  height: 52px;
+  padding-top: 6px;
+}
+
 .topbar-logo {
-  --logo-glow-x: 50%;
-  --logo-glow-y: 50%;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -64,8 +72,9 @@
   height: 38px;
   width: 188px;
   padding: 0;
-  text-decoration: none;
   transform: translateY(-1px);
+  user-select: none;
+  pointer-events: none;
 }
 
 .topbar-logo-svg {
@@ -81,72 +90,124 @@
 
 .topbar-logo-highlight {
   opacity: 0;
-  filter: drop-shadow(0 0 6px var(--signature-highlight-halo));
-  transition: opacity 0.18s ease;
+  transition: opacity 0.2s ease;
+}
+
+.topbar-logo-shimmer {
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition: opacity 0.24s ease;
 }
 
 .topbar-logo-mask-spot {
-  transform-box: fill-box;
-  transform-origin: center;
-  transform:
-    translate(
-      calc((var(--logo-glow-x) - 50%) * 1.68),
-      calc((var(--logo-glow-y) - 50%) * 1.08)
-    );
-  transition: transform 0.08s linear, r 0.18s ease;
+  transition: cx 0.08s linear, cy 0.08s linear, r 0.24s ease;
 }
 
-.topbar-logo:hover .topbar-logo-highlight,
-.topbar-logo:focus-visible .topbar-logo-highlight {
+.topbar-logo-zone:hover .topbar-logo-highlight,
+.topbar-logo-zone:focus-within .topbar-logo-highlight {
   opacity: 1;
 }
 
-.topbar-logo:hover .topbar-logo-mask-spot,
-.topbar-logo:focus-visible .topbar-logo-mask-spot {
-  r: 62;
+.topbar-logo-zone:hover .topbar-logo-shimmer,
+.topbar-logo-zone:focus-within .topbar-logo-shimmer {
+  opacity: 0.92;
 }
 
-.topbar-icon-button {
+.topbar-logo-zone:hover .topbar-logo-mask-spot,
+.topbar-logo-zone:focus-within .topbar-logo-mask-spot {
+  r: 88;
+}
+
+.topbar-nav-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
+  gap: 6px;
+  min-width: 0;
+  height: auto;
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  appearance: none;
+  -webkit-appearance: none;
   color: var(--primary-ink);
-  font-size: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
   text-decoration: none;
   cursor: pointer;
   box-shadow: none;
+  outline: none;
+  transition:
+    color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.topbar-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+
+.topbar-nav-label {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.topbar-nav-button .anticon {
   transition: color 0.18s ease;
 }
 
-.topbar-icon-button .anticon {
-  transition: color 0.18s ease;
-}
-
-.topbar-icon-button:hover,
-.topbar-icon-button:hover .anticon,
-.topbar-icon-button:focus-visible,
-.topbar-icon-button:focus-visible .anticon,
-.topbar-icon-button.active,
-.topbar-icon-button.active .anticon {
+.topbar-nav-button:hover,
+.topbar-nav-button:focus-visible {
   color: var(--primary-deep);
+  opacity: 0.92;
+}
+
+.topbar-nav-button:hover .anticon,
+.topbar-nav-button:focus-visible .anticon,
+.topbar-nav-button.active,
+.topbar-nav-button.active .anticon {
+  color: var(--primary-deep);
+}
+
+.topbar-nav-button.active {
+  opacity: 1;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.topbar-nav-button.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 26px;
+  height: 1px;
+  border-radius: 999px;
+  background: var(--primary);
+  transform: translateX(-50%);
+}
+
+.topbar-nav-button-ghost {
+  color: var(--muted-strong);
+}
+
+.topbar-nav-button-ghost:hover,
+.topbar-nav-button-ghost:focus-visible {
+  color: var(--danger-600);
+  opacity: 0.86;
 }
 
 .app-content {
   width: var(--content-width);
   margin: 0 auto;
   padding: 14px 0 48px;
-}
-
-.messages-app-content {
-  width: var(--content-width-wide);
-  height: calc(100dvh - 70px);
-  padding: 8px 0;
-  overflow: hidden;
 }
 
 .page-grid {
@@ -168,5 +229,9 @@
   .topbar-cluster {
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .topbar-nav-button {
+    padding: 0;
   }
 }

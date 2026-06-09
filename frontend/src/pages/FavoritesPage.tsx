@@ -6,17 +6,16 @@ import { StatStrip } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
 import { PageHeader, SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { useAuthState } from '../services/auth-state';
 import { fetchProducts, type FavoriteItem, type ProductSummary } from '../services/api';
-import { syncFavoriteSignal } from '../services/behavior';
 import { getFavoriteIds, loadFavorites, subscribeFavorites, toggleFavorite } from '../services/favorites';
-import { getDemoUser, subscribeSessionChange } from '../services/session';
 import { getProductImage } from '../utils/productCover';
 
 type FavoriteFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export function FavoritesPage() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState(() => getDemoUser());
+  const { currentUser } = useAuthState();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
@@ -55,7 +54,6 @@ export function FavoritesPage() {
 
   async function handleRemoveFavorite(item: ProductSummary) {
     await toggleFavorite(item.id, currentUser);
-    syncFavoriteSignal(item, false, currentUser);
     setFavoriteVersion((value) => value + 1);
   }
 
@@ -80,8 +78,8 @@ export function FavoritesPage() {
           const result = await loadFavorites(currentUser);
           setFavoriteItems(result.items);
         } else {
-          const data = await fetchProducts();
-          setProducts(data);
+          const data = await fetchProducts({ ids: favoriteIds, status: 'ALL', page: 1, pageSize: 60 });
+          setProducts(data.items);
           setFavoriteItems([]);
         }
       } catch {
@@ -94,10 +92,9 @@ export function FavoritesPage() {
 
     setLoading(true);
     void load();
-  }, [currentUser, favoriteVersion]);
+  }, [currentUser, favoriteIds, favoriteVersion]);
 
   useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
-  useEffect(() => subscribeSessionChange(() => setCurrentUser(getDemoUser())), []);
 
   return (
     <div className="favorites-page page-grid">
@@ -169,29 +166,25 @@ export function FavoritesPage() {
                     item={item}
                     imageSrc={getProductImage(item, index)}
                     signal={`${item.category} · ${item.condition}`}
-                    secondaryMeta={item.recommendationReason ?? '同校面交'}
-                    tertiaryMeta={(
-                      <>
-                        <span>{item.sellerName}</span>
-                        <i />
-                        <span>{formatFavoritedAt(item)}</span>
-                      </>
+                    coverActions={(
+                      <button
+                        type="button"
+                        className="fish-item-favorite"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          await handleRemoveFavorite(item);
+                        }}
+                        aria-label="取消收藏"
+                      >
+                        取消
+                      </button>
                     )}
-                    passiveMeta={(
-                      <>
-                        <button
-                          type="button"
-                          className="fish-item-link active"
-                          onClick={async (event) => {
-                            event.stopPropagation();
-                            await handleRemoveFavorite(item);
-                          }}
-                        >
-                          取消想要
-                        </button>
-                        <span>{item.favoriteCount ?? 0} 人想要</span>
-                      </>
-                    )}
+                    priceMeta={`${item.favoriteCount ?? 0} 人想要`}
+                    tagItems={[
+                      item.sellerName,
+                      formatFavoritedAt(item),
+                      '同校面交'
+                    ]}
                     onOpen={() => navigate(`/products/${item.id}`)}
                   />
                 )}
@@ -215,29 +208,25 @@ export function FavoritesPage() {
                     item={item}
                     imageSrc={getProductImage(item, index)}
                     signal={`${item.category} · ${item.condition}`}
-                    secondaryMeta={item.status}
-                    tertiaryMeta={(
-                      <>
-                        <span>{item.sellerName}</span>
-                        <i />
-                        <span>{formatFavoritedAt(item)}</span>
-                      </>
+                    coverActions={(
+                      <button
+                        type="button"
+                        className="fish-item-favorite"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          await handleRemoveFavorite(item);
+                        }}
+                        aria-label="移出收藏列表"
+                      >
+                        移出
+                      </button>
                     )}
-                    passiveMeta={(
-                      <>
-                        <button
-                          type="button"
-                          className="fish-item-link active"
-                          onClick={async (event) => {
-                            event.stopPropagation();
-                            await handleRemoveFavorite(item);
-                          }}
-                        >
-                          移出列表
-                        </button>
-                        <span>暂不可交易</span>
-                      </>
-                    )}
+                    priceMeta={item.status}
+                    tagItems={[
+                      item.sellerName,
+                      formatFavoritedAt(item),
+                      '暂不可交易'
+                    ]}
                     onOpen={() => navigate(`/products/${item.id}`)}
                   />
                 )}

@@ -14,6 +14,9 @@ import {
   UserTrustSummary
 } from '../services/api';
 import { getProductImage } from '../utils/productCover';
+import {
+  getUserPresentation
+} from '../utils/userPresentation';
 
 export function PublicUserPage() {
   const { id } = useParams();
@@ -36,10 +39,10 @@ export function PublicUserPage() {
       try {
         const [summary, productList] = await Promise.all([
           fetchUserTrustSummary(userId),
-          fetchProducts()
+          fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 })
         ]);
         setUser(summary);
-        setProducts(productList);
+        setProducts(productList.items);
         setError('');
       } catch (err) {
         setError(getApiErrorMessage(err, '用户主页加载失败'));
@@ -78,25 +81,26 @@ export function PublicUserPage() {
     `完成 ${user.completedOrders} 单`,
     `评分 ${user.averageRating.toFixed(1)}`
   ];
+  const userPresentation = getUserPresentation(user);
 
   return (
     <div className="page-grid public-user-page">
       <PageHeader
-        title={user.name}
+        title={user.displayName}
         subtitle="公开校园主页"
         meta={<span>{`${publishedProducts.length} 件在售闲置`}</span>}
       />
       <section className="profile-hero-card public-user-hero">
         <div className="profile-hero-copy">
           <div className="profile-avatar-badge">
-            <span>{user.name.slice(0, 1)}</span>
+            <span>{userPresentation.initial}</span>
           </div>
           <div className="profile-hero-meta">
             <div className="profile-hero-title-row">
-              <h1>{user.name}</h1>
+              <h1>{userPresentation.displayName}</h1>
               <div className="profile-hero-badges">
-                <span>{user.verified ? '实名认证' : '普通账号'}</span>
-                <span>{`信用${user.creditLevel}`}</span>
+                <span>{userPresentation.publicIdentityLabel}</span>
+                <span>{userPresentation.creditBadge.label}</span>
               </div>
             </div>
             <MetaList items={profileStats} className="profile-hero-stats" />
@@ -118,8 +122,8 @@ export function PublicUserPage() {
               item={item}
               imageSrc={getProductImage(item, index)}
               signal={`${item.category} · ${item.condition}`}
-              secondaryMeta="同校面交"
-              tertiaryMeta={<span>{item.sellerName}</span>}
+              priceMeta="同校面交"
+              tagItems={[item.sellerName, '在售商品']}
               onOpen={() => navigate(`/products/${item.id}`)}
             />
           )}

@@ -1,57 +1,18 @@
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Button, Empty, Skeleton, Tag } from 'antd';
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KeyValueGrid } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
-import {
-  fetchUserProfile,
-  fetchUserTrustSummary,
-  getApiErrorMessage,
-  UserProfile,
-  UserTrustSummary
-} from '../services/api';
-import { getDemoUser, getRoleLabel, hasTradingAccess, isGuestUser } from '../services/session';
-
-function formatIdentity(profile?: UserProfile | null) {
-  if (!profile) {
-    return '--';
-  }
-
-  return profile.verified ? '已实名' : '待实名';
-}
+import { useAuthState } from '../services/auth-state';
+import { getRoleLabel, hasTradingAccess, isGuestUser } from '../services/session';
+import { useCurrentUserProfileBundle } from '../services/user-profile';
 
 export function ProfileDetailPage() {
   const navigate = useNavigate();
-  const [user] = useState(() => getDemoUser());
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [trustSummary, setTrustSummary] = useState<UserTrustSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    async function load() {
-      if (!hasTradingAccess(user)) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const [profileResult, trustResult] = await Promise.all([
-          fetchUserProfile(user!.id),
-          fetchUserTrustSummary(user!.id)
-        ]);
-        setProfile(profileResult);
-        setTrustSummary(trustResult);
-      } catch (error) {
-        setErrorMessage(getApiErrorMessage(error, '个人资料加载失败'));
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void load();
-  }, [user]);
+  const { currentUser: user } = useAuthState();
+  const { profile, trustSummary, presentation, loading, errorMessage } = useCurrentUserProfileBundle(
+    hasTradingAccess(user) ? user : null
+  );
 
   if (!hasTradingAccess(user)) {
     return (
@@ -87,8 +48,8 @@ export function ProfileDetailPage() {
     { key: 'real-name', label: '真实姓名', value: profile.realName },
     { key: 'college', label: '学院', value: profile.college },
     { key: 'phone', label: '手机号', value: profile.phone },
-    { key: 'identity-status', label: '实名状态', value: profile.identityStatus },
-    { key: 'credit-level', label: '信用等级', value: trustSummary?.creditLevel ?? '正常' }
+    { key: 'identity-status', label: '实名状态', value: presentation.verificationLabel },
+    { key: 'credit-level', label: '信用标签', value: presentation.creditBadge.label }
   ];
   const trustMetricItems = [
     { key: 'completed-orders', label: '已完成交易', value: trustSummary?.completedOrders ?? 0 },
@@ -107,14 +68,14 @@ export function ProfileDetailPage() {
 
         <div className="profile-detail-hero">
           <div className="profile-avatar-badge">
-            <span>{profile.name.slice(0, 1)}</span>
+            <span>{presentation.initial}</span>
           </div>
           <div>
-            <h1>{profile.name}</h1>
+            <h1>{presentation.displayName}</h1>
             <p>{profile.email}</p>
             <div className="profile-detail-tags">
-              <Tag color="gold">{formatIdentity(profile)}</Tag>
-              <Tag color="green">信用 {profile.creditScore}</Tag>
+              <Tag color="gold">{presentation.verificationLabel}</Tag>
+              <Tag color="green">{presentation.creditBadge.label}</Tag>
               <Tag>{getRoleLabel(profile.role)}</Tag>
             </div>
           </div>

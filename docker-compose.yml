@@ -30,6 +30,33 @@ services:
     volumes:
       - ./minio-data:/data
 
+  meilisearch:
+    build:
+      context: ./meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: swapcampus-meili-dev-key
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  supertokens:
+    image: supertokens/supertokens-postgresql:latest
+    restart: unless-stopped
+    ports:
+      - "3567:3567"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3567/hello"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   backend:
     build:
       context: ./backend
@@ -38,39 +65,56 @@ services:
       NODE_ENV: development
       PORT: 3000
       DATABASE_URL: mysql://swapcampus:swapcampus@mysql:3306/swapcampus
-      JWT_SECRET: swapcampus-dev-secret
+      API_DOMAIN: http://10.66.0.11:3001
+      WEBSITE_DOMAIN: http://10.66.0.11:5178
+      SUPERTOKENS_CONNECTION_URI: ${SUPERTOKENS_CONNECTION_URI:-http://supertokens:3567}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: "false"
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: swapcampus
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_API_KEY: swapcampus-meili-dev-key
+      ENABLE_MESSAGE_DEMO_HYDRATE: ${ENABLE_MESSAGE_DEMO_HYDRATE:-false}
+      ENABLE_DEV_AUTH_FALLBACK: ${ENABLE_DEV_AUTH_FALLBACK:-true}
     ports:
       - "3001:3000"
     depends_on:
       mysql:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
       minio:
         condition: service_started
+      meilisearch:
+        condition: service_started
+      supertokens:
+        condition: service_healthy
 
   db-init:
+    profiles: ["init"]
     build:
       context: ./backend
     environment:
       DATABASE_URL: mysql://swapcampus:swapcampus@mysql:3306/swapcampus
-    command: sh -c "npm run db:push && npm run db:init"
+      API_DOMAIN: http://10.66.0.11:3001
+      WEBSITE_DOMAIN: http://10.66.0.11:5178
+      SUPERTOKENS_CONNECTION_URI: ${SUPERTOKENS_CONNECTION_URI:-http://supertokens:3567}
+    command: sh -c "npm run db:push -- --force-reset && npm run db:init"
     depends_on:
       mysql:
+        condition: service_healthy
+      supertokens:
         condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE_URL: http://localhost:3001/api
-        VITE_SOCKET_URL: http://localhost:3001
+        VITE_API_BASE_URL: http://10.66.0.11:3001/api
+        VITE_API_DOMAIN: http://10.66.0.11:3001
+        VITE_SOCKET_URL: http://10.66.0.11:3001
+        VITE_WEBSITE_DOMAIN: http://10.66.0.11:5178
+        VITE_ENABLE_MESSAGE_DEMO_HYDRATE: ${VITE_ENABLE_MESSAGE_DEMO_HYDRATE:-false}
     restart: unless-stopped
     ports:
       - "5178:80"

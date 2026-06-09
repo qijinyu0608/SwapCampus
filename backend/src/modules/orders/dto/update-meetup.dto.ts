@@ -1,9 +1,6 @@
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateMeetupDto {
-  @IsInt()
-  userId!: number;
-
   @IsString()
   @IsOptional()
   meetupLocation?: string;

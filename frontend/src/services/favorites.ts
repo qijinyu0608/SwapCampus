@@ -1,12 +1,12 @@
 import { addFavorite, fetchFavoriteList, removeFavorite, type FavoriteItem } from './api';
-import type { DemoUser } from './session';
+import type { SessionUser } from './session';
 
 const FAVORITES_KEY = 'swapcampus-favorites';
 const FAVORITES_EVENT = 'swapcampus:favorites-changed';
 
 type FavoriteMap = Record<string, number[]>;
 
-function resolveScope(user?: DemoUser | null) {
+function resolveScope(user?: SessionUser | null) {
   return user?.id ? String(user.id) : 'guest';
 }
 
@@ -29,7 +29,7 @@ function writeFavoriteMap(nextMap: FavoriteMap, scope: string) {
   window.dispatchEvent(new CustomEvent(FAVORITES_EVENT, { detail: { scope } }));
 }
 
-function setScopedFavoriteIds(ids: number[], user?: DemoUser | null) {
+function setScopedFavoriteIds(ids: number[], user?: SessionUser | null) {
   const scope = resolveScope(user);
   const map = readFavoriteMap();
 
@@ -42,20 +42,20 @@ function setScopedFavoriteIds(ids: number[], user?: DemoUser | null) {
   );
 }
 
-function getGuestFavoriteIds(user?: DemoUser | null) {
+function getGuestFavoriteIds(user?: SessionUser | null) {
   const map = readFavoriteMap();
   return map[resolveScope(user)] ?? [];
 }
 
-export function getFavoriteIds(user?: DemoUser | null) {
+export function getFavoriteIds(user?: SessionUser | null) {
   return getGuestFavoriteIds(user);
 }
 
-export function isFavorite(productId: number, user?: DemoUser | null) {
+export function isFavorite(productId: number, user?: SessionUser | null) {
   return getFavoriteIds(user).includes(productId);
 }
 
-export function setFavorite(productId: number, favorited: boolean, user?: DemoUser | null) {
+export function setFavorite(productId: number, favorited: boolean, user?: SessionUser | null) {
   const currentIds = getGuestFavoriteIds(user);
   const nextIds = favorited
     ? Array.from(new Set([...currentIds, productId]))
@@ -65,11 +65,11 @@ export function setFavorite(productId: number, favorited: boolean, user?: DemoUs
   return favorited;
 }
 
-export function hydrateFavorites(ids: number[], user?: DemoUser | null) {
+export function hydrateFavorites(ids: number[], user?: SessionUser | null) {
   setScopedFavoriteIds(ids, user);
 }
 
-export async function loadFavorites(user?: DemoUser | null) {
+export async function loadFavorites(user?: SessionUser | null) {
   if (user?.role === 'USER') {
     const result = await fetchFavoriteList();
     const ids = result.items.map((item) => item.id);
@@ -84,7 +84,7 @@ export async function loadFavorites(user?: DemoUser | null) {
   };
 }
 
-export async function toggleFavorite(productId: number, user?: DemoUser | null) {
+export async function toggleFavorite(productId: number, user?: SessionUser | null) {
   if (user?.role === 'USER') {
     const currentlyFavorited = isFavorite(productId, user);
     if (currentlyFavorited) {

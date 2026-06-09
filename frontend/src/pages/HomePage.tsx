@@ -1,358 +1,304 @@
 import { Input, Skeleton, message } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
-import type { MouseEvent } from 'react';
+import {
+  AppstoreOutlined,
+  BookOutlined,
+  CarOutlined,
+  LeftOutlined,
+  CommentOutlined,
+  CreditCardOutlined,
+  EditOutlined,
+  HeartOutlined,
+  HomeOutlined,
+  InboxOutlined,
+  LaptopOutlined,
+  PlayCircleOutlined,
+  RightOutlined,
+  SearchOutlined,
+  SkinOutlined,
+  SendOutlined
+} from '@ant-design/icons';
+import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FoldSection } from '../components/disclosure';
+import { EmptyState } from '../components/feedback';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import {
+  PRODUCT_CATEGORY_HOME_GROUPS,
+  type ProductCategoryHomeGroupIcon
+} from '../constants/productCategories';
 import { getBjfuMeetupLabel } from '../constants/campus';
-import { fetchProducts, fetchRecommendations, ProductSummary } from '../services/api';
-import { getBehaviorProfile, subscribeBehavior } from '../services/behavior';
+import {
+  fetchHomeRecommendations,
+  fetchFavoriteList,
+  fetchOrders,
+  getApiErrorMessage,
+  OrderItem,
+  ProductSummary
+} from '../services/api';
+import { useAuthState } from '../services/auth-state';
 import { subscribeFavorites, toggleFavorite } from '../services/favorites';
-import { getDemoUser, subscribeSessionChange } from '../services/session';
+import { useCurrentUserProfileBundle } from '../services/user-profile';
+import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
 
-const shortcutGroups = [
+const shortcutGroups = PRODUCT_CATEGORY_HOME_GROUPS;
+const categoryIcons: Record<ProductCategoryHomeGroupIcon, ReactNode> = {
+  digital: <LaptopOutlined />,
+  book: <BookOutlined />,
+  dorm: <HomeOutlined />,
+  fashion: <SkinOutlined />,
+  travel: <CarOutlined />,
+  beauty: <HeartOutlined />,
+  office: <EditOutlined />,
+  ticket: <CreditCardOutlined />,
+  fun: <PlayCircleOutlined />,
+  other: <AppstoreOutlined />
+};
+
+const homeCampaigns = [
   {
-    shortTitle: '手机数码',
-    title: '手机 / 数码 / 电脑',
-    badge: '热',
-    rows: [
-      { label: '手机', items: ['iPhone', '安卓机', '备用机', '手机壳'] },
-      { label: '电脑', items: ['笔记本', '显示器', '键盘', '鼠标'] },
-      { label: '数码', items: ['耳机', '平板', '相机', '充电宝'] }
-    ]
+    key: 'graduation',
+    kicker: '活动主场',
+    title: '毕业季清仓',
+    subtitle: '13号公寓搬迁专场，今晚图书馆北门可面交',
+    description: '以宿舍搬迁、整套打包和当天可取商品为主，适合捡漏和快速成交。',
+    pills: ['毕业清仓', '今晚可取', '同校面交'],
+    keyword: '毕业',
+    image: '/images/home-hero-banner-1.png'
   },
   {
-    shortTitle: '教材资料',
-    title: '教材 / 资料 / 文具',
-    badge: '稳',
-    rows: [
-      { label: '教材', items: ['高数', '计网', '英语', '思政'] },
-      { label: '考试', items: ['考研真题', '四六级', '期末资料', '网课笔记'] },
-      { label: '文具', items: ['活页本', '计算器', '台历', '中性笔'] }
-    ]
+    key: 'textbook',
+    kicker: '学期切换',
+    title: '下学期教材',
+    subtitle: '学研 A / 图书馆自提高频出现',
+    description: '教材、笔记、计算器和考试资料混合更新，适合开学前一站式补齐。',
+    pills: ['教材资料', '图书馆', '学习区'],
+    keyword: '教材',
+    image: '/images/home-hero-banner-2.png'
   },
   {
-    shortTitle: '宿舍白名单',
-    title: '宿舍 / 白名单电器 / 收纳',
-    badge: '省',
-    rows: [
-      { label: '宿舍', items: ['折叠桌', '非充电台灯', '床帘', '靠垫'] },
-      { label: '电器', items: ['电脑', '手机', '平板电脑', '充电宝'] },
-      { label: '收纳', items: ['置物架', '收纳篮', '鞋架', '挂钩'] }
-    ]
-  },
-  {
-    shortTitle: '鞋服箱包',
-    title: '服饰 / 鞋包 / 配件',
-    badge: '新',
-    rows: [
-      { label: '服饰', items: ['卫衣', '外套', 'T恤', '长裙'] },
-      { label: '鞋子', items: ['球鞋', '拖鞋', '板鞋', '凉鞋'] },
-      { label: '包配', items: ['双肩包', '斜挎包', '帽子', '手表'] }
-    ]
-  },
-  {
-    shortTitle: '运动出行',
-    title: '运动 / 自行车 / 乐器',
-    badge: '逛',
-    rows: [
-      { label: '运动', items: ['羽毛球拍', '护腕', '瑜伽垫', '哑铃'] },
-      { label: '代步', items: ['自行车', '头盔', '车锁', '打气筒'] },
-      { label: '乐器', items: ['吉他', '尤克里里', '琴包', '谱架'] }
-    ]
-  },
-  {
-    shortTitle: '卡券周边',
-    title: '卡券 / 票券 / 周边',
-    badge: '快',
-    rows: [
-      { label: '卡券', items: ['打印券', '咖啡券', '超市卡', '洗衣卡'] },
-      { label: '票券', items: ['电影票', '演出票', '校车票', '健身月卡'] },
-      { label: '周边', items: ['校园徽章', '手办', '贴纸', '海报'] }
-    ]
-  },
-  {
-    shortTitle: '毕业急出',
-    title: '毕业清仓 / 急出',
-    badge: '同校',
-    rows: [
-      { label: '毕业清仓', items: ['打包出', '宿舍带不走', '低价急出', '整套转'] },
-      { label: '今天可取', items: ['图书馆', '学一食堂', '东门', '13号公寓'] },
-      { label: '省心购', items: ['可验货', '支持小刀', '先到先得', '同校自提'] }
-    ]
-  },
-  {
-    shortTitle: '考研考证',
-    title: '考研 / 考证 / 用品',
-    badge: '低价',
-    rows: [
-      { label: '考研', items: ['英语', '政治', '数学', '专业课'] },
-      { label: '考证', items: ['教资', '计算机二级', '普通话', '法考'] },
-      { label: '用品', items: ['计划本', '计时器', '书立', '台灯'] }
-    ]
-  },
-  {
-    shortTitle: '日用洗护',
-    title: '生活 / 日用 / 洗护',
-    badge: '常',
-    rows: [
-      { label: '日用', items: ['水杯', '垃圾桶', '晾衣架', '收纳箱'] },
-      { label: '洗护', items: ['洗衣液', '香薰', '除湿盒', '粘毛器'] },
-      { label: '家清', items: ['抽纸', '清洁刷', '桌面收纳', '抹布'] }
-    ]
-  },
-  {
-    shortTitle: '桌搭灯具',
-    title: '桌搭 / 学习区 / 灯具',
-    badge: '学',
-    rows: [
-      { label: '学习区', items: ['增高架', '书立', '坐垫', '计时器'] },
-      { label: '灯具', items: ['护眼灯', '夹灯', '小夜灯', '台灯'] },
-      { label: '桌搭', items: ['显示器支架', '桌垫', '收线器', '键盘托'] }
-    ]
-  },
-  {
-    shortTitle: '美妆个护',
-    title: '美妆 / 护肤 / 个护',
-    badge: '用',
-    rows: [
-      { label: '护肤', items: ['面霜', '防晒', '身体乳', '面膜'] },
-      { label: '美妆', items: ['粉底', '口红', '眉笔', '腮红'] },
-      { label: '个护', items: ['电动牙刷', '电动剃须刀', '剃须刀', '相机'] }
-    ]
-  },
-  {
-    shortTitle: '通勤办公',
-    title: '通勤 / 实习 / 办公',
-    badge: '实',
-    rows: [
-      { label: '通勤', items: ['保温杯', '背包', '雨伞', '充电线'] },
-      { label: '办公', items: ['打印机', 'U盘', '订书机', '鼠标垫'] },
-      { label: '实习', items: ['正装', '工牌夹', '文件袋', '便签纸'] }
-    ]
-  },
-  {
-    shortTitle: '交换免费',
-    title: '免费送 / 交换 / 拼单',
-    badge: '省',
-    rows: [
-      { label: '免费送', items: ['自提免费', '顺手带走', '宿舍清理', '毕业送'] },
-      { label: '交换', items: ['以物换物', '教材互换', '卡券互换', '宿舍用品互换'] },
-      { label: '拼单', items: ['零食拼单', '日用品拼单', '打印拼单', '快递凑单'] }
-    ]
+    key: 'dorm',
+    kicker: '宿舍换新',
+    title: '白名单电器',
+    subtitle: '宿舍能用、当面可验、成色清晰',
+    description: '台灯、收纳、小电器和桌搭好物集中出现，偏向低风险同校交易。',
+    pills: ['宿舍白名单', '当面验货', '桌搭'],
+    keyword: '宿舍',
+    image: '/images/home-hero-banner-3.png'
   }
-];
+] as const;
 
-const filterRows = {
-  sort: ['综合排序', '最新发布', '价格最低', '信用优先', '离我最近'],
-  price: ['不限', '20以下', '20-50', '50-100', '100以上'],
-  condition: ['不限成色', '95新', '9成新', '8成新'],
-  trade: ['全部方式', '同校面交', '公寓自提', '今天可取']
+const orderStatusLabelMap: Record<string, string> = {
+  PENDING: '待付款',
+  IN_PROGRESS: '待收货',
+  WAITING_REVIEW: '待评价',
+  COMPLETED: '已完成',
+  CANCELED: '已取消'
 };
 
-type SortFilter = (typeof filterRows.sort)[number];
-type PriceFilter = (typeof filterRows.price)[number];
-type ConditionFilter = (typeof filterRows.condition)[number];
-type TradeFilter = (typeof filterRows.trade)[number];
-
-const statusMap: Record<string, { label: string; color: string }> = {
-  ON_SALE: { label: '在售', color: 'green' },
-  PENDING: { label: '新上架', color: 'orange' },
-  SOLD: { label: '已售', color: 'default' },
-  OFFLINE: { label: '已下架', color: 'red' }
+const sellerOrderStatusLabelMap: Record<string, string> = {
+  PENDING: '待确认',
+  IN_PROGRESS: '待面交',
+  WAITING_REVIEW: '待评价',
+  COMPLETED: '已完成',
+  CANCELED: '已取消'
 };
+
+type UserOrderScope = 'buying' | 'selling';
 
 const visibleShortcutGroups = shortcutGroups;
+const campaignCount = homeCampaigns.length;
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { currentUser } = useAuthState();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [activeSort, setActiveSort] = useState<SortFilter>('综合排序');
-  const [activePrice, setActivePrice] = useState<PriceFilter>('不限');
-  const [activeCondition, setActiveCondition] = useState<ConditionFilter>('不限成色');
-  const [activeTrade, setActiveTrade] = useState<TradeFilter>('全部方式');
+  const [searchInput, setSearchInput] = useState('');
   const [activeShortcutGroup, setActiveShortcutGroup] = useState<string | null>(null);
-  const [behaviorVersion, setBehaviorVersion] = useState(0);
   const [favoriteVersion, setFavoriteVersion] = useState(0);
-
-  const [currentUser, setCurrentUser] = useState(() => getDemoUser());
-  const behaviorProfile = useMemo(
-    () => getBehaviorProfile(currentUser),
-    [currentUser, behaviorVersion]
+  const [activeCampaignIndex, setActiveCampaignIndex] = useState(0);
+  const [userOrders, setUserOrders] = useState<OrderItem[]>([]);
+  const [userOrderScope, setUserOrderScope] = useState<UserOrderScope>('buying');
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [searchError, setSearchError] = useState('');
+  const { presentation: userPresentation } = useCurrentUserProfileBundle(
+    currentUser && currentUser.role !== 'GUEST' ? currentUser : null
   );
 
   useEffect(() => {
     async function load() {
       try {
-        const productsData = currentUser
-          ? await fetchRecommendations(currentUser.id)
-          : await fetchProducts();
-        setProducts(productsData);
-      } catch {
-        setProducts([
-          {
-            id: 1,
-            title: '机械键盘 95新',
-            category: '数码',
-            price: 18,
-            condition: '9成新',
-            tags: ['键盘', '低价', '同校'],
-            status: 'ON_SALE',
-            description: '13号公寓自提，图书馆附近可面交。',
-            sellerName: '张三',
-            imageUrl: '/images/products/keyboard.jpg'
-          }
-        ]);
+        const result = await fetchHomeRecommendations();
+        setProducts(result);
+        setSearchError('');
+      } catch (error) {
+        setProducts([]);
+        setSearchError(getApiErrorMessage(error, '推荐服务当前不可用'));
       } finally {
         setLoading(false);
       }
     }
 
+    setLoading(true);
     void load();
-  }, [currentUser]);
+  }, [currentUser?.id, favoriteVersion]);
 
-  useEffect(() => subscribeBehavior(() => setBehaviorVersion((value) => value + 1)), []);
   useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
-  useEffect(() => subscribeSessionChange(() => setCurrentUser(getDemoUser())), []);
 
-  function applyKeywordFilter(keyword: string) {
-    setSearchKeyword(keyword);
-  }
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveCampaignIndex((current) => (current + 1) % homeCampaigns.length);
+    }, 4800);
 
-  const recommendedProducts = useMemo(() => {
-    const keyword = searchKeyword.trim().toLowerCase();
+    return () => window.clearInterval(timer);
+  }, []);
 
-    const filtered = products.filter((item) => {
-      const matchesKeyword = !keyword || [item.title, item.description, item.category, item.sellerName, ...item.tags]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(keyword);
-
-      const matchesPrice = activePrice === '不限'
-        ? true
-        : activePrice === '20以下'
-          ? item.price < 20
-          : activePrice === '20-50'
-            ? item.price >= 20 && item.price <= 50
-            : activePrice === '50-100'
-              ? item.price > 50 && item.price <= 100
-              : item.price > 100;
-
-      const matchesCondition = activeCondition === '不限成色' || item.condition === activeCondition;
-
-      const matchesTrade = activeTrade === '全部方式'
-        ? true
-        : activeTrade === '同校面交'
-          ? true
-          : activeTrade === '公寓自提'
-          ? /公寓/.test(item.description)
-          : /今天|今晚|急出|可取/.test(item.description) || item.tags.some((tag) => /今天|今晚/.test(tag));
-
-      return matchesKeyword && matchesPrice && matchesCondition && matchesTrade;
-    });
-
-    const ranked = [...filtered];
-    if (activeSort === '综合排序') {
-      ranked
-        .map((item, index) => {
-          const categoryScore = behaviorProfile.categoryWeights[item.category] ?? 0;
-          const tagScore = item.tags.reduce((sum, tag) => sum + (behaviorProfile.tagWeights[tag] ?? 0), 0);
-          const favoriteBoost = behaviorProfile.favoriteProductIds.includes(item.id) ? 28 : 0;
-          const viewedBoost = behaviorProfile.viewedProductIds.includes(item.id) ? 10 : 0;
-          const trustBoost = Math.round((item.sellerCreditScore ?? 60) / 10);
-          const freshnessBoost = Math.max(0, 18 - index / 2);
-
-          return {
-            item,
-            score: categoryScore + tagScore + favoriteBoost + viewedBoost + trustBoost + freshnessBoost
-          };
-        })
-        .sort((left, right) => right.score - left.score)
-        .forEach((entry, index) => {
-          ranked[index] = entry.item;
-        });
-    } else if (activeSort === '价格最低') {
-      ranked.sort((a, b) => a.price - b.price);
-    } else if (activeSort === '信用优先') {
-      ranked.sort((a, b) => (b.sellerCreditScore ?? 60) - (a.sellerCreditScore ?? 60));
-    } else if (activeSort === '离我最近') {
-      ranked.sort((a, b) => Number(/图书馆|学一食堂/.test(a.description)) - Number(/图书馆|学一食堂/.test(b.description)));
-      ranked.reverse();
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'GUEST') {
+      setUserOrders([]);
+      setFavoriteCount(0);
+      return;
     }
 
-    return ranked.slice(0, 32);
-  }, [products, searchKeyword, activeSort, activePrice, activeCondition, activeTrade, behaviorProfile]);
+    fetchOrders({
+      page: 1,
+      pageSize: 12
+    })
+      .then((result) => setUserOrders(result.items))
+      .catch(() => setUserOrders([]));
+
+    fetchFavoriteList()
+      .then((result) => setFavoriteCount(result.total))
+      .catch(() => setFavoriteCount(0));
+  }, [currentUser, favoriteVersion]);
+
+  function submitSearch(keyword: string) {
+    if (!canUseSearch) {
+      void navigate('/login', { state: { from: '/' } });
+      return;
+    }
+
+    setSearchInput(keyword);
+    const nextKeyword = keyword.trim();
+    if (!nextKeyword) {
+      return;
+    }
+    navigate(`/search?q=${encodeURIComponent(nextKeyword)}`);
+  }
+
+  function applyKeywordFilter(keyword: string) {
+    if (!canUseSearch) {
+      void navigate('/login', { state: { from: '/' } });
+      return;
+    }
+
+    submitSearch(keyword);
+  }
+
+  function showPrevCampaign(event?: MouseEvent<HTMLElement>) {
+    event?.stopPropagation();
+    setActiveCampaignIndex((current) => (current - 1 + campaignCount) % campaignCount);
+  }
+
+  function showNextCampaign(event?: MouseEvent<HTMLElement>) {
+    event?.stopPropagation();
+    setActiveCampaignIndex((current) => (current + 1) % campaignCount);
+  }
+
   const activeShortcutPanel = useMemo(
     () => shortcutGroups.find((item) => item.title === activeShortcutGroup) ?? null,
     [activeShortcutGroup]
   );
-  const activityScene = useMemo(() => {
-    const source = recommendedProducts.length ? recommendedProducts : products;
-    const fallbackItems = source.slice(0, 2);
-    const pickItems = (terms: string[], count: number) => {
+  const homeCampaignCards = useMemo(() => {
+    const source = products;
+    return homeCampaigns.map((campaign, campaignIndex) => {
       const matched = source.filter((item) => {
         const haystack = [item.title, item.description, item.category, item.sellerName, ...item.tags]
           .filter(Boolean)
           .join(' ');
-        return terms.some((term) => haystack.includes(term));
+        return haystack.includes(campaign.keyword);
       });
+      const items = (matched.length ? matched : source).slice(0, 3);
+      return {
+        ...campaign,
+        items,
+        preview: items[0] ?? null,
+        index: campaignIndex
+      };
+    });
+  }, [products]);
+  const activeCampaign = homeCampaignCards[activeCampaignIndex] ?? homeCampaignCards[0] ?? null;
+  const buyingOrders = useMemo(
+    () => currentUser ? userOrders.filter((item) => item.buyerId === currentUser.id) : [],
+    [currentUser, userOrders]
+  );
+  const sellingOrders = useMemo(
+    () => currentUser ? userOrders.filter((item) => item.sellerId === currentUser.id) : [],
+    [currentUser, userOrders]
+  );
+  const userTickerItems = useMemo(() => {
+    const source = buyingOrders.length ? buyingOrders : userOrders;
+    return source.slice(0, 6).map((order) => ({
+      id: order.id,
+      title: order.productTitle,
+      status: orderStatusLabelMap[order.status] ?? order.status,
+      location: order.meetupLocation || '校内面交进行中'
+    }));
+  }, [buyingOrders, userOrders]);
+  const activeUserOrders = userOrderScope === 'buying' ? buyingOrders : sellingOrders;
+  const activeOrderStatusLabels = userOrderScope === 'buying' ? orderStatusLabelMap : sellerOrderStatusLabelMap;
+  const userPanelStats = useMemo(() => {
+    if (userOrderScope === 'selling') {
+      return [
+        { key: 'seller-pending', label: '待确认', value: sellingOrders.filter((item) => item.status === 'PENDING').length },
+        { key: 'seller-progress', label: '待面交', value: sellingOrders.filter((item) => item.status === 'IN_PROGRESS').length },
+        { key: 'seller-review', label: '待评价', value: sellingOrders.filter((item) => item.status === 'WAITING_REVIEW').length },
+        { key: 'seller-done', label: '已完成', value: sellingOrders.filter((item) => item.status === 'COMPLETED').length }
+      ];
+    }
 
-      return (matched.length ? matched : fallbackItems).slice(0, count);
-    };
-
-    return {
-      lead: {
-        title: activeShortcutPanel?.shortTitle ?? '毕业季清仓',
-        subtitle: activeShortcutPanel
-          ? activeShortcutPanel.rows.slice(0, 2).map((row) => row.label).join(' · ')
-          : '13号公寓搬迁 · 图书馆可取',
-        pills: activeShortcutPanel
-          ? [...activeShortcutPanel.rows.slice(0, 2).map((row) => row.label), '同校面交']
-          : ['毕业清仓', '图书馆可取', '同校面交'],
-        items: activeShortcutPanel
-          ? pickItems(activeShortcutPanel.rows.flatMap((row) => [row.label, ...row.items]), 2)
-          : pickItems(['毕业', '急出', '图书馆', '13号公寓'], 2)
-      },
-      cards: [
-        {
-          title: '下学期教材',
-          subtitle: '图书馆 / 学研A',
-          keyword: '教材',
-          tone: 'sun',
-          items: pickItems(['教材', '资料', '文具'], 2)
-        },
-        {
-          title: '宿舍换新',
-          subtitle: '13号公寓 / 白名单',
-          keyword: '宿舍',
-          tone: 'mint',
-          items: pickItems(['宿舍', '白名单', '收纳', '台灯'], 2)
-        },
-        {
-          title: '今天面交',
-          subtitle: '学一食堂 / 东门',
-          keyword: '图书馆',
-          tone: 'sky',
-          items: pickItems(['图书馆', '学一食堂', '东门', '急出'], 2)
-        },
-        {
-          title: '数码捡漏',
-          subtitle: '信息楼 / 图书馆',
-          keyword: '数码',
-          tone: 'peach',
-          items: pickItems(['数码', '耳机', '电脑', '平板'], 2)
-        }
-      ]
-    };
-  }, [activeShortcutPanel, products, recommendedProducts]);
-  const filterSummary = [activeSort, activePrice, activeTrade].filter((item) => item && item !== '不限' && item !== '全部方式');
-  const leadPrimaryItem = activityScene.lead.items[0] ?? null;
-  const leadSecondaryItem = activityScene.lead.items[1] ?? null;
+    return [
+      { key: 'favorites', label: '收藏', value: favoriteCount },
+      { key: 'buying-pending', label: '待确认', value: buyingOrders.filter((item) => item.status === 'PENDING').length },
+      { key: 'buying-receive', label: '待收货', value: buyingOrders.filter((item) => item.status === 'IN_PROGRESS').length },
+      { key: 'buying-review', label: '待评价', value: buyingOrders.filter((item) => item.status === 'WAITING_REVIEW').length }
+    ];
+  }, [buyingOrders, favoriteCount, sellingOrders, userOrderScope]);
+  const featuredOrder = useMemo(() => {
+    return activeUserOrders[0] ?? null;
+  }, [activeUserOrders]);
+  const userOrderScopeMeta = useMemo(() => ({
+    buying: {
+      label: '我买到的',
+      count: buyingOrders.length,
+      emptyTitle: '暂无买到的',
+      emptyDesc: '下单后会在这里显示最近进度。',
+      stateScope: 'buying'
+    },
+    selling: {
+      label: '我卖出的',
+      count: sellingOrders.length,
+      emptyTitle: '暂无卖出的',
+      emptyDesc: '有人购买你发布的商品后会显示进度。',
+      stateScope: 'selling'
+    }
+  }), [buyingOrders.length, sellingOrders.length]);
+  const guestGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour >= 11 && hour < 14) {
+      return '中午好';
+    }
+    if (hour >= 14 && hour < 18) {
+      return '下午好';
+    }
+    if (hour >= 18 || hour < 5) {
+      return '晚上好';
+    }
+    return '上午好';
+  }, []);
+  const isGuestView = !currentUser || currentUser.role === 'GUEST';
+  const canUseSearch = currentUser?.role === 'USER' || currentUser?.role === 'ADMIN';
 
   function getFavoriteRestriction(item: ProductSummary) {
     if (item.status === 'SOLD') {
@@ -393,21 +339,30 @@ export function HomePage() {
 
   return (
     <div className="fish-home">
-      <section className="fish-search-shell">
-        <div className="fish-search-row">
-          <div className="fish-search-box">
-            <Input
-              size="large"
-              prefix={<SearchOutlined />}
-              placeholder="搜索手机、电脑、教材、卡券"
-              bordered={false}
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-            />
-            <button type="button" className="fish-search-button">搜索</button>
+      {canUseSearch ? (
+        <section className="fish-search-shell">
+          <div className="fish-search-row">
+            <div className="fish-search-box">
+              <Input
+                size="large"
+                prefix={<SearchOutlined />}
+                placeholder="搜索手机、电脑、教材、卡券"
+                bordered={false}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onPressEnter={() => submitSearch(searchInput)}
+              />
+              <button
+                type="button"
+                className="fish-search-button fish-search-button-home"
+                onClick={() => submitSearch(searchInput)}
+              >
+                搜索
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section className="fish-market-layout" onMouseLeave={() => setActiveShortcutGroup(null)}>
         <section className="fish-market-category-block">
@@ -425,7 +380,9 @@ export function HomePage() {
                 onFocus={() => setActiveShortcutGroup(item.title)}
                 onClick={() => setActiveShortcutGroup((value) => (value === item.title ? null : item.title))}
               >
-                <span className="fish-category-badge">{item.badge}</span>
+                <span className="fish-category-badge" aria-hidden="true">
+                  {categoryIcons[item.icon]}
+                </span>
                 <div className="fish-category-copy">
                   <strong>{item.shortTitle}</strong>
                 </div>
@@ -465,109 +422,189 @@ export function HomePage() {
             </div>
           ) : (
             <div className="fish-market-activity-stage">
-              <div className="fish-activity-grid">
-                <div
-                  className="fish-activity-hero-card"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => applyKeywordFilter(activityScene.lead.title)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      applyKeywordFilter(activityScene.lead.title);
-                    }
-                  }}
-                >
-                  <div className="fish-activity-hero-copy">
-                    <span className="fish-activity-kicker">校园活动</span>
-                    <strong>{activityScene.lead.title}</strong>
-                    <p>{activityScene.lead.subtitle}</p>
-                    <div className="fish-activity-hero-footer">
-                      <div className="fish-activity-pills">
-                        {activityScene.lead.pills.map((item) => (
-                          <span key={item}>{item}</span>
-                        ))}
-                      </div>
-                      <span className="fish-activity-hero-cta">去看看</span>
-                    </div>
-                  </div>
-                  <div className="fish-activity-hero-preview">
-                    {leadPrimaryItem ? (
-                      <button
-                        key={`lead-primary-${leadPrimaryItem.id}`}
-                        type="button"
-                        className="fish-activity-product feature"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/products/${leadPrimaryItem.id}`);
-                        }}
-                      >
-                        <img src={getProductImage(leadPrimaryItem, 0)} alt={leadPrimaryItem.title} />
-                        <div className="fish-activity-product-copy">
-                          <strong>¥{leadPrimaryItem.price}</strong>
-                          <span>{leadPrimaryItem.title}</span>
-                        </div>
-                      </button>
-                    ) : null}
-                    {leadSecondaryItem ? (
-                      <button
-                        key={`lead-secondary-${leadSecondaryItem.id}`}
-                        type="button"
-                        className="fish-activity-product slim"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/products/${leadSecondaryItem.id}`);
-                        }}
-                      >
-                        <img src={getProductImage(leadSecondaryItem, 1)} alt={leadSecondaryItem.title} />
-                        <div className="fish-activity-product-copy">
-                          <strong>¥{leadSecondaryItem.price}</strong>
-                          <span>{leadSecondaryItem.title}</span>
-                        </div>
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="fish-activity-card-grid">
-                  {activityScene.cards.map((card) => (
+              <div className="fish-home-stage">
+                <div className="fish-home-hero-column">
+                  {activeCampaign ? (
                     <div
-                      key={card.title}
-                      className={`fish-activity-card tone-${card.tone}`}
+                      className="fish-home-campaign"
                       role="button"
                       tabIndex={0}
-                      onClick={() => applyKeywordFilter(card.keyword)}
+                      onClick={() => applyKeywordFilter(activeCampaign.keyword)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          applyKeywordFilter(card.keyword);
+                          applyKeywordFilter(activeCampaign.keyword);
+                          return;
+                        }
+
+                        if (event.key === 'ArrowLeft') {
+                          showPrevCampaign();
+                          return;
+                        }
+
+                        if (event.key === 'ArrowRight') {
+                          showNextCampaign();
                         }
                       }}
                     >
-                      <div className="fish-activity-card-copy">
-                        <strong>{card.title}</strong>
-                        <span>{card.subtitle}</span>
+                      <div
+                        className="fish-home-campaign-track"
+                        style={{ transform: `translateX(-${activeCampaign.index * 100}%)` }}
+                      >
+                        {homeCampaignCards.map((campaign) => (
+                          <img
+                            key={campaign.key}
+                            className="fish-home-campaign-image"
+                            src={campaign.image}
+                            alt={`${campaign.title} 活动展示图`}
+                          />
+                        ))}
                       </div>
-                      <div className="fish-activity-card-items">
-                        {card.items.map((item, index) => (
-                          <button
-                            key={`${card.title}-${item.id}-${index}`}
-                            type="button"
-                            className="fish-activity-mini-product"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              navigate(`/products/${item.id}`);
-                            }}
-                          >
-                            <img src={getProductImage(item, index)} alt={item.title} />
-                            <div className="fish-activity-mini-product-copy">
-                              <strong>¥{item.price}</strong>
-                              <span>{item.title}</span>
-                            </div>
-                          </button>
+                      <div className="fish-home-campaign-nav" aria-label="活动翻页">
+                        <button
+                          type="button"
+                          className="fish-home-campaign-nav-button"
+                          aria-label="上一张活动图"
+                          onClick={showPrevCampaign}
+                        >
+                          <LeftOutlined />
+                        </button>
+                        <button
+                          type="button"
+                          className="fish-home-campaign-nav-button"
+                          aria-label="下一张活动图"
+                          onClick={showNextCampaign}
+                        >
+                          <RightOutlined />
+                        </button>
+                      </div>
+                      <div className="fish-home-campaign-dots" aria-hidden="true">
+                        {homeCampaignCards.map((campaign, index) => (
+                          <span
+                            key={campaign.key}
+                            className={index === activeCampaign.index ? 'active' : undefined}
+                          />
                         ))}
                       </div>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
+
+                <aside className="fish-home-user-panel">
+                  {isGuestView ? (
+                    <div className="fish-home-user-guest">
+                      <div className="fish-home-user-guest-top">
+                        <span className="fish-home-user-guest-avatar">
+                          <img src="/images/default-avatar.png" alt="默认头像" />
+                        </span>
+                        <span className="fish-home-user-guest-kicker">{guestGreeting}！</span>
+                      </div>
+                      <div className="fish-home-user-guest-copy">
+                        <strong>登录后查看收藏、订单、发布</strong>
+                        <p>管理教材、数码和宿舍闲置交易</p>
+                      </div>
+                      <div className="fish-home-user-guest-actions">
+                        <button
+                          type="button"
+                          className="fish-home-user-guest-login"
+                          onClick={() => navigate('/login', { state: { from: '/', mode: 'login' } })}
+                        >
+                          立即登录
+                        </button>
+                        <button
+                          type="button"
+                          className="fish-home-user-guest-register"
+                          onClick={() => navigate('/login', { state: { from: '/', mode: 'register' } })}
+                        >
+                          还没有账号？去注册
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="fish-home-user-profile">
+                        <div className="fish-home-user-head">
+                          <span className="fish-home-user-avatar">
+                            <img src="/images/default-avatar.png" alt="默认头像" />
+                          </span>
+                          <div className="fish-home-user-copy">
+                            <strong>{currentUser.displayName}</strong>
+                            <span className={`fish-home-user-credit is-${userPresentation.creditBadge.tone}`}>
+                              <span className="fish-home-user-credit-label">{userPresentation.creditBadge.label}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="fish-home-user-order-tabs" role="tablist" aria-label="交易栏目">
+                        {(['buying', 'selling'] as const).map((scope) => (
+                          <button
+                            key={scope}
+                            type="button"
+                            role="tab"
+                            aria-selected={userOrderScope === scope}
+                            className={userOrderScope === scope ? 'active' : undefined}
+                            onClick={() => setUserOrderScope(scope)}
+                          >
+                            <span>{userOrderScopeMeta[scope].label}</span>
+                            <strong>{userOrderScopeMeta[scope].count}</strong>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="fish-home-user-stats">
+                        {userPanelStats.map((item) => (
+                          <div
+                            key={item.key}
+                            className="fish-home-user-stat"
+                          >
+                            <strong>{item.value}</strong>
+                            <span>{item.label}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="fish-home-user-order-card"
+                        onClick={() => navigate('/profile', {
+                          state: {
+                            section: 'orders',
+                            orderScope: userOrderScopeMeta[userOrderScope].stateScope
+                          }
+                        })}
+                      >
+                        {featuredOrder ? (
+                          <>
+                            <img
+                              className="fish-home-user-order-image"
+                              src={featuredOrder.productImageUrl || '/images/products/demo-square.png'}
+                              alt={featuredOrder.productTitle}
+                            />
+                            <div className="fish-home-user-order-copy">
+                              <div className="fish-home-user-panel-head">
+                                <strong>{activeOrderStatusLabels[featuredOrder.status] ?? featuredOrder.status}</strong>
+                                <span>{userOrderScopeMeta[userOrderScope].label}</span>
+                              </div>
+                              <h3>{featuredOrder.productTitle}</h3>
+                              <p>
+                                {featuredOrder.meetupLocation
+                                  || (userOrderScope === 'buying' ? `卖家 ${featuredOrder.sellerName}` : `买家 ${featuredOrder.buyerName}`)}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="fish-home-user-order-empty">
+                            <div className="fish-home-user-panel-head">
+                              <strong>{userOrderScopeMeta[userOrderScope].emptyTitle}</strong>
+                              <span>{userOrderScopeMeta[userOrderScope].label}</span>
+                            </div>
+                            <p>{userOrderScopeMeta[userOrderScope].emptyDesc}</p>
+                          </div>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </aside>
               </div>
             </div>
           )}
@@ -576,78 +613,26 @@ export function HomePage() {
 
       <section className="fish-feed-shell fish-feed-shell-home">
         <div className="fish-feed-header">
-          <h2>推荐</h2>
-        </div>
-
-        <FoldSection
-          title="筛选"
-          meta={filterSummary.length ? filterSummary.join(' / ') : '展开筛选'}
-          compact
-        >
-          <div className="fish-filter-panel">
-            <div className="fish-filter-row">
-              <span className="fish-filter-label">排序</span>
-              {filterRows.sort.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={activeSort === item ? 'fish-filter-chip active' : 'fish-filter-chip'}
-                  onClick={() => setActiveSort(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <div className="fish-filter-row">
-              <span className="fish-filter-label">价格</span>
-              {filterRows.price.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={activePrice === item ? 'fish-filter-chip active' : 'fish-filter-chip'}
-                  onClick={() => setActivePrice(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <div className="fish-filter-row">
-              <span className="fish-filter-label">成色</span>
-              {filterRows.condition.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={activeCondition === item ? 'fish-filter-chip active' : 'fish-filter-chip'}
-                  onClick={() => setActiveCondition(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <div className="fish-filter-row">
-              <span className="fish-filter-label">交易</span>
-              {filterRows.trade.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={activeTrade === item ? 'fish-filter-chip active' : 'fish-filter-chip'}
-                  onClick={() => setActiveTrade(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+          <div className="fish-feed-header-badge">
+            <h2>猜你喜欢</h2>
           </div>
-        </FoldSection>
+        </div>
 
         {loading ? (
           <Skeleton active paragraph={{ rows: 10 }} />
+        ) : searchError ? (
+          <EmptyState
+            className="is-shell"
+            title="推荐暂不可用"
+            description={searchError}
+          />
         ) : (
           <ProductGrid
-            items={recommendedProducts}
+            items={products}
             className="fish-feed-grid"
+            emptyState={<EmptyState className="is-shell" title="暂时还没有推荐内容" description="稍后再来看看新上架和热门闲置。" />}
             renderItem={(item, index) => {
-              const status = statusMap[item.status] ?? { label: item.status, color: 'default' };
+              const status = getListingStatusPresentation(item.status);
               const meetupLabel = getBjfuMeetupLabel(index);
               const coverSignal = `${item.category} · ${item.condition}`;
               const isFavorited = Boolean(item.isFavorited);
@@ -671,20 +656,12 @@ export function HomePage() {
                       {isFavorited ? '已想要' : favoriteRestriction ?? '想要'}
                     </button>
                   )}
-                  secondaryMeta={item.status !== 'ON_SALE' ? status.label : undefined}
-                  tertiaryMeta={(
-                    <>
-                      <span>{item.sellerName}</span>
-                      <i />
-                      <span>{meetupLabel}</span>
-                    </>
-                  )}
-                  passiveMeta={(
-                    <>
-                      <span>{item.favoriteCount ?? 0} 人想要</span>
-                      <span>{item.recommendationReason ?? '同校面交'}</span>
-                    </>
-                  )}
+                  priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.favoriteCount ?? 0} 人想要`}
+                  tagItems={[
+                    item.sellerName,
+                    meetupLabel,
+                    '同校面交'
+                  ]}
                   onOpen={() => navigate(`/products/${item.id}`)}
                 />
               );

@@ -14,6 +14,17 @@ enum UserRole {
   ADMIN
 }
 
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  BANNED
+}
+
 enum ProductStatus {
   PENDING
   ON_SALE
@@ -43,6 +54,24 @@ enum CampusServiceStatus {
   CANCELED
 }
 
+enum CampusServiceUrgency {
+  NORMAL
+  TODAY
+  URGENT
+}
+
+enum CampusServiceFulfillmentMode {
+  DROP_OFF
+  FACE_TO_FACE
+  FLEXIBLE
+}
+
+enum CampusServiceContactPreference {
+  CHAT_ONLY
+  PHONE_AFTER_MATCH
+  FLEXIBLE
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -59,14 +88,14 @@ enum BehaviorEventType {
 
 model User {
   id                          Int                  @id @default(autoincrement())
+  supertokensUserId           String?              @unique
   studentId                   String               @unique
-  name                        String
+  displayName                 String
   email                       String               @unique
-  passwordHash                String
   role                        UserRole             @default(USER)
   creditScore                 Int                  @default(60)
-  isVerified                  Boolean              @default(false)
-  isBanned                    Boolean              @default(false)
+  verificationStatus          VerificationStatus   @default(PENDING)
+  accountStatus               AccountStatus        @default(ACTIVE)
   createdAt                   DateTime             @default(now())
   updatedAt                   DateTime             @updatedAt
   verification                StudentVerification?
@@ -91,7 +120,6 @@ model StudentVerification {
   realName  String
   college   String
   phone     String
-  status    String   @default("PENDING")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id])
@@ -105,7 +133,7 @@ model Product {
   price         Decimal        @db.Decimal(10, 2)
   category      String
   condition     String
-  tags          String
+  tags          Json
   status        ProductStatus  @default(PENDING)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -176,6 +204,16 @@ model CampusServiceTask {
   locationTo       String
   deadlineLabel    String
   estimatedMinutes Int
+  urgency          CampusServiceUrgency           @default(NORMAL)
+  fulfillmentMode  CampusServiceFulfillmentMode   @default(FLEXIBLE)
+  contactPreference CampusServiceContactPreference @default(CHAT_ONLY)
+  itemCount        Int                   @default(1)
+  trustNote        String?
+  matchedAt        DateTime?
+  completedAt      DateTime?
+  canceledAt       DateTime?
+  canceledById     Int?
+  cancelReason     String?
   publisherId      Int
   accepterId       Int?
   status           CampusServiceStatus   @default(OPEN)

@@ -1,14 +1,19 @@
 import type { KeyboardEvent, ReactNode } from 'react';
-import type { ProductSummary } from '../../services/api';
+import type { ListingSummary } from '../../services/api';
 
 type ProductSummaryCardProps = {
-  item: ProductSummary;
+  item: ListingSummary;
   imageSrc: string;
+  coverClassName?: string;
   signal?: ReactNode;
+  coverMeta?: ReactNode;
+  title?: ReactNode;
+  bodyMeta?: ReactNode;
   coverActions?: ReactNode;
-  secondaryMeta?: ReactNode;
-  tertiaryMeta?: ReactNode;
-  passiveMeta?: ReactNode;
+  secondaryActions?: ReactNode;
+  priceValue?: ReactNode;
+  priceMeta?: ReactNode;
+  tagItems?: ReactNode[];
   className?: string;
   onOpen?: () => void;
 };
@@ -16,15 +21,22 @@ type ProductSummaryCardProps = {
 export function ProductSummaryCard({
   item,
   imageSrc,
+  coverClassName,
   signal,
+  coverMeta,
+  title,
+  bodyMeta,
   coverActions,
-  secondaryMeta,
-  tertiaryMeta,
-  passiveMeta,
+  secondaryActions,
+  priceValue,
+  priceMeta,
+  tagItems,
   className,
   onOpen
 }: ProductSummaryCardProps) {
   const classes = ['fish-item-card', className ?? ''].filter(Boolean).join(' ');
+  const normalizedTags = (tagItems ?? []).filter(Boolean);
+  const coverClasses = ['fish-item-cover', item.imageUrl ? 'has-image' : '', coverClassName ?? ''].filter(Boolean).join(' ');
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Enter') {
@@ -40,19 +52,27 @@ export function ProductSummaryCard({
       onClick={onOpen}
       onKeyDown={onOpen ? handleKeyDown : undefined}
     >
-      <div className={item.imageUrl ? 'fish-item-cover has-image' : 'fish-item-cover'}>
+      <div className={coverClasses}>
         <img className="fish-item-cover-image" src={imageSrc} alt={item.title} />
         {signal ? <span className="fish-item-signal">{signal}</span> : null}
+        {coverMeta ? <div className="fish-item-cover-meta">{coverMeta}</div> : null}
         {coverActions}
       </div>
       <div className="fish-item-body">
-        <h3>{item.title}</h3>
-        <div className="fish-item-price-row">
-          <strong>¥{item.price}</strong>
-          {secondaryMeta ? <span>{secondaryMeta}</span> : null}
+        <h3>{title ?? item.title}</h3>
+        <div className="fish-item-tags-row" aria-label="商品标签">
+          {normalizedTags.map((tag, index) => (
+            <span key={index} className="fish-item-tag">
+              <span className="fish-item-tag-content">{tag}</span>
+            </span>
+          ))}
         </div>
-        {tertiaryMeta ? <div className="fish-item-meta">{tertiaryMeta}</div> : null}
-        {passiveMeta ? <div className="fish-item-passive-row">{passiveMeta}</div> : null}
+        {bodyMeta ? <div className="fish-item-body-meta">{bodyMeta}</div> : null}
+        <div className="fish-item-price-row">
+          <strong>{priceValue ?? `¥${item.price}`}</strong>
+          {priceMeta ? <span className="fish-item-price-meta">{priceMeta}</span> : null}
+        </div>
+        {secondaryActions ? <div className="fish-item-secondary-row">{secondaryActions}</div> : null}
       </div>
     </article>
   );

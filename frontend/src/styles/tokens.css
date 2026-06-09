@@ -78,8 +78,12 @@
   --signature-ink-hover: color-mix(in srgb, var(--neutral-900) 84%, var(--brand-400) 16%);
   --signature-glow: rgba(250, 180, 45, 0.08);
   --signature-highlight-core: rgba(242, 171, 43, 0.88);
-  --signature-highlight-edge: rgba(228, 156, 25, 0.54);
-  --signature-highlight-halo: rgba(250, 180, 45, 0.18);
+  --signature-highlight-gold: rgba(247, 196, 84, 0.76);
+  --signature-highlight-amber: rgba(234, 152, 30, 0.58);
+  --signature-highlight-peach: rgba(246, 183, 118, 0.34);
+  --signature-highlight-core-soft: rgba(252, 205, 110, 0.3);
+  --signature-highlight-halo: rgba(250, 180, 45, 0.2);
+  --signature-highlight-halo-soft: rgba(250, 180, 45, 0.12);
 
   /* Semantic usage */
   --success: var(--success-500);

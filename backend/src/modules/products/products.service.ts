@@ -1,165 +1,18 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { OrderStatus, ProductStatus } from '@prisma/client';
+import { AccountStatus, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RecommendationsService } from '../recommendations/recommendations.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { SearchService } from '../search/search.service';
+import { isProductCategoryName, normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-categories';
+import { isProductConditionValue, PRODUCT_CONDITION_VALUES } from './product-conditions';
 import { CreateProductDto } from './dto/create-product.dto';
+import { SearchProductsDto } from './dto/search-products.dto';
 
 const TARGET_SEED_COUNT = 360;
+const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 
-const fallbackProducts = [
-  {
-    id: 1,
-    title: '高等数学同济版上下册',
-    category: '教材',
-    price: 28,
-    condition: '9成新',
-    tags: ['教材', '期末', '低价'],
-    status: 'ON_SALE',
-    description: '少量重点标记，在北林图书馆或学研中心A座面交更方便。',
-    sellerName: '林舟',
-    sellerCreditScore: 92,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/books-1.jpg'
-  },
-  {
-    id: 2,
-    title: '罗技机械键盘 K 系列',
-    category: '数码',
-    price: 118,
-    condition: '95新',
-    tags: ['数码', '键盘', '可验货'],
-    status: 'PENDING',
-    description: '轴体和接口都正常，13号公寓或信息楼附近可直接试。',
-    sellerName: '周砚',
-    sellerCreditScore: 86,
-    sellerVerified: true,
-    recommendationReason: '新上',
-    imageUrl: '/images/products/keyboard.jpg'
-  },
-  {
-    id: 3,
-    title: '护眼宿舍台灯',
-    category: '宿舍好物',
-    price: 43,
-    condition: '8成新',
-    tags: ['台灯', '宿舍', '护眼'],
-    status: 'ON_SALE',
-    description: '期末周自习一直在用，亮度稳定，今晚可在学一食堂附近面交。',
-    sellerName: '唐悦',
-    sellerCreditScore: 84,
-    sellerVerified: true,
-    recommendationReason: '信用好',
-    imageUrl: '/images/products/lamp.jpg'
-  },
-  {
-    id: 4,
-    title: '宿舍三层收纳架',
-    category: '生活用品',
-    price: 27,
-    condition: '9成新',
-    tags: ['生活用品', '收纳', '宿舍'],
-    status: 'ON_SALE',
-    description: '搬寝室整理出来的，放零食和洗漱用品都方便，学二食堂可面交。',
-    sellerName: '许晴',
-    sellerCreditScore: 88,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/storage-shelf.jpg'
-  },
-  {
-    id: 5,
-    title: '羽毛球拍双拍套装',
-    category: '运动器材',
-    price: 58,
-    condition: '9成新',
-    tags: ['运动器材', '羽毛球', '社团'],
-    status: 'ON_SALE',
-    description: '社团活动后闲置，拍线状态正常，田家炳体育馆附近可试看。',
-    sellerName: '陈诺',
-    sellerCreditScore: 82,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/badminton.jpg'
-  },
-  {
-    id: 6,
-    title: '校园骑行头盔',
-    category: '自行车',
-    price: 48,
-    condition: '9成新',
-    tags: ['自行车', '头盔', '通勤'],
-    status: 'ON_SALE',
-    description: '平时骑车去教学楼戴过，没有磕碰，内衬干净。',
-    sellerName: '沈一',
-    sellerCreditScore: 79,
-    sellerVerified: true,
-    recommendationReason: '信用好',
-    imageUrl: '/images/products/badminton.jpg'
-  },
-  {
-    id: 7,
-    title: '卡西欧函数计算器',
-    category: '文具',
-    price: 55,
-    condition: '95新',
-    tags: ['文具', '计算器', '考试'],
-    status: 'ON_SALE',
-    description: '按键和显示都正常，考试周和课程作业都能继续用。',
-    sellerName: '吴嘉',
-    sellerCreditScore: 90,
-    sellerVerified: true,
-    recommendationReason: '信用好',
-    imageUrl: '/images/products/books-1.jpg'
-  },
-  {
-    id: 8,
-    title: '20000mAh 以下充电宝',
-    category: '小家电',
-    price: 30,
-    condition: '9成新',
-    tags: ['小家电', '充电宝', '宿舍白名单'],
-    status: 'ON_SALE',
-    description: '容量 10000mAh，接口和充电状态正常，支持当面试用。',
-    sellerName: '赵川',
-    sellerCreditScore: 76,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/powerbank.png'
-  },
-  {
-    id: 9,
-    title: '运动外套 M 码',
-    category: '鞋服',
-    price: 36,
-    condition: '9成新',
-    tags: ['鞋服', '外套', 'M码'],
-    status: 'ON_SALE',
-    description: '秋季上课穿过几次，洗净后一直放柜子里。',
-    sellerName: '郑宁',
-    sellerCreditScore: 83,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/clothing-rack.jpg'
-  },
-  {
-    id: 10,
-    title: '考研政治冲刺资料',
-    category: '考研资料',
-    price: 26,
-    condition: '9成新',
-    tags: ['考研资料', '政治', '冲刺'],
-    status: 'ON_SALE',
-    description: '重点内容完整，后期背诵和刷题都还能继续用，图书馆可面交。',
-    sellerName: '宋禾',
-    sellerCreditScore: 87,
-    sellerVerified: true,
-    recommendationReason: '同校',
-    imageUrl: '/images/products/books-2.jpg'
-  }
-];
-
-const allowedCategories = ['教材', '数码', '生活用品', '运动器材', '宿舍好物', '自行车', '文具', '小家电', '鞋服', '考研资料'];
+const allowedCategories = [...PRODUCT_CATEGORY_NAMES];
 const prohibitedKeywords = ['刀具', '代抢', '账号', '药品', '烟草', '酒精', '发票', '银行卡', '代写', '代考', '外挂', '校园贷'];
 const dormElectricalWhitelist = ['电脑', '非充电台灯', '手机', '平板电脑', '20000mAh以下充电宝', '电动牙刷', '电动剃须刀', '相机'];
 const dormElectricalKeywords = [
@@ -195,6 +48,12 @@ const communityNotices = [
   '教材资料、数码配件和生活用品请写清成色、配件、容量或版本，避免误导同学。',
   '平台禁止账号、代写代考、烟酒药品、刀具、校园贷等内容，违规账号会被限制发布。'
 ];
+const productStatusLabelMap: Record<ProductStatus, string> = {
+  ON_SALE: '在售',
+  PENDING: '审核中',
+  SOLD: '已售',
+  OFFLINE: '已下架'
+};
 const ruleHighlights = [
   '禁售词自动审核命中后直接驳回',
   '宿舍电器仅允许白名单范围内发布',
@@ -202,83 +61,91 @@ const ruleHighlights = [
   '商品通过后仍保留人工巡检和举报下架'
 ];
 const categoryImageMap: Record<string, string[]> = {
-  教材: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
-  数码: ['/images/products/keyboard.jpg', '/images/products/powerbank.png'],
-  生活用品: ['/images/products/clothing-rack.jpg', '/images/products/storage-shelf.jpg', '/images/products/plush.jpg'],
-  运动器材: ['/images/products/badminton.jpg'],
-  宿舍好物: ['/images/products/lamp.jpg', '/images/products/fan.jpg', '/images/products/storage-shelf.jpg'],
-  自行车: ['/images/products/badminton.jpg', '/images/products/storage-shelf.jpg'],
-  文具: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
-  小家电: ['/images/products/fan.jpg', '/images/products/lamp.jpg'],
-  鞋服: ['/images/products/clothing-rack.jpg', '/images/products/plush.jpg'],
-  考研资料: ['/images/products/books-2.jpg', '/images/products/books-1.jpg']
+  教材资料: [DEMO_PRODUCT_IMAGE],
+  数码电子: [DEMO_PRODUCT_IMAGE],
+  宿舍生活: [DEMO_PRODUCT_IMAGE],
+  运动出行: [DEMO_PRODUCT_IMAGE],
+  鞋服箱包: [DEMO_PRODUCT_IMAGE],
+  办公文具: [DEMO_PRODUCT_IMAGE],
+  美妆个护: [DEMO_PRODUCT_IMAGE],
+  卡券票务: [DEMO_PRODUCT_IMAGE],
+  兴趣文娱: [DEMO_PRODUCT_IMAGE],
+  其他: [DEMO_PRODUCT_IMAGE]
 };
 
 function resolveDefaultImagePool(category: string, title: string) {
   if (/(教材|真题|笔记|复习|英语|数学|专业课|活页本|荧光笔|计算器|资料)/.test(title)) {
-    return ['/images/products/books-1.jpg', '/images/products/books-2.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(键盘)/.test(title)) {
-    return ['/images/products/keyboard.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(充电宝|电源)/.test(title)) {
-    return ['/images/products/powerbank.png'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(台灯|阅读灯|夜灯)/.test(title)) {
-    return ['/images/products/lamp.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(风扇)/.test(title)) {
-    return ['/images/products/fan.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(羽毛球|跳绳|护腕|头盔|骑行)/.test(title)) {
-    return ['/images/products/badminton.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(衣架|衣服|外套|卫衣|鞋|拖鞋|双肩包)/.test(title)) {
-    return ['/images/products/clothing-rack.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(收纳|置物|推车|文件架|书桌)/.test(title)) {
-    return ['/images/products/storage-shelf.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
   if (/(靠垫|毛绒)/.test(title)) {
-    return ['/images/products/plush.jpg'];
+    return [DEMO_PRODUCT_IMAGE];
   }
 
-  return categoryImageMap[category] ?? categoryImageMap.宿舍好物;
+  return categoryImageMap[normalizeProductCategoryName(category)] ?? categoryImageMap.其他;
 }
 
-function normalizeTags(tags: string) {
+function normalizeTags(tags: Prisma.JsonValue | null) {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
   return tags
-    .split(',')
-    .map((tag) => tag.trim())
+    .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
     .filter(Boolean);
 }
 
 function buildProductTags(payload: Pick<CreateProductDto, 'title' | 'category' | 'condition' | 'tags'>) {
-  const manualTags = (payload.tags ?? '')
-    .split(/[，,、/\s]+/)
+  const manualTags = (payload.tags ?? [])
+    .flatMap((tag) => tag.split(/[，,、/\s]+/))
     .map((tag) => tag.trim())
     .filter(Boolean);
 
-  const fallbackTitle = normalizeProductTitle(payload.title).slice(0, 12);
-  const combinedTags = [
-    ...manualTags,
-    payload.category,
-    payload.condition,
-    fallbackTitle
-  ].filter(Boolean);
+  const filteredTags = manualTags.filter((tag, index, list) => {
+    if (list.indexOf(tag) !== index) {
+      return false;
+    }
 
-  return combinedTags
-    .filter((tag, index) => combinedTags.indexOf(tag) === index)
-    .slice(0, 4)
-    .join(',');
+    if (PRODUCT_CATEGORY_NAMES.includes(tag as (typeof PRODUCT_CATEGORY_NAMES)[number])) {
+      return false;
+    }
+
+    if (PRODUCT_CONDITION_VALUES.includes(tag as (typeof PRODUCT_CONDITION_VALUES)[number])) {
+      return false;
+    }
+
+    return tag.length <= 16;
+  });
+
+  return filteredTags.slice(0, 6);
 }
 
 function getCreditLevel(score: number) {
@@ -299,15 +166,25 @@ function getDefaultImageUrl(productId: number, category: string, title: string) 
   return imagePool[productId % imagePool.length];
 }
 
-function normalizeProductTitle(title: string) {
-  return title
-    .replace(/\s+(95新|9成新|8成新)$/u, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+function getSearchTotalHits(result: { totalHits?: number; estimatedTotalHits?: number }) {
+  return result.totalHits ?? result.estimatedTotalHits ?? 0;
+}
+
+function getPriceBand(price: number) {
+  if (price < 20) {
+    return 'under_20';
+  }
+  if (price <= 50) {
+    return '20_50';
+  }
+  if (price <= 100) {
+    return '50_100';
+  }
+  return '100_plus';
 }
 
 function normalizeAuditContent(payload: Pick<CreateProductDto, 'title' | 'description' | 'category' | 'tags'>) {
-  return `${payload.title} ${payload.description} ${payload.category} ${payload.tags ?? ''}`.toLowerCase();
+  return `${payload.title} ${payload.description} ${payload.category} ${(payload.tags ?? []).join(' ')}`.toLowerCase();
 }
 
 function extractPowerBankCapacity(content: string) {
@@ -361,7 +238,8 @@ function getModerationRejectReason(payload: Pick<CreateProductDto, 'title' | 'de
     return '宿舍电器不在白名单内';
   }
 
-  const mentionsDormElectrical = payload.category === '小家电' ||
+  const normalizedCategory = normalizeProductCategoryName(payload.category);
+  const mentionsDormElectrical = normalizedCategory === '宿舍生活' ||
     /(充电宝|移动电源|powerbank|台灯|阅读灯|护眼灯|电脑|笔记本|台式机|手机|平板|ipad|电动牙刷|电动剃须刀|剃须刀|相机|单反|微单)/i.test(content);
   if (mentionsDormElectrical && !matchesAllowedDormElectrical(content)) {
     return rejectReasonForDormElectrical(content);
@@ -375,8 +253,8 @@ export class ProductsService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(RecommendationsService)
-    private readonly recommendationsService?: RecommendationsService
+    @Inject(SearchService)
+    private readonly searchService: SearchService
   ) {}
 
   private async buildProductCards(products: Array<{
@@ -386,24 +264,40 @@ export class ProductsService {
     category: string;
     price: unknown;
     condition: string;
-    tags: string;
+    tags: Prisma.JsonValue | null;
     status: ProductStatus;
     description: string;
-  }>) {
+  }>, userId?: number) {
     const sellerIds = [...new Set(products.map((product) => product.sellerId))];
     const productIds = products.map((product) => product.id);
 
-    const [sellers, images] = await Promise.all([
+    const [sellers, images, favoriteCounts, favoritedProductIds] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: sellerIds } },
-        select: { id: true, name: true, creditScore: true, isVerified: true }
+        select: { id: true, displayName: true, creditScore: true, verificationStatus: true }
       }),
       this.prisma.productImage.findMany({
         where: { productId: { in: productIds } },
         orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }]
-      })
+      }),
+      this.prisma.favorite.groupBy({
+        by: ['productId'],
+        where: { productId: { in: productIds } },
+        _count: { _all: true }
+      }),
+      userId
+        ? this.prisma.favorite.findMany({
+            where: {
+              userId,
+              productId: { in: productIds }
+            },
+            select: { productId: true, createdAt: true }
+          })
+        : Promise.resolve([])
     ]);
 
+    const favoriteCountMap = new Map(favoriteCounts.map((item) => [item.productId, item._count._all]));
+    const userFavoriteMap = new Map(favoritedProductIds.map((item) => [item.productId, item.createdAt]));
     const sellerMap = new Map(sellers.map((seller) => [seller.id, seller]));
     const imageMap = new Map<number, string>();
 
@@ -413,158 +307,251 @@ export class ProductsService {
       }
     });
 
-    return products.map((product) => ({
-      id: product.id,
-      title: product.title,
-      category: product.category,
-      price: Number(product.price),
-      condition: product.condition,
-      tags: normalizeTags(product.tags),
-      status: product.status,
-      description: product.description,
-      sellerId: product.sellerId,
-      sellerName: sellerMap.get(product.sellerId)?.name ?? `用户#${product.sellerId}`,
-      sellerCreditScore: sellerMap.get(product.sellerId)?.creditScore ?? 60,
-      sellerVerified: sellerMap.get(product.sellerId)?.isVerified ?? false,
-      recommendationReason: '同校',
-      imageUrl: imageMap.get(product.id) ?? getDefaultImageUrl(product.id, product.category, product.title)
-    }));
-  }
+    return products.map((product) => {
+      const userFavoritedAt = userFavoriteMap.get(product.id);
+      const normalizedCategory = normalizeProductCategoryName(product.category);
 
-  private async getPreferenceProfile(userId?: number) {
-    if (this.recommendationsService) {
-      return this.recommendationsService.getPreferenceProfile(userId);
-    }
-
-    const emptyProfile = {
-      preferredCategories: new Set<string>(),
-      preferredTags: new Set<string>(),
-      activeFavoriteIds: new Set<number>(),
-      viewedProductIds: new Set<number>(),
-      categoryWeights: new Map<string, number>(),
-      tagWeights: new Map<string, number>()
-    };
-
-    const preferredCategories = new Set<string>();
-    const preferredTags = new Set<string>();
-
-    if (!userId) {
-      return emptyProfile;
-    }
-
-    const [orders, conversations] = await Promise.all([
-      this.prisma.order.findMany({
-        where: { buyerId: userId },
-        orderBy: { updatedAt: 'desc' },
-        take: 20,
-        select: { productId: true }
-      }),
-      this.prisma.conversation.findMany({
-        where: {
-          messages: {
-            some: { senderId: userId }
-          }
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: 20,
-        select: { productId: true }
-      })
-    ]);
-
-    const productIds = [...new Set([...orders, ...conversations].map((item) => item.productId).filter(Boolean))] as number[];
-    if (!productIds.length) {
-      return emptyProfile;
-    }
-
-    const behaviorProducts = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
-      select: { category: true, tags: true }
+      return {
+        id: product.id,
+        title: product.title,
+        category: normalizedCategory,
+        price: Number(product.price),
+        condition: product.condition,
+        tags: normalizeTags(product.tags),
+        status: product.status,
+        description: product.description,
+        sellerId: product.sellerId,
+        sellerName: sellerMap.get(product.sellerId)?.displayName ?? `用户#${product.sellerId}`,
+        sellerCreditScore: sellerMap.get(product.sellerId)?.creditScore ?? 60,
+        sellerVerified: sellerMap.get(product.sellerId)?.verificationStatus === VerificationStatus.APPROVED,
+        imageUrl: imageMap.get(product.id) ?? getDefaultImageUrl(product.id, normalizedCategory, product.title),
+        favoriteCount: favoriteCountMap.get(product.id) ?? 0,
+        isFavorited: Boolean(userFavoritedAt),
+        favoritedAt: userFavoritedAt ?? null
+      };
     });
+  }
 
-    behaviorProducts.forEach((product) => {
-      preferredCategories.add(product.category);
-      normalizeTags(product.tags).forEach((tag) => preferredTags.add(tag));
+  private async getCandidateProductsForRecommendation(excludeProductIds: number[], excludeSellerId?: number) {
+    return this.prisma.product.findMany({
+      where: {
+        status: ProductStatus.ON_SALE,
+        ...(excludeProductIds.length ? { id: { notIn: excludeProductIds } } : {}),
+        ...(excludeSellerId ? { sellerId: { not: excludeSellerId } } : {})
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 180
     });
-
-    return {
-      preferredCategories,
-      preferredTags,
-      activeFavoriteIds: new Set<number>(),
-      viewedProductIds: new Set<number>(),
-      categoryWeights: new Map(Array.from(preferredCategories).map((item) => [item, 18])),
-      tagWeights: new Map(Array.from(preferredTags).map((item) => [item, 10]))
-    };
   }
 
-  private inferRecommendationReason(
-    product: { id?: number; category: string; tags: string[]; sellerVerified: boolean },
-    profile?: {
-      preferredCategories?: Set<string>;
-      preferredTags?: Set<string>;
-      activeFavoriteIds?: Set<number>;
-      categoryWeights?: Map<string, number>;
-      tagWeights?: Map<string, number>;
-    }
-  ) {
-    if (!profile) {
-      return product.sellerVerified ? '信用好' : '同校';
-    }
+  async getHomeRecommendations(userId?: number) {
+    const seedCategories = new Map<string, number>();
+    const seedTags = new Map<string, number>();
+    const seedPriceBands = new Map<string, number>();
+    const excludedProductIds = new Set<number>();
 
-    if (product.id && profile.activeFavoriteIds?.has(product.id)) {
-      return '想要过';
-    }
+    if (userId) {
+      const [favorites, orders] = await Promise.all([
+        this.prisma.favorite.findMany({
+          where: { userId },
+          include: {
+            product: {
+              select: {
+                id: true,
+                category: true,
+                tags: true,
+                price: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 24
+        }),
+        this.prisma.order.findMany({
+          where: {
+            OR: [{ buyerId: userId }, { sellerId: userId }]
+          },
+          include: {
+            product: {
+              select: {
+                id: true,
+                category: true,
+                tags: true,
+                price: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 24
+        })
+      ]);
 
-    const categoryMatched =
-      profile.preferredCategories?.has(product.category) ||
-      (profile.categoryWeights?.get(product.category) ?? 0) >= 14;
+      favorites.forEach((favorite, index) => {
+        const product = favorite.product;
+        if (!product) {
+          return;
+        }
 
-    if (categoryMatched) {
-      return '同类';
-    }
-
-    const tagMatched = product.tags.some((tag) =>
-      profile.preferredTags?.has(tag) || (profile.tagWeights?.get(tag) ?? 0) >= 8
-    );
-
-    if (tagMatched) {
-      return '常看';
-    }
-
-    return product.sellerVerified ? '信用好' : '同校';
-  }
-
-  private keepUniqueTitles<T extends { title: string }>(items: T[], limit?: number) {
-    const seen = new Set<string>();
-    const unique: T[] = [];
-
-    for (const item of items) {
-      const normalizedTitle = normalizeProductTitle(item.title);
-      if (seen.has(normalizedTitle)) {
-        continue;
-      }
-      seen.add(normalizedTitle);
-      unique.push(item);
-      if (limit && unique.length >= limit) {
-        break;
-      }
-    }
-
-    return unique;
-  }
-
-  async listProducts() {
-    try {
-      const products = await this.prisma.product.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 240
+        excludedProductIds.add(product.id);
+        const weight = Math.max(2, 8 - Math.floor(index / 4));
+        seedCategories.set(product.category, (seedCategories.get(product.category) ?? 0) + weight);
+        normalizeTags(product.tags).slice(0, 6).forEach((tag) => {
+          seedTags.set(tag, (seedTags.get(tag) ?? 0) + weight);
+        });
+        const priceBand = getPriceBand(Number(product.price));
+        seedPriceBands.set(priceBand, (seedPriceBands.get(priceBand) ?? 0) + weight);
       });
 
-      const cards = await this.buildProductCards(products);
-      return this.keepUniqueTitles(cards, 60);
-    } catch (error) {
-      console.error('ProductsService.listProducts fallback:', error);
-      return fallbackProducts;
+      orders.forEach((order, index) => {
+        const product = order.product;
+        if (!product) {
+          return;
+        }
+
+        excludedProductIds.add(product.id);
+        const weight = Math.max(1, 6 - Math.floor(index / 4));
+        seedCategories.set(product.category, (seedCategories.get(product.category) ?? 0) + weight);
+        normalizeTags(product.tags).slice(0, 6).forEach((tag) => {
+          seedTags.set(tag, (seedTags.get(tag) ?? 0) + weight);
+        });
+        const priceBand = getPriceBand(Number(product.price));
+        seedPriceBands.set(priceBand, (seedPriceBands.get(priceBand) ?? 0) + weight);
+      });
     }
+
+    const candidateProducts = await this.getCandidateProductsForRecommendation(
+      [...excludedProductIds],
+      userId
+    );
+
+    const favoriteStats = await this.prisma.favorite.groupBy({
+      by: ['productId'],
+      where: {
+        productId: {
+          in: candidateProducts.map((item) => item.id)
+        }
+      },
+      _count: { _all: true }
+    });
+    const favoriteCountMap = new Map(favoriteStats.map((item) => [item.productId, item._count._all]));
+
+    const scoredProducts = candidateProducts.map((product, index) => {
+      const price = Number(product.price);
+      const priceBand = getPriceBand(price);
+      const tags = normalizeTags(product.tags);
+      const categoryScore = seedCategories.get(product.category) ?? 0;
+      const tagScore = tags.reduce((sum, tag) => sum + (seedTags.get(tag) ?? 0), 0);
+      const priceBandScore = seedPriceBands.get(priceBand) ?? 0;
+      const favoriteScore = Math.min(10, favoriteCountMap.get(product.id) ?? 0);
+      const freshnessScore = Math.max(0, 12 - Math.floor(index / 12));
+      const diversityPenalty = categoryScore > 0 ? 0 : Math.floor(index / 18);
+      const score = categoryScore * 4 + tagScore * 2 + priceBandScore * 2 + favoriteScore + freshnessScore - diversityPenalty;
+
+      return {
+        product,
+        score
+      };
+    });
+
+    scoredProducts.sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return right.product.createdAt.getTime() - left.product.createdAt.getTime();
+    });
+
+    const selected: typeof candidateProducts = [];
+    const categoryCount = new Map<string, number>();
+
+    for (const item of scoredProducts) {
+      const currentCategoryCount = categoryCount.get(item.product.category) ?? 0;
+      if (selected.length >= 24) {
+        break;
+      }
+
+      if (currentCategoryCount >= 4 && scoredProducts.length > 24) {
+        continue;
+      }
+
+      selected.push(item.product);
+      categoryCount.set(item.product.category, currentCategoryCount + 1);
+    }
+
+    if (selected.length < 24) {
+      scoredProducts.forEach((item) => {
+        if (selected.length >= 24) {
+          return;
+        }
+
+        if (selected.some((selectedItem) => selectedItem.id === item.product.id)) {
+          return;
+        }
+
+        selected.push(item.product);
+      });
+    }
+
+    return this.buildProductCards(selected, userId);
+  }
+
+  async searchProducts(query: SearchProductsDto) {
+    const ids = query.ids
+      ?.split(',')
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isFinite(item) && item > 0);
+
+    const result = await this.searchService.searchProducts({
+      q: query.q,
+      category: query.category,
+      condition: query.condition,
+      sellerId: query.sellerId,
+      ids,
+      status: query.status,
+      trade: query.trade,
+      sort: query.sort,
+      minPrice: query.minPrice,
+      maxPrice: query.maxPrice,
+      page: query.page,
+      pageSize: query.pageSize
+    });
+
+    const hits = result.hits as Array<{ id: number }>;
+    const productIds = hits.map((item) => item.id);
+    const page = result.page ?? query.page ?? 1;
+    const pageSize = result.hitsPerPage ?? query.pageSize ?? 24;
+    const total = getSearchTotalHits(result);
+    const totalPages = result.totalPages ?? Math.ceil(total / pageSize);
+
+    if (!productIds.length) {
+      return {
+        items: [],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages
+        }
+      };
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds }
+      }
+    });
+    const cards = await this.buildProductCards(products);
+    const cardMap = new Map(cards.map((item) => [item.id, item]));
+
+    return {
+      items: productIds.map((id) => cardMap.get(id)).filter((item): item is (typeof cards)[number] => Boolean(item)),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages
+      }
+    };
   }
 
   getPublishingRules() {
@@ -577,61 +564,6 @@ export class ProductsService {
       reviewFlow: ['实名认证', '自动审核', '人工审核', '通过上架'],
       trustSignals: ['实名账号', '信用分', '举报下架', '审核留痕']
     };
-  }
-
-  async getRecommendations(userId?: number) {
-    try {
-      const candidateProducts = await this.prisma.product.findMany({
-        where: { status: ProductStatus.ON_SALE },
-        orderBy: { createdAt: 'desc' },
-        take: 180
-      });
-
-      const [cards, profile] = await Promise.all([
-        this.buildProductCards(candidateProducts),
-        this.getPreferenceProfile(userId)
-      ]);
-      const popularityMap = this.recommendationsService
-        ? await this.recommendationsService.getPopularityMap(cards.map((item) => item.id))
-        : new Map<number, { favoriteCount: number; orderCount: number; reportCount: number }>();
-
-      return this.keepUniqueTitles(
-        cards
-        .filter((product, index) => (userId ? product.sellerId !== userId : true))
-        .map((product, index) => {
-          const matchedTagCount = product.tags.filter((tag) =>
-            profile.preferredTags?.has(tag) || (profile.tagWeights?.get(tag) ?? 0) >= 8
-          ).length;
-          const categoryMatched =
-            profile.preferredCategories?.has(product.category) ||
-            (profile.categoryWeights?.get(product.category) ?? 0) >= 14;
-          const popularity = popularityMap.get(product.id) ?? { favoriteCount: 0, orderCount: 0, reportCount: 0 };
-          const score =
-            (categoryMatched ? 45 : 0) +
-            matchedTagCount * 9 +
-            (profile.activeFavoriteIds?.has(product.id) ? 24 : 0) +
-            (profile.viewedProductIds?.has(product.id) ? 12 : 0) +
-            Math.round(product.sellerCreditScore / 8) +
-            (product.sellerVerified ? 10 : 0) +
-            popularity.favoriteCount * 6 +
-            popularity.orderCount * 10 -
-            popularity.reportCount * 12 +
-            Math.max(0, 18 - index / 3);
-
-          return {
-            ...product,
-            recommendationReason: this.inferRecommendationReason(product, profile),
-            score
-          };
-        })
-        .sort((left, right) => right.score - left.score)
-        .map(({ score, ...product }) => product),
-        36
-      );
-    } catch (error) {
-      console.error('ProductsService.getRecommendations fallback:', error);
-      return this.listProducts();
-    }
   }
 
   async getProductDetail(id: number, userId?: number) {
@@ -684,15 +616,17 @@ export class ProductsService {
         })
       : [];
 
-    const relatedCards = await this.buildProductCards(relatedProducts);
-    const profile = await this.getPreferenceProfile(userId);
-    const responseRate = Math.min(99, (seller?.isVerified ? 88 : 76) + Math.min(10, Math.floor(sellerMessages / 4)));
+    const relatedCards = await this.buildProductCards(relatedProducts, userId);
+    const responseRate = Math.min(99, (seller?.verificationStatus === VerificationStatus.APPROVED ? 88 : 76) + Math.min(10, Math.floor(sellerMessages / 4)));
     const completedOrders = sellerOrders.filter((order) => order.status === OrderStatus.COMPLETED).length;
     const averageRating = sellerReviews.length
       ? Number((sellerReviews.reduce((sum, review) => sum + review.rating, 0) / sellerReviews.length).toFixed(1))
       : 4.8;
 
-    const detailCard = (await this.buildProductCards([product]))[0];
+    const detailCard = (await this.buildProductCards([product], userId))[0];
+    const sellerCreditScore = seller?.creditScore ?? detailCard.sellerCreditScore ?? 60;
+    const sellerVerificationStatus = seller?.verificationStatus ?? VerificationStatus.PENDING;
+    const sellerAccountStatus = seller?.accountStatus ?? AccountStatus.ACTIVE;
 
     return {
       ...detailCard,
@@ -702,35 +636,59 @@ export class ProductsService {
       publishedAt: product.createdAt,
       seller: {
         id: seller?.id ?? product.sellerId,
-        name: seller?.name ?? detailCard.sellerName,
-        creditScore: seller?.creditScore ?? detailCard.sellerCreditScore,
-        creditLevel: getCreditLevel(seller?.creditScore ?? detailCard.sellerCreditScore),
-        verified: seller?.isVerified ?? detailCard.sellerVerified,
-        identityStatus: seller?.verification?.status ?? (seller?.isVerified ? 'APPROVED' : 'PENDING'),
-        college: seller?.verification?.college ?? (seller?.isVerified ? '林学院' : '待认证'),
+        displayName: seller?.displayName ?? detailCard.sellerName,
+        creditScore: sellerCreditScore,
+        creditLevel: getCreditLevel(sellerCreditScore),
+        verificationStatus: sellerVerificationStatus,
+        accountStatus: sellerAccountStatus,
+        college: seller?.verification?.college ?? (sellerVerificationStatus === VerificationStatus.APPROVED ? '林学院' : '待认证'),
         responseRate,
         averageRating,
         completedOrders
       },
       stats: {
-        favoriteCount,
+        favoriteCount: detailCard.favoriteCount ?? favoriteCount,
         reportCount,
-        wantCount: favoriteCount + 12,
-        viewCount: favoriteCount * 7 + 126
+        wantCount: (detailCard.favoriteCount ?? favoriteCount) + 12,
+        viewCount: (detailCard.favoriteCount ?? favoriteCount) * 7 + 126
       },
       compliance: {
-        allowedCategory: allowedCategories.includes(product.category),
-        trustSignals: [seller?.isVerified ? '实名账号' : '待实名', `信用${seller?.creditScore ?? detailCard.sellerCreditScore}`, reportCount > 0 ? `近30天举报${reportCount}` : '近30天无举报'],
+        allowedCategory: allowedCategories.includes(normalizeProductCategoryName(product.category)),
+        trustSignals: [sellerVerificationStatus === VerificationStatus.APPROVED ? '实名账号' : '待实名', `信用${sellerCreditScore}`, reportCount > 0 ? `近30天举报${reportCount}` : '近30天无举报'],
         reviewFlow: ['内容校验', '人工巡检', '异常下架']
       },
-      recommendationReason: this.inferRecommendationReason(detailCard, profile),
-      relatedProducts: this.keepUniqueTitles(
-        relatedCards.map((item) => ({
-          ...item,
-          recommendationReason: this.inferRecommendationReason(item, profile)
-        })),
-        4
-      )
+      relatedProducts: relatedCards,
+      detailBase: {
+        id: detailCard.id,
+        type: 'PRODUCT',
+        title: detailCard.title,
+        description: detailCard.description,
+        price: detailCard.price,
+        amountLabel: `¥${detailCard.price}`,
+        imageUrl: detailCard.imageUrl,
+        tags: detailCard.tags,
+        summaryTags: detailCard.tags,
+        status: detailCard.status,
+        statusLabel: productStatusLabelMap[detailCard.status],
+        publisher: {
+          id: seller?.id ?? product.sellerId,
+          displayName: seller?.displayName ?? detailCard.sellerName,
+          creditScore: sellerCreditScore,
+          verificationStatus: sellerVerificationStatus,
+          accountStatus: sellerAccountStatus
+        },
+        metaItems: [
+          { key: 'category', label: '分类', value: detailCard.category },
+          { key: 'condition', label: '成色', value: detailCard.condition },
+          { key: 'seller-status', label: '卖家状态', value: sellerVerificationStatus === VerificationStatus.APPROVED ? '实名认证' : '普通账号' },
+          { key: 'credit-level', label: '信用等级', value: getCreditLevel(sellerCreditScore) },
+          { key: 'published-at', label: '发布时间', value: product.createdAt.toISOString() }
+        ],
+        timeline: [
+          { key: 'published', label: '发布时间', value: product.createdAt.toISOString() },
+          { key: 'updated', label: '最近变更', value: product.updatedAt.toISOString() }
+        ]
+      }
     };
   }
 
@@ -752,30 +710,34 @@ export class ProductsService {
       console.error('ProductsService.getDashboardStats fallback:', error);
       return {
         userCount: 3,
-        productCount: fallbackProducts.length,
+        productCount: 0,
         pendingCount: 1,
         targetSeedCount: TARGET_SEED_COUNT
       };
     }
   }
 
-  async createProduct(payload: CreateProductDto) {
-    if (!allowedCategories.includes(payload.category)) {
+  async createProduct(payload: CreateProductDto, currentUser: AuthenticatedUser) {
+    const sellerUser = requireAuthenticatedUser(currentUser);
+    if (!isProductCategoryName(payload.category) || !allowedCategories.includes(payload.category)) {
       throw new BadRequestException('当前分类不支持发布');
+    }
+    if (!isProductConditionValue(payload.condition)) {
+      throw new BadRequestException('当前成色不支持发布');
     }
 
     const normalizedTags = buildProductTags(payload);
 
     const seller = await this.prisma.user.findUnique({
-      where: { id: payload.sellerId },
-      select: { id: true, isBanned: true }
+      where: { id: sellerUser.id },
+      select: { id: true, accountStatus: true }
     });
 
     if (!seller) {
       throw new BadRequestException('登录状态已失效，请重新登录');
     }
 
-    if (seller.isBanned) {
+    if (seller.accountStatus === AccountStatus.BANNED) {
       throw new ForbiddenException('账号已被封禁，无法发布商品');
     }
 
@@ -789,7 +751,7 @@ export class ProductsService {
 
     const product = await this.prisma.product.create({
       data: {
-        sellerId: payload.sellerId,
+        sellerId: sellerUser.id,
         title: payload.title,
         description: payload.description,
         price: payload.price,
@@ -799,6 +761,8 @@ export class ProductsService {
         status: ProductStatus.PENDING
       }
     });
+
+    await this.searchService.syncProduct(product.id);
 
     return {
       id: product.id,

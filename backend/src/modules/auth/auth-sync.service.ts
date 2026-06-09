@@ -1,0 +1,185 @@
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { AccountStatus, Prisma, UserRole, VerificationStatus } from '@prisma/client';
+import UserRoles from 'supertokens-node/recipe/userroles';
+import { PrismaService } from '../../prisma/prisma.service';
+import { APP_ROLES, DEFAULT_TENANT_ID } from './auth.constants';
+import { rolePermissionMap } from './supertokens.config';
+
+type AuthProfileInput = {
+  supertokensUserId: string;
+  email: string;
+  displayName: string;
+  studentId?: string | null;
+  college?: string | null;
+  role?: UserRole;
+  verificationStatus?: VerificationStatus;
+  accountStatus?: AccountStatus;
+};
+
+function normalizeStudentId(studentId?: string | null) {
+  const next = studentId?.trim();
+  return next || null;
+}
+
+function normalizeDisplayName(displayName: string) {
+  const next = displayName.trim();
+  if (!next) {
+    throw new ConflictException('展示名不能为空');
+  }
+
+  return next;
+}
+
+function normalizeCollege(college?: string | null) {
+  const next = college?.trim();
+  return next || '待填写';
+}
+
+@Injectable()
+export class AuthSyncService {
+  private roleMutationsUnavailable = false;
+  private roleBootstrapReady = false;
+
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService
+  ) {}
+
+  private buildGeneratedStudentId(sourceId: string) {
+    const digits = sourceId.replace(/\D/g, '');
+    return `2026${digits.slice(-6).padStart(6, '0')}`;
+  }
+
+  private toRoleName(role: UserRole) {
+    return role === UserRole.ADMIN ? APP_ROLES.ADMIN : APP_ROLES.USER;
+  }
+
+  private ensureSuperTokensLinkedUser<T extends { supertokensUserId: string | null }>(user: T): T & { supertokensUserId: string } {
+    if (!user.supertokensUserId) {
+      throw new ConflictException('认证账号映射缺失');
+    }
+
+    return user as T & { supertokensUserId: string };
+  }
+
+  async ensureRoles() {
+    if (this.roleBootstrapReady || this.roleMutationsUnavailable) {
+      return;
+    }
+
+    try {
+      for (const [role, permissions] of Object.entries(rolePermissionMap)) {
+        await UserRoles.createNewRoleOrAddPermissions(role, [...permissions]);
+      }
+      this.roleBootstrapReady = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('status code: 403')) {
+        this.roleMutationsUnavailable = true;
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  async syncUserProfile(input: AuthProfileInput) {
+    const email = input.email.trim().toLowerCase();
+    const displayName = normalizeDisplayName(input.displayName);
+    const role = input.role ?? UserRole.USER;
+    const verificationStatus = input.verificationStatus ?? VerificationStatus.PENDING;
+    const accountStatus = input.accountStatus ?? AccountStatus.ACTIVE;
+    const studentId = normalizeStudentId(input.studentId) ?? this.buildGeneratedStudentId(input.supertokensUserId);
+    const college = normalizeCollege(input.college);
+
+    try {
+      const user = await this.prisma.user.upsert({
+        where: { supertokensUserId: input.supertokensUserId },
+        update: {
+          email,
+          displayName,
+          studentId,
+          role,
+          verificationStatus,
+          accountStatus,
+          verification: {
+            upsert: {
+              update: {
+                realName: displayName,
+                college
+              },
+              create: {
+                realName: displayName,
+                college,
+                phone: '待填写'
+              }
+            }
+          }
+        },
+        create: {
+          supertokensUserId: input.supertokensUserId,
+          email,
+          displayName,
+          studentId,
+          role,
+          creditScore: 60,
+          verificationStatus,
+          accountStatus,
+          verification: {
+            create: {
+              realName: displayName,
+              college,
+              phone: '待填写'
+            }
+          }
+        },
+        include: {
+          verification: true
+        }
+      });
+
+      const linkedUser = this.ensureSuperTokensLinkedUser(user);
+      await this.syncUserRole(linkedUser.supertokensUserId, linkedUser.role);
+      return linkedUser;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('邮箱或学号已被占用');
+      }
+
+      throw error;
+    }
+  }
+
+  async syncUserRole(supertokensUserId: string, role: UserRole) {
+    if (this.roleMutationsUnavailable) {
+      return;
+    }
+
+    const roleName = this.toRoleName(role);
+    try {
+      const allRoles = await UserRoles.getRolesForUser(DEFAULT_TENANT_ID, supertokensUserId);
+
+      await Promise.all(
+        allRoles.roles
+          .filter((item) => item !== roleName)
+          .map((item) => UserRoles.removeUserRole(DEFAULT_TENANT_ID, supertokensUserId, item))
+      );
+
+      await UserRoles.addRoleToUser(DEFAULT_TENANT_ID, supertokensUserId, roleName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('status code: 403')) {
+        this.roleMutationsUnavailable = true;
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  async findBySuperTokensUserId(supertokensUserId: string) {
+    return this.prisma.user.findUnique({
+      where: { supertokensUserId }
+    });
+  }
+}

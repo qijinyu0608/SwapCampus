@@ -1,18 +1,34 @@
 import { Alert, Button, Form, Input } from 'antd';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { loginUser, registerUser } from '../services/api';
-import { saveSession } from '../services/session';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { getApiErrorMessage, loginUser, registerUser } from '../services/api';
+import { useAuthState } from '../services/auth-state';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const location = useLocation();
+  const { setCurrentUser } = useAuthState();
+  const initialMode = (location.state as { mode?: unknown } | null)?.mode === 'register' ? 'register' : 'login';
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const nextPath = typeof (location.state as { from?: unknown } | null)?.from === 'string'
+    ? (location.state as { from: string }).from
+    : null;
+  const copy =
+    mode === 'login'
+      ? {
+          title: '登录',
+          subtitle: '使用学号或邮箱继续'
+        }
+      : {
+          title: '注册',
+          subtitle: '创建一个新的校园账号'
+        };
 
   async function handleRegister(values: {
     studentId?: string;
-    name: string;
+    displayName: string;
     email: string;
     college?: string;
     password: string;
@@ -20,16 +36,13 @@ export function LoginPage() {
     setLoading(true);
     try {
       const result = await registerUser(values);
-      saveSession({
-        accessToken: result.accessToken,
-        user: result.user
-      });
-      setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.name}` });
-      void navigate('/');
+      setCurrentUser(result.user);
+      setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.displayName}` });
+      void navigate(nextPath || '/');
     } catch (error: any) {
       setMessage({
         type: 'error',
-        text: error?.response?.data?.message ?? '注册失败，请稍后重试'
+        text: getApiErrorMessage(error, '注册失败，请稍后重试')
       });
     } finally {
       setLoading(false);
@@ -40,16 +53,13 @@ export function LoginPage() {
     setLoading(true);
     try {
       const result = await loginUser(values);
-      saveSession({
-        accessToken: result.accessToken,
-        user: result.user
-      });
+      setCurrentUser(result.user);
       setMessage({ type: 'success', text: result.message ?? '登录成功' });
-      void navigate(result.user.role === 'ADMIN' ? '/admin' : '/');
+      void navigate(nextPath || (result.user.role === 'ADMIN' ? '/admin' : '/'));
     } catch (error: any) {
       setMessage({
         type: 'error',
-        text: error?.response?.data?.message ?? '登录失败，请检查账号和密码'
+        text: getApiErrorMessage(error, '登录失败，请检查账号和密码')
       });
     } finally {
       setLoading(false);
@@ -61,8 +71,8 @@ export function LoginPage() {
       <div className="login-grid">
         <section className="login-panel primary">
           <div className="login-panel-head">
-            <h1>登录</h1>
-            <span>学号或邮箱</span>
+            <h1>{copy.title}</h1>
+            <span>{copy.subtitle}</span>
           </div>
           <div className="login-mode-switch">
             <button
@@ -95,7 +105,7 @@ export function LoginPage() {
             </Form>
           ) : (
             <Form layout="vertical" onFinish={handleRegister} className="form-shell">
-              <Form.Item label="姓名" name="name" rules={[{ required: true }]}>
+              <Form.Item label="展示名" name="displayName" rules={[{ required: true }]}>
                 <Input placeholder="例如：王同学" />
               </Form.Item>
               <Form.Item label="邮箱" name="email" rules={[{ required: true }]}>

@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 import { InfoList, TagList } from '../components/data-display';
 import { FoldSection } from '../components/disclosure';
 import { ActionRow, InlineMeta, PageCard } from '../components/layout';
+import { PRODUCT_CATEGORY_NAMES } from '../constants/productCategories';
+import { PRODUCT_CONDITION_VALUES } from '../constants/productConditions';
+import { useAuthState } from '../services/auth-state';
 import { createProduct, fetchPublishingRules, getApiErrorMessage, PublishingRules } from '../services/api';
-import { getDemoUser, hasTradingAccess, isGuestUser } from '../services/session';
+import { hasTradingAccess, isGuestUser } from '../services/session';
 
 const descriptionTemplates = [
   {
@@ -39,7 +42,7 @@ const descriptionTemplates = [
   }
 ] as const;
 
-const defaultAllowedCategories = ['教材', '数码', '生活用品', '运动器材', '宿舍好物', '自行车', '文具', '小家电', '鞋服', '考研资料'];
+const defaultAllowedCategories = [...PRODUCT_CATEGORY_NAMES];
 const defaultDormElectricalWhitelist = ['电脑', '非充电台灯', '手机', '平板电脑', '20000mAh以下充电宝', '电动牙刷', '电动剃须刀', '相机'];
 const defaultCommunityNotices = [
   '宿舍电器只允许白名单内物品发布，吹风机、电热饭盒、热水壶等会被系统直接驳回。',
@@ -59,23 +62,14 @@ function buildPublishTags(values: {
   condition: string;
   tags?: string;
 }) {
-  const normalizedTags = (values.tags ?? '')
+  return (values.tags ?? '')
     .split(/[，,、/\s]+/)
     .map((tag) => tag.trim())
     .filter(Boolean);
-
-  const fallbackTitle = values.title.trim().slice(0, 12);
-  const combinedTags = [
-    ...normalizedTags,
-    values.category,
-    values.condition,
-    fallbackTitle
-  ].filter(Boolean);
-
-  return combinedTags.filter((tag, index) => combinedTags.indexOf(tag) === index).slice(0, 4).join(',');
 }
 
 export function ProductPublishPage() {
+  const { currentUser } = useAuthState();
   const [form] = Form.useForm();
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [rules, setRules] = useState<PublishingRules | null>(null);
@@ -110,14 +104,8 @@ export function ProductPublishPage() {
     description: string;
     tags?: string;
   }) {
-    const demoUser = getDemoUser();
-    if (!hasTradingAccess(demoUser)) {
-      setMessage({ type: 'error', text: isGuestUser(demoUser) ? '浏览账号不可发布商品。' : '请先登录后再发布商品。' });
-      return;
-    }
-
-    const activeUser = demoUser;
-    if (!activeUser) {
+    if (!hasTradingAccess(currentUser)) {
+      setMessage({ type: 'error', text: isGuestUser(currentUser) ? '浏览账号不可发布商品。' : '请先登录后再发布商品。' });
       return;
     }
 
@@ -175,7 +163,7 @@ export function ProductPublishPage() {
                   <InputNumber min={0} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name="condition" label="成色" rules={[{ required: true }]}>
-                  <Select options={[{ value: '95新' }, { value: '9成新' }, { value: '8成新' }]} />
+                  <Select options={PRODUCT_CONDITION_VALUES.map((value) => ({ value }))} />
                 </Form.Item>
               </div>
               <Form.Item name="description" label="描述" rules={[{ required: true }]}>

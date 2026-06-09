@@ -1,7 +1,5 @@
 import { Layout } from 'antd';
-import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { getDemoUser, subscribeSessionChange } from '../../services/session';
+import { useAuthState } from '../../services/auth-state';
 import { TopBar } from './TopBar';
 
 type AppShellProps = {
@@ -9,10 +7,7 @@ type AppShellProps = {
 };
 
 export function AppShell({ children }: AppShellProps) {
-  const location = useLocation();
-  const [currentUser, setCurrentUser] = useState(getDemoUser());
-
-  useEffect(() => subscribeSessionChange(() => setCurrentUser(getDemoUser())), []);
+  const { currentUser } = useAuthState();
 
   return (
     <Layout className="app-shell">
@@ -21,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
           <TopBar currentUser={currentUser} />
         </div>
       </Layout.Header>
-      <Layout.Content className={location.pathname === '/messages' ? 'app-content messages-app-content' : 'app-content'}>
+      <Layout.Content className="app-content">
         {children}
       </Layout.Content>
     </Layout>

@@ -1,10 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CompleteOrderDto } from './dto/complete-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateMeetupDto } from './dto/update-meetup.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthenticatedUser } from '../auth/auth.types';
 
 function parsePositiveInt(value: string | undefined, field: string) {
   if (value === undefined) {
@@ -27,52 +30,62 @@ export class OrdersController {
   ) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   listOrders(
-    @Query('userId') userId?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string
   ) {
     return this.ordersService.listOrders({
-      userId: parsePositiveInt(userId, 'userId'),
+      currentUser: user,
       page: parsePositiveInt(page, 'page'),
       pageSize: parsePositiveInt(pageSize, 'pageSize')
     });
   }
 
   @Post()
-  createOrder(@Body() payload: CreateOrderDto) {
-    return this.ordersService.createOrder(payload);
+  @UseGuards(JwtAuthGuard)
+  createOrder(@Body() payload: CreateOrderDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.createOrder(payload, user);
   }
 
   @Patch(':id/meetup')
+  @UseGuards(JwtAuthGuard)
   confirmMeetup(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: UpdateMeetupDto
+    @Body() payload: UpdateMeetupDto,
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.ordersService.confirmMeetup(id, payload);
+    return this.ordersService.confirmMeetup(id, payload, user);
   }
 
   @Patch(':id/cancel')
+  @UseGuards(JwtAuthGuard)
   cancelOrder(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: CancelOrderDto
+    @Body() payload: CancelOrderDto,
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.ordersService.cancelOrder(id, payload);
+    return this.ordersService.cancelOrder(id, payload, user);
   }
 
   @Patch(':id/complete')
+  @UseGuards(JwtAuthGuard)
   completeMeetup(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: CompleteOrderDto
+    @Body() payload: CompleteOrderDto,
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.ordersService.completeMeetup(id, payload);
+    return this.ordersService.completeMeetup(id, payload, user);
   }
 
   @Post(':id/reviews')
+  @UseGuards(JwtAuthGuard)
   createReview(
     @Param('id', ParseIntPipe) id: number,
-    @Body() payload: CreateReviewDto
+    @Body() payload: CreateReviewDto,
+    @CurrentUser() user: AuthenticatedUser
   ) {
-    return this.ordersService.createReview(id, payload);
+    return this.ordersService.createReview(id, payload, user);
   }
 }

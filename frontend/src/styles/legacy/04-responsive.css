@@ -1,6 +1,12 @@
 @media (max-width: 1200px) {
   .fish-market-layout {
     grid-template-columns: 154px minmax(0, 1fr);
+    gap: 10px;
+    padding: 0;
+  }
+
+  .fish-home-stage {
+    grid-template-columns: minmax(0, 1fr) 212px;
   }
 
   .fish-feed-grid {
@@ -47,6 +53,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .service-workbench {
+    grid-template-columns: 1fr;
+  }
+
   .admin-user-grid {
     grid-template-columns: 1fr;
   }
@@ -61,22 +71,8 @@
 }
 
 @media (max-width: 960px) {
-  .app-header-inner,
   .app-content {
     width: min(100vw - 20px, 100%);
-  }
-
-  .app-header-inner {
-    flex-wrap: wrap;
-    gap: 14px;
-    padding: 12px 0;
-  }
-
-  .nav-pills {
-    order: 2;
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
   }
 
   .fish-search-row {
@@ -97,7 +93,36 @@
   }
 
   .fish-market-layout {
+    --fish-home-stage-height: 320px;
     grid-template-columns: 136px minmax(0, 1fr);
+    gap: 8px;
+    padding: 0;
+  }
+
+  .fish-market-category-block {
+    padding-right: 6px;
+  }
+
+  .fish-home-stage {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "user";
+  }
+
+  .fish-home-campaign {
+    min-height: 320px;
+    height: auto;
+    aspect-ratio: auto;
+  }
+
+  .fish-home-user-panel {
+    grid-template-rows: auto auto auto;
+    height: auto;
+  }
+
+  .fish-home-user-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .fish-market-category-head {
@@ -106,14 +131,14 @@
 
   .fish-category-row {
     grid-template-columns: 22px minmax(0, 1fr);
-    gap: 4px;
-    padding: 7px 7px;
+    gap: 6px;
+    padding: 7px 8px;
   }
 
   .fish-category-badge {
-    width: 16px;
-    height: 16px;
-    font-size: 8px;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
   }
 
   .fish-category-copy strong {
@@ -161,6 +186,10 @@
 
   .fish-filter-row {
     align-items: flex-start;
+  }
+
+  .service-detail-metrics {
+    grid-template-columns: 1fr 1fr;
   }
 
   .detail-feed-grid {
@@ -220,7 +249,21 @@
 
 @media (max-width: 720px) {
   .fish-market-layout {
+    --fish-home-stage-height: 320px;
     grid-template-columns: 112px minmax(0, 1fr);
+    gap: 6px;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .fish-market-category-block {
+    padding-right: 4px;
+  }
+
+  .fish-category-panel {
+    height: auto;
+    min-height: 0;
+    max-height: none;
   }
 
   .fish-category-row {
@@ -229,9 +272,9 @@
   }
 
   .fish-category-badge {
-    width: 14px;
-    height: 14px;
-    font-size: 7px;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
   }
 
   .fish-category-copy strong {
@@ -240,6 +283,14 @@
 
   .fish-market-category-head strong {
     font-size: 12px;
+  }
+
+  .fish-home-campaign {
+    min-height: auto;
+  }
+
+  .fish-home-user-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .fish-activity-grid {
@@ -255,6 +306,10 @@
     grid-template-columns: 1fr;
   }
 
+  .service-market-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .fish-activity-card-copy {
     align-content: start;
   }
@@ -267,6 +322,32 @@
 @media (max-width: 500px) {
   .fish-market-layout {
     grid-template-columns: 1fr;
+  }
+
+  .fish-home-user-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fish-home-user-guest-top {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .fish-home-user-guest-avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .fish-home-user-order-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .fish-home-user-order-image {
+    width: 64px;
+    height: 64px;
+  }
+
+  .fish-home-stage {
+    min-height: auto;
   }
 
   .fish-market-activity {
@@ -325,18 +406,6 @@
 }
 
 @media (max-width: 640px) {
-  .brand-title {
-    font-size: 26px;
-  }
-
-  .header-actions {
-    width: 100%;
-  }
-
-  .header-sell-button {
-    width: 100%;
-  }
-
   .app-content {
     padding: 14px 0 36px;
   }
@@ -345,9 +414,16 @@
     font-size: 24px;
   }
 
+  .service-detail-metrics {
+    grid-template-columns: 1fr;
+  }
+
   .fish-search-shell {
-    padding: 12px;
-    border-radius: 4px;
+    padding: 2px 0 4px;
+  }
+
+  .fish-search-box {
+    padding-left: 10px;
   }
 
   .fish-feed-grid {

@@ -1,6 +1,11 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { CampusServiceStatus, OrderStatus, Prisma, ProductStatus, UserRole } from '@prisma/client';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { AccountStatus, CampusServiceStatus, OrderStatus, Prisma, ProductStatus, UserRole, VerificationStatus } from '@prisma/client';
+import { convertToRecipeUserId } from 'supertokens-node';
+import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { requireAdminUser, requireAuthenticatedUser } from '../auth/auth.utils';
+import { SearchService } from '../search/search.service';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -55,34 +60,74 @@ function normalizePagination(page?: number, pageSize?: number) {
 export class UsersService {
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(SearchService)
+    private readonly searchService: SearchService
   ) {}
+
+  private mapSuperTokensError(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('No SuperTokens core available to query')) {
+      throw new ServiceUnavailableException('认证服务未就绪，请稍后重试');
+    }
+
+    throw error;
+  }
+
+  private async syncCredentialEmail(user: {
+    supertokensUserId: string | null;
+    email: string;
+  }, nextEmail?: string) {
+    const normalizedEmail = nextEmail?.trim().toLowerCase();
+    if (!normalizedEmail || normalizedEmail === user.email || !user.supertokensUserId) {
+      return;
+    }
+
+    let result: Awaited<ReturnType<typeof EmailPassword.updateEmailOrPassword>>;
+    try {
+      result = await EmailPassword.updateEmailOrPassword({
+        recipeUserId: convertToRecipeUserId(user.supertokensUserId),
+        email: normalizedEmail,
+        userContext: {}
+      });
+    } catch (error) {
+      this.mapSuperTokensError(error);
+    }
+
+    if (result.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
+      throw new ConflictException('邮箱已被使用');
+    }
+
+    if (result.status === 'UNKNOWN_USER_ID_ERROR') {
+      throw new BadRequestException('认证账号映射失效，请重新登录后再修改邮箱');
+    }
+  }
 
   private mapProfile(user: {
     id: number;
-    name: string;
+    displayName: string;
     studentId: string;
     email: string;
     role: UserRole;
     creditScore: number;
-    isVerified: boolean;
+    verificationStatus: VerificationStatus;
+    accountStatus: AccountStatus;
     verification: {
       realName: string;
       college: string;
       phone: string;
-      status: string;
     } | null;
   }) {
     return {
       id: user.id,
-      name: user.name,
+      displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
       role: user.role,
       creditScore: user.creditScore,
-      verified: user.isVerified,
-      identityStatus: user.verification?.status ?? (user.isVerified ? 'APPROVED' : 'PENDING'),
-      realName: user.verification?.realName ?? user.name,
+      verificationStatus: user.verificationStatus,
+      accountStatus: user.accountStatus,
+      realName: user.verification?.realName ?? user.displayName,
       college: user.verification?.college ?? '待填写',
       phone: user.verification?.phone ?? '待填写'
     };
@@ -136,18 +181,18 @@ export class UsersService {
     const averageRating = reviews.length
       ? Number((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1))
       : 4.8;
-    const responseRate = Math.min(99, user.isVerified ? 88 + Math.min(10, Math.floor(sentMessages / 4)) : 72 + Math.min(12, Math.floor(sentMessages / 5)));
+    const responseRate = Math.min(99, user.verificationStatus === VerificationStatus.APPROVED ? 88 + Math.min(10, Math.floor(sentMessages / 4)) : 72 + Math.min(12, Math.floor(sentMessages / 5)));
 
     return {
       id: user.id,
-      name: user.name,
+      displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
       creditScore: user.creditScore,
       creditLevel: getCreditLevel(user.creditScore),
-      verified: user.isVerified,
-      identityStatus: user.verification?.status ?? (user.isVerified ? 'APPROVED' : 'PENDING'),
-      college: user.verification?.college ?? (user.isVerified ? '信息学院' : '待填写'),
+      verificationStatus: user.verificationStatus,
+      accountStatus: user.accountStatus,
+      college: user.verification?.college ?? (user.verificationStatus === VerificationStatus.APPROVED ? '信息学院' : '待填写'),
       completedOrders,
       activeOrders,
       waitingReviews,
@@ -157,7 +202,12 @@ export class UsersService {
     };
   }
 
-  async updateProfile(userId: number, payload: UpdateProfileDto) {
+  async updateProfile(userId: number, payload: UpdateProfileDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    if (authUser.id !== userId && authUser.role !== UserRole.ADMIN) {
+      throw new BadRequestException('只能修改自己的资料');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { verification: true }
@@ -167,14 +217,14 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    const nextName = payload.name?.trim();
+    const nextDisplayName = payload.displayName?.trim();
     const nextEmail = payload.email?.trim();
     const nextRealName = payload.realName?.trim();
     const nextCollege = payload.college?.trim();
     const nextPhone = payload.phone?.trim();
 
-    if (payload.name !== undefined && !nextName) {
-      throw new BadRequestException('姓名不能为空');
+    if (payload.displayName !== undefined && !nextDisplayName) {
+      throw new BadRequestException('展示名不能为空');
     }
 
     if (payload.email !== undefined) {
@@ -200,10 +250,11 @@ export class UsersService {
     }
 
     try {
+      await this.syncCredentialEmail(user, nextEmail);
       const updated = await this.prisma.user.update({
         where: { id: userId },
         data: {
-          name: nextName ?? undefined,
+          displayName: nextDisplayName ?? undefined,
           email: nextEmail ?? undefined,
           verification: {
             upsert: {
@@ -213,16 +264,17 @@ export class UsersService {
                 phone: nextPhone ?? undefined
               },
               create: {
-                realName: nextRealName ?? user.name,
+                realName: nextRealName ?? (nextDisplayName ?? user.displayName),
                 college: nextCollege ?? '待填写',
-                phone: nextPhone ?? '待填写',
-                status: user.isVerified ? 'APPROVED' : 'PENDING'
+                phone: nextPhone ?? '待填写'
               }
             }
           }
         },
         include: { verification: true }
       });
+
+      await this.searchService.syncSellerProducts(userId);
 
       return this.mapProfile(updated);
     } catch (error) {
@@ -239,7 +291,9 @@ export class UsersService {
     pageSize?: number;
     college?: string;
     keyword?: string;
+    currentUser?: AuthenticatedUser;
   }) {
+    requireAdminUser(filters?.currentUser);
     const { page, pageSize, skip } = normalizePagination(filters?.page, filters?.pageSize);
     const college = filters?.college?.trim();
     const keyword = filters?.keyword?.trim();
@@ -255,7 +309,7 @@ export class UsersService {
       ...(keyword
         ? {
             OR: [
-              { name: { contains: keyword } },
+              { displayName: { contains: keyword } },
               { email: { contains: keyword } },
               { studentId: { contains: keyword } },
               {
@@ -276,7 +330,7 @@ export class UsersService {
     const [users, total, allUserColleges] = await Promise.all([
       this.prisma.user.findMany({
         where,
-        orderBy: [{ isBanned: 'desc' }, { creditScore: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [{ accountStatus: 'desc' }, { creditScore: 'asc' }, { createdAt: 'desc' }],
         skip,
         take: pageSize,
         include: { verification: true }
@@ -451,18 +505,18 @@ export class UsersService {
         .filter((item): item is Date => Boolean(item))
         .sort((left, right) => right.getTime() - left.getTime())[0] ?? user.updatedAt;
       const riskScore =
-        (user.isBanned ? 100 : 0) +
+        (user.accountStatus === AccountStatus.BANNED ? 100 : 0) +
         report.open * 35 +
         Math.max(0, 75 - user.creditScore) +
         product.offline * 6 +
         order.canceled * 4 +
-        (user.isVerified ? 0 : 12);
-      const riskLevel = user.isBanned || riskScore >= 80
+        (user.verificationStatus === VerificationStatus.APPROVED ? 0 : 12);
+      const riskLevel = user.accountStatus === AccountStatus.BANNED || riskScore >= 80
         ? 'HIGH'
         : riskScore >= 35
           ? 'MEDIUM'
           : 'LOW';
-      const suggestedAction = user.isBanned
+      const suggestedAction = user.accountStatus === AccountStatus.BANNED
         ? '复核封禁'
         : report.open > 0
           ? '优先处理举报'
@@ -472,12 +526,13 @@ export class UsersService {
 
       return {
         id: user.id,
-        name: user.name,
+        displayName: user.displayName,
         email: user.email,
         studentId: user.studentId,
         creditScore: user.creditScore,
-        verified: user.isVerified,
-        isBanned: user.isBanned,
+        verificationStatus: user.verificationStatus,
+        accountStatus: user.accountStatus,
+        isBanned: user.accountStatus === AccountStatus.BANNED,
         college: user.verification?.college ?? '待填写',
         reportCount: report.total,
         openReportCount: report.open,
@@ -512,8 +567,9 @@ export class UsersService {
     };
   }
 
-  async updateBanStatus(userId: number, payload: UpdateBanStatusDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async updateBanStatus(userId: number, payload: UpdateBanStatusDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
+    const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: userId }
       });
@@ -524,7 +580,7 @@ export class UsersService {
 
       const updated = await tx.user.update({
         where: { id: userId },
-        data: { isBanned: payload.banned }
+        data: { accountStatus: payload.banned ? AccountStatus.BANNED : AccountStatus.ACTIVE }
       });
 
       if (payload.banned) {
@@ -555,8 +611,8 @@ export class UsersService {
 
       await tx.auditLog.create({
         data: {
-          actorId: payload.handledBy,
-          actorName: payload.handledBy ? `管理员#${payload.handledBy}` : '管理员',
+          actorId: adminUser.id,
+          actorName: `管理员#${adminUser.id}`,
           action: payload.banned ? 'BAN_USER' : 'UNBAN_USER',
           targetType: 'USER',
           targetId: userId,
@@ -566,8 +622,11 @@ export class UsersService {
 
       return {
         id: updated.id,
-        isBanned: updated.isBanned
+        isBanned: updated.accountStatus === AccountStatus.BANNED
       };
     });
+
+    await this.searchService.syncSellerProducts(userId);
+    return result;
   }
 }

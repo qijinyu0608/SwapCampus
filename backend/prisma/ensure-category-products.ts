@@ -1,99 +1,100 @@
 import { PrismaClient, ProductStatus } from '@prisma/client';
+import { PRODUCT_CATEGORY_NAMES, type ProductCategoryName } from './product-category-migration';
 
 const prisma = new PrismaClient();
 
-const categories = ['教材', '数码', '生活用品', '运动器材', '宿舍好物', '自行车', '文具', '小家电', '鞋服', '考研资料'] as const;
+const categories = [...PRODUCT_CATEGORY_NAMES];
 
-const imagePoolByCategory: Record<(typeof categories)[number], string[]> = {
-  教材: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
-  数码: ['/images/products/keyboard.jpg', '/images/products/powerbank.png'],
-  生活用品: ['/images/products/clothing-rack.jpg', '/images/products/storage-shelf.jpg', '/images/products/plush.jpg'],
-  运动器材: ['/images/products/badminton.jpg'],
-  宿舍好物: ['/images/products/lamp.jpg', '/images/products/fan.jpg', '/images/products/storage-shelf.jpg'],
-  自行车: ['/images/products/badminton.jpg', '/images/products/storage-shelf.jpg'],
-  文具: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
-  小家电: ['/images/products/fan.jpg', '/images/products/lamp.jpg'],
-  鞋服: ['/images/products/clothing-rack.jpg', '/images/products/plush.jpg'],
-  考研资料: ['/images/products/books-2.jpg', '/images/products/books-1.jpg']
+const imagePoolByCategory: Record<ProductCategoryName, string[]> = {
+  数码电子: ['/images/products/keyboard.jpg', '/images/products/powerbank.png'],
+  教材资料: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
+  宿舍生活: ['/images/products/lamp.jpg', '/images/products/storage-shelf.jpg', '/images/products/fan.jpg'],
+  鞋服箱包: ['/images/products/clothing-rack.jpg', '/images/products/plush.jpg'],
+  运动出行: ['/images/products/badminton.jpg', '/images/products/storage-shelf.jpg'],
+  美妆个护: ['/images/products/demo-square.png'],
+  办公文具: ['/images/products/books-1.jpg', '/images/products/books-2.jpg'],
+  卡券票务: ['/images/products/demo-square.png'],
+  兴趣文娱: ['/images/products/demo-square.png'],
+  其他: ['/images/products/demo-square.png']
 };
 
-const guaranteedTemplates: Record<(typeof categories)[number], { title: string; description: string; price: number; condition: string; tags: string[] }> = {
-  教材: {
-    title: '高数教材整套 9成新',
-    description: '上学期课程结束后闲置，内容完整，少量标记，适合继续接着用。',
-    price: 25,
-    condition: '9成新',
-    tags: ['教材', '高数', '校内面交']
-  },
-  数码: {
+const guaranteedTemplates: Record<ProductCategoryName, { title: string; description: string; price: number; condition: string; tags: string[] }> = {
+  数码电子: {
     title: '机械键盘宿舍自用款',
     description: '功能正常，接口和按键都没问题，可以当面试用。',
     price: 88,
     condition: '95新',
-    tags: ['数码', '键盘', '可验货']
+    tags: ['键盘', '可验货']
   },
-  生活用品: {
+  教材资料: {
+    title: '高数教材整套',
+    description: '上学期课程结束后闲置，内容完整，少量标记，适合继续接着用。',
+    price: 25,
+    condition: '9成新',
+    tags: ['高数', '校内面交']
+  },
+  宿舍生活: {
     title: '宿舍三层收纳架',
     description: '搬宿舍整理出来的，放零食和日用品都方便。',
     price: 26,
     condition: '9成新',
-    tags: ['生活用品', '收纳', '宿舍']
+    tags: ['收纳', '宿舍']
   },
-  运动器材: {
-    title: '羽毛球拍双拍套装',
-    description: '社团活动后闲置，拍线状态正常，校内可约试看。',
-    price: 52,
-    condition: '9成新',
-    tags: ['运动器材', '羽毛球', '社团']
-  },
-  宿舍好物: {
-    title: '护眼宿舍台灯',
-    description: '亮度稳定，晚自习和宿舍学习都很适合。',
-    price: 29,
-    condition: '95新',
-    tags: ['宿舍好物', '台灯', '护眼']
-  },
-  自行车: {
-    title: '校园骑行头盔',
-    description: '平时骑车通勤用过，没有磕碰，内衬干净。',
-    price: 35,
-    condition: '9成新',
-    tags: ['自行车', '头盔', '通勤']
-  },
-  文具: {
-    title: '函数计算器考试版',
-    description: '按键和显示都正常，考试周和课程作业都能继续用。',
-    price: 46,
-    condition: '95新',
-    tags: ['文具', '计算器', '考试']
-  },
-  小家电: {
-    title: '20000mAh 以下充电宝',
-    description: '容量 10000mAh，接口和充电状态正常，宿舍和图书馆都方便备用。',
-    price: 30,
-    condition: '9成新',
-    tags: ['小家电', '充电宝', '宿舍白名单']
-  },
-  鞋服: {
+  鞋服箱包: {
     title: '运动外套 M 码',
     description: '上课和晨跑穿过几次，洗净后一直放在柜子里。',
     price: 39,
     condition: '9成新',
-    tags: ['鞋服', '外套', 'M码']
+    tags: ['外套', 'M码']
   },
-  考研资料: {
-    title: '考研政治冲刺资料',
-    description: '重点内容完整，后期背诵和刷题都还能继续用。',
-    price: 22,
+  运动出行: {
+    title: '羽毛球拍双拍套装',
+    description: '社团活动后闲置，拍线状态正常，校内可约试看。',
+    price: 52,
     condition: '9成新',
-    tags: ['考研资料', '政治', '冲刺']
+    tags: ['羽毛球', '社团']
+  },
+  美妆个护: {
+    title: '防晒霜全新未拆',
+    description: '备份买多了，日期新，适合夏天通勤和军训备用。',
+    price: 34,
+    condition: '95新',
+    tags: ['防晒', '全新']
+  },
+  办公文具: {
+    title: '函数计算器考试版',
+    description: '按键和显示都正常，考试周和课程作业都能继续用。',
+    price: 46,
+    condition: '95新',
+    tags: ['计算器', '考试']
+  },
+  卡券票务: {
+    title: '打印券打包转',
+    description: '本学期没用完，适合期末打印资料，校内直接转给同学。',
+    price: 18,
+    condition: '95新',
+    tags: ['打印券', '低价']
+  },
+  兴趣文娱: {
+    title: '尤克里里入门套装',
+    description: '买来练过一段时间，现在闲置，琴包和调音器一起出。',
+    price: 96,
+    condition: '9成新',
+    tags: ['乐器', '入门']
+  },
+  其他: {
+    title: '毕业清仓杂物打包',
+    description: '一些宿舍闲置一起带走，适合顺路捡漏。',
+    price: 20,
+    condition: '8成新',
+    tags: ['打包', '毕业清仓']
   }
 };
 
 async function main() {
   const users = await prisma.user.findMany({
     orderBy: [{ role: 'asc' }, { id: 'asc' }],
-    select: { id: true, name: true }
+    select: { id: true, displayName: true }
   });
 
   if (!users.length) {
@@ -124,7 +125,7 @@ async function main() {
         price: template.price,
         category,
         condition: template.condition,
-        tags: template.tags.join(','),
+        tags: template.tags,
         status: ProductStatus.ON_SALE
       }
     });
@@ -137,14 +138,14 @@ async function main() {
       }))
     });
 
-    console.log(`[db:ensure-category-products] created ${category}: ${template.title} (seller ${seller.name})`);
+    console.log(`[db:ensure-category-products] created ${category}: ${template.title} (seller ${seller.displayName})`);
   }
 }
 
 main()
   .catch((error) => {
     console.error('[db:ensure-category-products] failed', error);
-    process.exitCode = 1;
+    process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();

@@ -3,6 +3,13 @@ import { CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client'
 import { ReportsService } from './reports.service';
 
 describe('ReportsService', () => {
+  const adminUser = {
+    id: 22,
+    studentId: '2026000022',
+    email: 'admin@swapcampus.cn',
+    role: 'ADMIN'
+  } as any;
+
   it('should ban reported user and offline active products when resolving BAN_USER', async () => {
     const prisma = {
       report: {
@@ -40,16 +47,20 @@ describe('ReportsService', () => {
     } as any;
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
-    const service = new ReportsService(prisma);
+    const searchService = {
+      syncProduct: jest.fn().mockResolvedValue(undefined),
+      syncSellerProducts: jest.fn().mockResolvedValue(undefined)
+    } as any;
+
+    const service = new ReportsService(prisma, searchService);
     const result = await service.resolveReport(6, {
-      handledBy: 22,
       resolutionNote: '核查后封禁',
       nextStatus: 'BAN_USER'
-    });
+    }, adminUser);
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 24 },
-      data: { isBanned: true }
+      data: { accountStatus: 'BANNED' }
     });
     expect(prisma.product.updateMany).toHaveBeenCalledWith({
       where: {
@@ -76,6 +87,7 @@ describe('ReportsService', () => {
       id: 6,
       status: 'RESOLVED'
     });
+    expect(searchService.syncSellerProducts).toHaveBeenCalledWith(24);
   });
 
   it('should reject BAN_USER when report has no target user', async () => {
@@ -107,14 +119,16 @@ describe('ReportsService', () => {
     } as any;
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
-    const service = new ReportsService(prisma);
+    const service = new ReportsService(prisma, {
+      syncProduct: jest.fn(),
+      syncSellerProducts: jest.fn()
+    } as any);
 
     await expect(
       service.resolveReport(7, {
-        handledBy: 22,
         resolutionNote: '无用户对象',
         nextStatus: 'BAN_USER'
-      })
+      }, adminUser)
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -1,6 +1,9 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
+import { AccountStatus, CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { requireAdminUser, requireAuthenticatedUser } from '../auth/auth.utils';
+import { SearchService } from '../search/search.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 
@@ -8,10 +11,13 @@ import { ResolveReportDto } from './dto/resolve-report.dto';
 export class ReportsService {
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(SearchService)
+    private readonly searchService: SearchService
   ) {}
 
-  async listReports() {
+  async listReports(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
     const reports = await this.prisma.report.findMany({
       orderBy: { createdAt: 'desc' },
       take: 30
@@ -31,21 +37,22 @@ export class ReportsService {
     }));
   }
 
-  async createReport(payload: CreateReportDto) {
+  async createReport(payload: CreateReportDto, currentUser: AuthenticatedUser) {
+    const reporterUser = requireAuthenticatedUser(currentUser);
     if (!payload.productId && !payload.targetUserId) {
       throw new BadRequestException('举报对象不能为空');
     }
 
     const reporter = await this.prisma.user.findUnique({
-      where: { id: payload.reporterId },
-      select: { id: true, isBanned: true }
+      where: { id: reporterUser.id },
+      select: { id: true, accountStatus: true }
     });
 
     if (!reporter) {
       throw new BadRequestException('登录状态已失效，请重新登录');
     }
 
-    if (reporter.isBanned) {
+    if (reporter.accountStatus === AccountStatus.BANNED) {
       throw new ForbiddenException('账号已被封禁，无法发起举报');
     }
 
@@ -73,7 +80,7 @@ export class ReportsService {
 
     const report = await this.prisma.report.create({
       data: {
-        reporterId: payload.reporterId,
+        reporterId: reporterUser.id,
         productId: payload.productId,
         targetUserId: payload.targetUserId,
         reason: payload.reason,
@@ -83,8 +90,8 @@ export class ReportsService {
 
     await this.prisma.auditLog.create({
       data: {
-        actorId: payload.reporterId,
-        actorName: `用户#${payload.reporterId}`,
+        actorId: reporterUser.id,
+        actorName: `用户#${reporterUser.id}`,
         action: 'CREATE_REPORT',
         targetType: payload.productId ? 'PRODUCT' : 'USER',
         targetId: payload.productId ?? payload.targetUserId!,
@@ -99,8 +106,9 @@ export class ReportsService {
     };
   }
 
-  async resolveReport(reportId: number, payload: ResolveReportDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async resolveReport(reportId: number, payload: ResolveReportDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
+    const result = await this.prisma.$transaction(async (tx) => {
       const report = await tx.report.findUnique({
         where: { id: reportId }
       });
@@ -141,7 +149,7 @@ export class ReportsService {
         await Promise.all([
           tx.user.update({
             where: { id: report.targetUserId },
-            data: { isBanned: true }
+            data: { accountStatus: AccountStatus.BANNED }
           }),
           tx.product.updateMany({
             where: {
@@ -170,7 +178,7 @@ export class ReportsService {
       if (payload.nextStatus === 'UNBAN_USER' && report.targetUserId) {
         await tx.user.update({
           where: { id: report.targetUserId },
-          data: { isBanned: false }
+          data: { accountStatus: AccountStatus.ACTIVE }
         });
       }
 
@@ -179,14 +187,14 @@ export class ReportsService {
         data: {
           status: finalStatus,
           resolutionNote: payload.resolutionNote,
-          handledBy: payload.handledBy
+          handledBy: adminUser.id
         }
       });
 
       await tx.auditLog.create({
         data: {
-          actorId: payload.handledBy,
-          actorName: `管理员#${payload.handledBy}`,
+          actorId: adminUser.id,
+          actorName: `管理员#${adminUser.id}`,
           action: payload.nextStatus,
           targetType: report.productId ? 'REPORT_PRODUCT' : 'REPORT_USER',
           targetId: report.productId ?? report.targetUserId ?? report.id,
@@ -200,9 +208,22 @@ export class ReportsService {
         resolutionNote: updated.resolutionNote
       };
     });
+
+    const resolvedReport = await this.prisma.report.findUnique({
+      where: { id: reportId },
+      select: { productId: true, targetUserId: true }
+    });
+    if (resolvedReport?.productId) {
+      await this.searchService.syncProduct(resolvedReport.productId);
+    }
+    if (resolvedReport?.targetUserId) {
+      await this.searchService.syncSellerProducts(resolvedReport.targetUserId);
+    }
+    return result;
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
     const logs = await this.prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: 40

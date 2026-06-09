@@ -3,21 +3,36 @@ import { execSync } from 'node:child_process';
 
 const prisma = new PrismaClient();
 
+function runStep(name: string, command: string, options?: { allowFailure?: boolean }) {
+  console.log(`[db:init] start ${name}`);
+  try {
+    execSync(command, { stdio: 'inherit' });
+    console.log(`[db:init] done ${name}`);
+  } catch (error) {
+    if (options?.allowFailure) {
+      console.warn(`[db:init] skip ${name}:`, error);
+      return;
+    }
+
+    throw error;
+  }
+}
+
 async function main() {
   const userCount = await prisma.user.count();
   if (userCount > 0) {
     console.log(`[db:init] existing data detected (${userCount} users), sync default accounts`);
-    execSync('npm run db:sync-default-accounts', { stdio: 'inherit' });
-    execSync('npm run db:ensure-category-products', { stdio: 'inherit' });
-    execSync('npm run db:ensure-campus-services', { stdio: 'inherit' });
+    runStep('sync default accounts', 'npm run db:sync-default-accounts', { allowFailure: true });
+    runStep('ensure category products', 'npm run db:ensure-category-products');
+    runStep('ensure campus services', 'npm run db:ensure-campus-services');
     return;
   }
 
   console.log('[db:init] database is empty, run seed');
-  execSync('npm run db:seed', { stdio: 'inherit' });
-  execSync('npm run db:sync-default-accounts', { stdio: 'inherit' });
-  execSync('npm run db:ensure-category-products', { stdio: 'inherit' });
-  execSync('npm run db:ensure-campus-services', { stdio: 'inherit' });
+  runStep('seed', 'npm run db:seed');
+  runStep('sync default accounts', 'npm run db:sync-default-accounts', { allowFailure: true });
+  runStep('ensure category products', 'npm run db:ensure-category-products');
+  runStep('ensure campus services', 'npm run db:ensure-campus-services');
 }
 
 main()

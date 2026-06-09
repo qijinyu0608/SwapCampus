@@ -1,3 +1,5 @@
+import { normalizeProductCategoryName, type ProductCategoryName } from '../constants/productCategories';
+
 type CoverInput = {
   title: string;
   category: string;
@@ -7,17 +9,17 @@ type CoverInput = {
   variant?: number;
 };
 
-const categoryThemes: Record<string, { start: string; end: string; accent: string; ink: string; line: string }> = {
-  数码: { start: '#f7f8fb', end: '#eeeff3', accent: '#5f7391', ink: '#18212f', line: '#d5dbe4' },
-  教材: { start: '#fbfaf7', end: '#f1eee7', accent: '#9b7d57', ink: '#241f18', line: '#ddd4c6' },
-  生活用品: { start: '#f8f8f6', end: '#efefe9', accent: '#7b8576', ink: '#1f241e', line: '#d8ddd3' },
-  运动器材: { start: '#f8f8f8', end: '#efefef', accent: '#8d715f', ink: '#241f1c', line: '#ddd4ce' },
-  宿舍好物: { start: '#fbfaf7', end: '#f2efe8', accent: '#9c8464', ink: '#231f18', line: '#ded5c8' },
-  自行车: { start: '#f7faf8', end: '#edf3ef', accent: '#6d8a74', ink: '#1d251f', line: '#d5dfd8' },
-  文具: { start: '#faf9f6', end: '#f2eee6', accent: '#8c7560', ink: '#2b241d', line: '#ddd3c6' },
-  小家电: { start: '#f7f9fb', end: '#edf1f5', accent: '#677a8d', ink: '#1d2430', line: '#d5dde6' },
-  鞋服: { start: '#faf7f7', end: '#f2ecec', accent: '#8b7068', ink: '#2a211f', line: '#dececa' },
-  考研资料: { start: '#fbfaf5', end: '#f2eee2', accent: '#9b7f52', ink: '#282116', line: '#dfd5be' }
+const categoryThemes: Record<ProductCategoryName, { start: string; end: string; accent: string; ink: string; line: string }> = {
+  数码电子: { start: '#f7f8fb', end: '#eeeff3', accent: '#5f7391', ink: '#18212f', line: '#d5dbe4' },
+  教材资料: { start: '#fbfaf7', end: '#f1eee7', accent: '#9b7d57', ink: '#241f18', line: '#ddd4c6' },
+  宿舍生活: { start: '#fbfaf7', end: '#f2efe8', accent: '#9c8464', ink: '#231f18', line: '#ded5c8' },
+  鞋服箱包: { start: '#faf7f7', end: '#f2ecec', accent: '#8b7068', ink: '#2a211f', line: '#dececa' },
+  运动出行: { start: '#f7faf8', end: '#edf3ef', accent: '#6d8a74', ink: '#1d251f', line: '#d5dfd8' },
+  美妆个护: { start: '#fcf7fa', end: '#f6eef5', accent: '#9c6c84', ink: '#2c1f28', line: '#e3d2db' },
+  办公文具: { start: '#faf9f6', end: '#f2eee6', accent: '#8c7560', ink: '#2b241d', line: '#ddd3c6' },
+  卡券票务: { start: '#fffaf3', end: '#f8f0df', accent: '#a67a1f', ink: '#2c220d', line: '#e6d7b0' },
+  兴趣文娱: { start: '#f8f7fb', end: '#efedf8', accent: '#7567a1', ink: '#211d30', line: '#d8d3e7' },
+  其他: { start: '#f8f8f6', end: '#efefe9', accent: '#7b8576', ink: '#1f241e', line: '#d8ddd3' }
 };
 
 const offsets = [
@@ -25,6 +27,8 @@ const offsets = [
   { x: 6, y: -4 },
   { x: -8, y: 5 }
 ];
+
+export const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 
 function escapeSvgText(text: string) {
   return text
@@ -42,7 +46,7 @@ function splitTitle(title: string) {
 }
 
 function renderCategoryShape(category: string, accent: string, line: string, x: number, y: number) {
-  if (category === '数码') {
+  if (category === '数码电子') {
     return `
       <rect x="${220 + x}" y="${138 + y}" width="280" height="168" rx="18" fill="#ffffff" stroke="${line}" stroke-width="6" />
       <rect x="${242 + x}" y="${160 + y}" width="236" height="124" rx="10" fill="#eef2f7" />
@@ -51,7 +55,7 @@ function renderCategoryShape(category: string, accent: string, line: string, x: 
     `;
   }
 
-  if (category === '教材') {
+  if (category === '教材资料') {
     return `
       <rect x="${214 + x}" y="${156 + y}" width="88" height="168" rx="12" fill="${accent}" opacity="0.92" />
       <rect x="${314 + x}" y="${144 + y}" width="92" height="180" rx="12" fill="#ffffff" stroke="${line}" stroke-width="6" />
@@ -61,7 +65,7 @@ function renderCategoryShape(category: string, accent: string, line: string, x: 
     `;
   }
 
-  if (category === '运动器材') {
+  if (category === '运动出行') {
     return `
       <circle cx="${324 + x}" cy="${220 + y}" r="72" fill="none" stroke="${accent}" stroke-width="14" />
       <circle cx="${324 + x}" cy="${220 + y}" r="48" fill="none" stroke="${line}" stroke-width="8" />
@@ -70,7 +74,7 @@ function renderCategoryShape(category: string, accent: string, line: string, x: 
     `;
   }
 
-  if (category === '宿舍好物') {
+  if (category === '宿舍生活') {
     return `
       <path d="M360 ${140 + y} C308 ${158 + y}, 274 ${210 + y}, 274 ${264 + y} L446 ${264 + y} C446 ${210 + y}, 412 ${158 + y}, 360 ${140 + y}Z" fill="#ffffff" stroke="${line}" stroke-width="8" />
       <rect x="${344 + x}" y="${264 + y}" width="32" height="104" rx="12" fill="${accent}" />
@@ -95,7 +99,8 @@ export function buildProductCover({
   sellerName = '同校用户',
   variant = 0
 }: CoverInput) {
-  const theme = categoryThemes[category] ?? categoryThemes.宿舍好物;
+  const normalizedCategory = normalizeProductCategoryName(category);
+  const theme = categoryThemes[normalizedCategory] ?? categoryThemes.其他;
   const offset = offsets[variant % offsets.length];
   const titleLines = splitTitle(title);
   const subtitle = [condition, sellerName].filter(Boolean).join(' · ');
@@ -115,7 +120,7 @@ export function buildProductCover({
       <rect width="720" height="560" rx="20" fill="url(#bg)" />
       <rect x="22" y="22" width="676" height="516" rx="18" fill="rgba(255,255,255,0.34)" />
       <rect x="44" y="42" width="120" height="34" rx="8" fill="rgba(255,255,255,0.94)" />
-      <text x="70" y="65" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700" fill="${theme.accent}">${escapeSvgText(category)}</text>
+      <text x="70" y="65" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="700" fill="${theme.accent}">${escapeSvgText(normalizedCategory)}</text>
       <ellipse cx="360" cy="404" rx="166" ry="30" fill="rgba(17,24,39,0.07)" />
       ${renderCategoryShape(category, theme.accent, theme.line, offset.x, offset.y)}
       <rect x="44" y="426" width="632" height="90" rx="16" fill="url(#panel)" stroke="rgba(209,213,219,0.84)" />
@@ -165,41 +170,11 @@ function resolveRealImages(product: ProductImageLike) {
 }
 
 export function resolvePrimaryProductImage(product: ProductImageLike, variant = 0) {
-  const [realImage] = resolveRealImages(product);
-
-  if (realImage) {
-    return realImage;
-  }
-
-  return buildProductCover({
-    title: product.title,
-    category: product.category,
-    price: product.price,
-    condition: product.condition,
-    sellerName: product.sellerName,
-    variant
-  });
+  return DEMO_PRODUCT_IMAGE;
 }
 
 export function resolveProductGallery(product: ProductImageLike, variant = 0, count = 4) {
-  const realImages = resolveRealImages(product);
-
-  if (realImages.length >= count) {
-    return realImages.slice(0, count);
-  }
-
-  const fallbackImages = Array.from({ length: Math.max(count - realImages.length, 0) }).map((_, index) =>
-    buildProductCover({
-      title: product.title,
-      category: product.category,
-      price: product.price,
-      condition: product.condition,
-      sellerName: product.sellerName,
-      variant: variant + index
-    })
-  );
-
-  return [...realImages, ...fallbackImages].slice(0, count);
+  return Array.from({ length: count }, () => DEMO_PRODUCT_IMAGE);
 }
 
 export function getProductImage(product: ProductImageLike, variant = 0) {
