@@ -608,45 +608,59 @@
 .ui-credit-badge-preview-a {
   font-weight: 800;
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.42),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  text-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  -webkit-text-fill-color: transparent;
 }
 
 .ui-credit-badge-preview-a.is-low {
-  background:
-    linear-gradient(180deg, rgba(255, 239, 222, 0.56) 0%, rgba(255, 255, 255, 0.08) 20%, rgba(0, 0, 0, 0.06) 100%),
-    linear-gradient(180deg, #efc29b 0%, #cf8a59 48%, #a96235 100%);
-  color: #fffaf5;
+  background-color: #c8895c;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 100%),
+    linear-gradient(180deg, #fff2e6 0%, #ffd7b3 40%, #8d4d23 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
 }
 
 .ui-credit-badge-preview-a.is-stable {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.14) 28%, rgba(0, 0, 0, 0.06) 100%),
-    linear-gradient(180deg, #fafcff 0%, #dde4ec 52%, #b7c0cc 100%);
-  color: #5e6975;
+  background-color: #d8dde4;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 100%),
+    linear-gradient(180deg, #ffffff 0%, #f5f8fb 40%, #67717d 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
 }
 
 .ui-credit-badge-preview-a.is-good {
-  background:
-    linear-gradient(180deg, rgba(255, 248, 212, 0.82) 0%, rgba(255, 255, 255, 0.14) 26%, rgba(79, 43, 0, 0.08) 100%),
-    linear-gradient(180deg, #ffe79a 0%, #efc85e 46%, #cb982b 100%);
-  color: #563805;
+  background-color: #e0b755;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%),
+    linear-gradient(180deg, #fff4cf 0%, #fff0b3 38%, #8c5d10 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
 }
 
 .ui-credit-badge-preview-a.is-great {
-  background:
-    linear-gradient(180deg, rgba(255, 229, 158, 0.34) 0%, rgba(255, 255, 255, 0.08) 24%, rgba(0, 0, 0, 0.08) 100%),
-    linear-gradient(180deg, #151719 0%, #21252c 48%, #2f343d 100%);
-  color: #f6d57e;
+  background-color: #202329;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(180deg, #ffe7a6 0%, #f0cc73 45%, #bb8c24 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
 }
 
 .ui-credit-badge-preview-a.is-excellent {
-  background:
-    linear-gradient(180deg, rgba(213, 238, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 24%, rgba(0, 0, 0, 0.14) 100%),
-    linear-gradient(180deg, #0c1015 0%, #161d26 46%, #252f3d 100%);
-  color: #eef5ff;
+  background-color: #171c23;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%),
+    linear-gradient(180deg, #f7fbff 0%, #dbe7f4 48%, #aebccd 100%);
+  background-origin: border-box;
+  background-clip: padding-box, text;
+  -webkit-background-clip: padding-box, text;
 }
 
 .ui-credit-badge-preview-b {
