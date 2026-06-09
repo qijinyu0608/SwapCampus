@@ -293,7 +293,7 @@
 }
 
 .ui-credit-badge.is-good .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #fffbea 0%, #f0cf62 42%, #5a3900 100%);
+  background-image: linear-gradient(180deg, #f6e9bf 0%, #d9b04d 42%, #5a3900 100%);
 }
 
 .ui-credit-badge.is-stable {
@@ -302,7 +302,7 @@
 }
 
 .ui-credit-badge.is-stable .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #ffffff 0%, #d7dde4 44%, #4f5864 100%);
+  background-image: linear-gradient(180deg, #f0f2f4 0%, #bcc4cd 44%, #4f5864 100%);
 }
 
 .ui-credit-badge.is-low {
@@ -311,7 +311,7 @@
 }
 
 .ui-credit-badge.is-low .ui-credit-badge-label {
-  background-image: linear-gradient(180deg, #fff6ee 0%, #df9f72 42%, #663020 100%);
+  background-image: linear-gradient(180deg, #f6ddd0 0%, #c88459 42%, #663020 100%);
 }
 
 .ui-info-list {
