@@ -601,6 +601,7 @@
   border-radius: 6px;
   border: 0;
   white-space: nowrap;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
   font-size: 11px;
   line-height: 1.1;
 }
