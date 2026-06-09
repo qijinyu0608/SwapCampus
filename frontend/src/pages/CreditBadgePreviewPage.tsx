@@ -38,8 +38,8 @@ export function CreditBadgePreviewPage() {
               <strong>{item.score}</strong>
               <span>{item.label}</span>
               <div className="credit-badge-preview-badge-cell">
-                <div className={`ui-credit-badge-preview-a is-${item.tone}`}>
-                  <span className="ui-credit-badge-preview-a-label">{item.label}</span>
+                <div className={`ui-credit-badge is-${item.tone}`}>
+                  <span className="ui-credit-badge-label">{item.label}</span>
                 </div>
               </div>
               <div className="credit-badge-preview-badge-cell">
