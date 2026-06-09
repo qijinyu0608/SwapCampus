@@ -29,8 +29,7 @@ export function CreditBadgePreviewPage() {
           <div className="credit-badge-preview-row is-head">
             <span>信用分</span>
             <span>标签文案</span>
-            <span>A 更珠宝</span>
-            <span>A 纯色底</span>
+            <span>A 叠加版</span>
             <span>B 更奢侈品</span>
           </div>
 
@@ -40,12 +39,7 @@ export function CreditBadgePreviewPage() {
               <span>{item.label}</span>
               <div className="credit-badge-preview-badge-cell">
                 <div className={`ui-credit-badge-preview-a is-${item.tone}`}>
-                  {item.label}
-                </div>
-              </div>
-              <div className="credit-badge-preview-badge-cell">
-                <div className={`ui-credit-badge-preview-a-solid is-${item.tone}`}>
-                  {item.label}
+                  <span className="ui-credit-badge-preview-a-label">{item.label}</span>
                 </div>
               </div>
               <div className="credit-badge-preview-badge-cell">

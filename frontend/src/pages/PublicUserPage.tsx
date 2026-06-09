@@ -100,7 +100,9 @@ export function PublicUserPage() {
               <h1>{userPresentation.displayName}</h1>
               <div className="profile-hero-badges">
                 <span>{userPresentation.publicIdentityLabel}</span>
-                <span>{userPresentation.creditBadge.label}</span>
+                <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
+                  <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
+                </div>
               </div>
             </div>
             <MetaList items={profileStats} className="profile-hero-stats" />

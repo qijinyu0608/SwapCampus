@@ -609,7 +609,7 @@ export function ProfilePage() {
                   <h1>{userPresentation.displayName}</h1>
                   <div className="profile-hero-badges">
                     <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
-                      {userPresentation.creditBadge.label}
+                      <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
                     </div>
                     <span>{userPresentation.verificationLabel}</span>
                   </div>

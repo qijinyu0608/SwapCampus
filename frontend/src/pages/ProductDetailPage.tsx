@@ -313,7 +313,9 @@ export function ProductDetailPage() {
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
               <strong>{detail.seller.displayName}</strong>
-              <span>{sellerIdentity}</span>
+              <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
+                <span className="ui-credit-badge-label">{sellerIdentity}</span>
+              </div>
             </div>
             <MetaList items={sellerStats} className="detail-seller-strip-meta" />
           </div>

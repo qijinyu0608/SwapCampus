@@ -529,7 +529,7 @@ export function HomePage() {
                           <div className="fish-home-user-copy">
                             <strong>{currentUser.displayName}</strong>
                             <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
-                              {userPresentation.creditBadge.label}
+                              <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
                             </div>
                           </div>
                         </div>
