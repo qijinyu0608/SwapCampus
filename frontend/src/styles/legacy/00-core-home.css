@@ -152,11 +152,21 @@
   align-items: center;
 }
 
+.fish-home-search .fish-search-row {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.fish-home-search .fish-search-box {
+  min-height: 44px;
+}
+
 .fish-search-box {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 42px;
+  width: 100%;
   padding: 3px 6px 3px 12px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--paper) 92%, var(--primary-soft) 8%);
@@ -623,6 +633,8 @@
 .fish-home-user-guest-copy {
   display: grid;
   gap: 4px;
+  justify-items: center;
+  text-align: center;
 }
 
 .fish-home-user-guest-kicker {
@@ -687,58 +699,9 @@
   line-height: 1.35;
 }
 
-.fish-home-user-copy .fish-home-user-credit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.fish-home-user-copy .ui-credit-badge {
   justify-self: start;
-  width: fit-content;
-  min-width: 72px;
-  max-width: 116px;
-  min-height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 0;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
   align-self: start;
-  box-shadow: none;
-}
-
-.fish-home-user-credit-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: inherit;
-}
-
-.fish-home-user-credit.is-excellent {
-  background: #ffe8a3;
-  color: #7a4b00;
-}
-
-.fish-home-user-credit.is-great {
-  background: #dcecff;
-  color: #23558a;
-}
-
-.fish-home-user-credit.is-good {
-  background: #def4e7;
-  color: #27683f;
-}
-
-.fish-home-user-credit.is-stable {
-  background: #eef1f5;
-  color: #596170;
-}
-
-.fish-home-user-credit.is-low {
-  background: #ffe7e7;
-  color: #9a3d3d;
 }
 
 .fish-home-user-panel-head {
@@ -1735,11 +1698,20 @@
 }
 
 .fish-feed-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: 18px;
   line-height: 1;
   font-weight: 700;
   color: #8c5310;
+}
+
+.fish-feed-title-heart {
+  color: #8c5310;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .fish-feed-tabs {

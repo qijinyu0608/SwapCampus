@@ -3,6 +3,7 @@ import { AdminPage } from '../pages/AdminPage';
 import { CampusServiceDetailPage } from '../pages/CampusServiceDetailPage';
 import { CampusServicePublishPage } from '../pages/CampusServicePublishPage';
 import { CampusServicesPage } from '../pages/CampusServicesPage';
+import { CreditBadgePreviewPage } from '../pages/CreditBadgePreviewPage';
 import { FavoritesPage } from '../pages/FavoritesPage';
 import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
@@ -27,6 +28,7 @@ export const appRoutes: AppRouteDefinition[] = [
   { path: '/campus-services', element: <RequireUser><CampusServicesPage /></RequireUser>, navigationLabel: '校园服务' },
   { path: '/campus-services/:id', element: <RequireUser><CampusServiceDetailPage /></RequireUser> },
   { path: '/campus-services/publish', element: <RequireUser><CampusServicePublishPage /></RequireUser> },
+  { path: '/credit-badges', element: <CreditBadgePreviewPage /> },
   { path: '/favorites', element: <FavoritesPage />, navigationLabel: '想要' },
   { path: '/products/:id', element: <ProductDetailPage /> },
   { path: '/users/:id', element: <PublicUserPage /> },

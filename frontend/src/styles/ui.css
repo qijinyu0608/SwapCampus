@@ -229,6 +229,52 @@
   color: var(--success-600);
 }
 
+.ui-credit-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-width: 72px;
+  max-width: 116px;
+  min-height: 24px;
+  padding: 0 11px;
+  border-radius: 6px;
+  border: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: none;
+  text-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.12);
+}
+
+.ui-credit-badge.is-excellent {
+  background: linear-gradient(180deg, #0d0f13 0%, #171b22 52%, #222834 100%);
+  color: #d9e1ec;
+}
+
+.ui-credit-badge.is-great {
+  background: linear-gradient(180deg, #111317 0%, #1a1d22 46%, #252a33 100%);
+  color: #efc76b;
+}
+
+.ui-credit-badge.is-good {
+  background: linear-gradient(180deg, #f6dc8e 0%, #e4bc55 48%, #c9962e 100%);
+  color: #4e3305;
+}
+
+.ui-credit-badge.is-stable {
+  background: linear-gradient(180deg, #f5f7fa 0%, #e1e6ec 52%, #ccd3dc 100%);
+  color: #525c69;
+}
+
+.ui-credit-badge.is-low {
+  background: linear-gradient(180deg, #e0ae81 0%, #c48653 50%, #a96536 100%);
+  color: #fff6ee;
+}
+
 .ui-info-list {
   display: grid;
   gap: 8px;

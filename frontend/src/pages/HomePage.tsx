@@ -340,7 +340,7 @@ export function HomePage() {
   return (
     <div className="fish-home">
       {canUseSearch ? (
-        <section className="fish-search-shell">
+        <section className="fish-search-shell fish-home-search">
           <div className="fish-search-row">
             <div className="fish-search-box">
               <Input
@@ -528,9 +528,9 @@ export function HomePage() {
                           </span>
                           <div className="fish-home-user-copy">
                             <strong>{currentUser.displayName}</strong>
-                            <span className={`fish-home-user-credit is-${userPresentation.creditBadge.tone}`}>
-                              <span className="fish-home-user-credit-label">{userPresentation.creditBadge.label}</span>
-                            </span>
+                            <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
+                              {userPresentation.creditBadge.label}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -614,7 +614,11 @@ export function HomePage() {
       <section className="fish-feed-shell fish-feed-shell-home">
         <div className="fish-feed-header">
           <div className="fish-feed-header-badge">
-            <h2>猜你喜欢</h2>
+            <h2>
+              <span className="fish-feed-title-heart" aria-hidden="true">♥</span>
+              <span>猜你喜欢</span>
+              <span className="fish-feed-title-heart" aria-hidden="true">♥</span>
+            </h2>
           </div>
         </div>
 
