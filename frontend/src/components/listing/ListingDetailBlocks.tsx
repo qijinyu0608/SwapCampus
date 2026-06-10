@@ -7,6 +7,7 @@ type ListingStatusTone = 'default' | 'warning' | 'info' | 'success';
 type ListingHeroProps = {
   detail: ListingDetailBase;
   statusTone?: ListingStatusTone;
+  showStatus?: boolean;
   amountAside?: ReactNode;
   metrics?: ReactNode;
   titleAs?: 'h1' | 'h2';
@@ -41,6 +42,7 @@ type ListingTimelinePanelProps = {
 export function ListingDetailHero({
   detail,
   statusTone = 'default',
+  showStatus = true,
   amountAside,
   metrics,
   titleAs = 'h1',
@@ -52,9 +54,11 @@ export function ListingDetailHero({
   return (
     <div className={classes}>
       <div className="listing-detail-hero-head">
-        <StatusBadge tone={statusTone} className="listing-detail-status">
-          {detail.statusLabel}
-        </StatusBadge>
+        {showStatus ? (
+          <StatusBadge tone={statusTone} className="listing-detail-status">
+            {detail.statusLabel}
+          </StatusBadge>
+        ) : <span aria-hidden="true" />}
         <div className="listing-detail-amount">
           <strong>{detail.amountLabel}</strong>
           {amountAside ? <span>{amountAside}</span> : null}

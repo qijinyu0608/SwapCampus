@@ -9,6 +9,8 @@ export async function resolveOptionalAuthUser(
   prisma: PrismaService,
   request: SessionRequest & RequestWithAuthenticatedUser
 ): Promise<AuthenticatedUser | undefined> {
+  const headers = (request as { headers?: Record<string, string | string[] | undefined> }).headers ?? {};
+
   if (request.user) {
     return request.user;
   }
@@ -19,7 +21,7 @@ export async function resolveOptionalAuthUser(
     return {
       id: Number(accessTokenPayload.userId),
       supertokensUserId: String(session.getUserId()),
-      studentId: String(accessTokenPayload.studentId ?? ''),
+      studentId: typeof accessTokenPayload.studentId === 'string' ? accessTokenPayload.studentId : null,
       displayName: typeof accessTokenPayload.displayName === 'string' ? accessTokenPayload.displayName : undefined,
       email: String(accessTokenPayload.email ?? ''),
       role: (accessTokenPayload.role as UserRole) ?? UserRole.USER,
@@ -27,6 +29,6 @@ export async function resolveOptionalAuthUser(
     };
   }
 
-  const fallbackUser = await resolveDevFallbackUser(prisma, request.headers[DEV_AUTH_HEADER]);
+  const fallbackUser = await resolveDevFallbackUser(prisma, headers[DEV_AUTH_HEADER]);
   return fallbackUser ?? undefined;
 }

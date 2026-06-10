@@ -10,6 +10,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { MessagesPage } from '../pages/MessagesPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductPublishPage } from '../pages/ProductPublishPage';
+import { ProductPublishRulesPage } from '../pages/ProductPublishRulesPage';
 import { ProfileDetailPage } from '../pages/ProfileDetailPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { PublicUserPage } from '../pages/PublicUserPage';
@@ -33,6 +34,7 @@ export const appRoutes: AppRouteDefinition[] = [
   { path: '/products/:id', element: <ProductDetailPage /> },
   { path: '/users/:id', element: <PublicUserPage /> },
   { path: '/publish', element: <RequireUser><ProductPublishPage /></RequireUser> },
+  { path: '/publish/rules', element: <RequireUser><ProductPublishRulesPage /></RequireUser> },
   { path: '/messages', element: <RequireUser><MessagesPage /></RequireUser>, navigationLabel: '消息' },
   { path: '/profile', element: <RequireUser><ProfilePage /></RequireUser>, navigationLabel: '我的' },
   { path: '/profile/detail', element: <RequireUser><ProfileDetailPage /></RequireUser> },

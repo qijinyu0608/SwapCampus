@@ -4,4 +4,5 @@ export class UpdateProfileDto {
   realName?: string;
   college?: string;
   phone?: string;
+  avatarUrl?: string;
 }

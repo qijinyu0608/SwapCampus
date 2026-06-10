@@ -3,6 +3,7 @@ import { Button, Empty, Skeleton, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { KeyValueGrid } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import { getRoleLabel, hasTradingAccess, isGuestUser } from '../services/session';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
@@ -44,18 +45,12 @@ export function ProfileDetailPage() {
   }
 
   const profileInfoItems = [
-    { key: 'student-id', label: '学号', value: profile.studentId },
+    { key: 'student-id', label: '学号', value: profile.studentId || '未填写' },
     { key: 'real-name', label: '真实姓名', value: profile.realName },
     { key: 'college', label: '学院', value: profile.college },
     { key: 'phone', label: '手机号', value: profile.phone },
     { key: 'identity-status', label: '实名状态', value: presentation.verificationLabel },
     { key: 'credit-level', label: '信用标签', value: presentation.creditBadge.label }
-  ];
-  const trustMetricItems = [
-    { key: 'completed-orders', label: '已完成交易', value: trustSummary?.completedOrders ?? 0 },
-    { key: 'active-orders', label: '进行中订单', value: trustSummary?.activeOrders ?? 0 },
-    { key: 'waiting-reviews', label: '待评价', value: trustSummary?.waitingReviews ?? 0 },
-    { key: 'response-rate', label: '消息回复率', value: `${trustSummary?.responseRate ?? '--'}%` }
   ];
 
   return (
@@ -68,7 +63,12 @@ export function ProfileDetailPage() {
 
         <div className="profile-detail-hero">
           <div className="profile-avatar-badge">
-            <span>{presentation.initial}</span>
+            <UserAvatar
+              src={presentation.avatarUrl}
+              alt={`${presentation.displayName}的头像`}
+              fallbackLabel={presentation.initial}
+              className="profile-avatar-image"
+            />
           </div>
           <div>
             <h1>{presentation.displayName}</h1>
@@ -82,7 +82,6 @@ export function ProfileDetailPage() {
         </div>
 
         <KeyValueGrid items={profileInfoItems} className="profile-detail-grid" />
-        <KeyValueGrid items={trustMetricItems} columns={4} className="profile-detail-metrics" />
       </section>
     </div>
   );

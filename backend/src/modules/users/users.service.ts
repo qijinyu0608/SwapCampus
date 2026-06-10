@@ -56,6 +56,44 @@ function normalizePagination(page?: number, pageSize?: number) {
   };
 }
 
+function normalizeTags(tags: Prisma.JsonValue | null) {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+
+  return tags
+    .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+    .filter(Boolean);
+}
+
+type UserHistoryListParams = {
+  page?: number;
+  pageSize?: number;
+  currentUser?: AuthenticatedUser;
+};
+
+type UserFollowingListParams = {
+  page?: number;
+  pageSize?: number;
+  currentUser?: AuthenticatedUser;
+};
+
+type FollowUserSummary = {
+  id: number;
+  displayName: string;
+  studentId: string | null;
+  email: string;
+  avatarUrl: string | null;
+  creditScore: number;
+  verificationStatus: VerificationStatus;
+  accountStatus: AccountStatus;
+  verification: {
+    college: string;
+  } | null;
+  activeProductCount: number;
+  followerCount: number;
+};
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -106,8 +144,9 @@ export class UsersService {
   private mapProfile(user: {
     id: number;
     displayName: string;
-    studentId: string;
+    studentId: string | null;
     email: string;
+    avatarUrl: string | null;
     role: UserRole;
     creditScore: number;
     verificationStatus: VerificationStatus;
@@ -123,6 +162,7 @@ export class UsersService {
       displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -130,6 +170,106 @@ export class UsersService {
       realName: user.verification?.realName ?? user.displayName,
       college: user.verification?.college ?? '待填写',
       phone: user.verification?.phone ?? '待填写'
+    };
+  }
+
+  private async buildProductCards(
+    products: Array<{
+      id: number;
+      sellerId: number;
+      title: string;
+      category: string;
+      price: Prisma.Decimal | number;
+      condition: string;
+      tags: Prisma.JsonValue | null;
+      status: ProductStatus;
+      description: string;
+    }>,
+    currentUserId?: number
+  ) {
+    if (!products.length) {
+      return [];
+    }
+
+    const sellerIds = [...new Set(products.map((product) => product.sellerId))];
+    const productIds = products.map((product) => product.id);
+
+    const [sellers, images, favoriteCounts, favoritedProducts] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: sellerIds } },
+        select: { id: true, displayName: true, creditScore: true, verificationStatus: true }
+      }),
+      this.prisma.productImage.findMany({
+        where: { productId: { in: productIds } },
+        orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }],
+        select: { productId: true, imageUrl: true }
+      }),
+      this.prisma.favorite.groupBy({
+        by: ['productId'],
+        where: { productId: { in: productIds } },
+        _count: { _all: true }
+      }),
+      currentUserId
+        ? this.prisma.favorite.findMany({
+            where: {
+              userId: currentUserId,
+              productId: { in: productIds }
+            },
+            select: { productId: true, createdAt: true }
+          })
+        : Promise.resolve([])
+    ]);
+
+    const sellerMap = new Map(sellers.map((seller) => [seller.id, seller]));
+    const favoriteCountMap = new Map(favoriteCounts.map((item) => [item.productId, item._count._all]));
+    const favoritedMap = new Map(favoritedProducts.map((item) => [item.productId, item.createdAt]));
+    const imageMap = new Map<number, string>();
+
+    images.forEach((image) => {
+      if (!imageMap.has(image.productId)) {
+        imageMap.set(image.productId, image.imageUrl);
+      }
+    });
+
+    return products.map((product) => {
+      const seller = sellerMap.get(product.sellerId);
+      const favoritedAt = favoritedMap.get(product.id);
+
+      return {
+        id: product.id,
+        title: product.title,
+        category: product.category,
+        price: Number(product.price),
+        condition: product.condition,
+        tags: normalizeTags(product.tags),
+        status: product.status,
+        description: product.description,
+        sellerId: product.sellerId,
+        sellerName: seller?.displayName ?? `用户#${product.sellerId}`,
+        sellerCreditScore: seller?.creditScore ?? 60,
+        sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED,
+        imageUrl: imageMap.get(product.id) ?? '/images/products/demo-square.png',
+        favoriteCount: favoriteCountMap.get(product.id) ?? 0,
+        isFavorited: Boolean(favoritedAt),
+        favoritedAt: favoritedAt ?? null
+      };
+    });
+  }
+
+  private mapFollowUser(user: FollowUserSummary, followedAt?: Date) {
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      studentId: user.studentId,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      creditScore: user.creditScore,
+      verificationStatus: user.verificationStatus,
+      accountStatus: user.accountStatus,
+      college: user.verification?.college ?? '待填写',
+      activeProductCount: user.activeProductCount,
+      followerCount: user.followerCount,
+      followedAt: followedAt?.toISOString() ?? null
     };
   }
 
@@ -146,7 +286,7 @@ export class UsersService {
     return this.mapProfile(user);
   }
 
-  async getTrustSummary(userId: number) {
+  async getTrustSummary(userId: number, currentUser?: AuthenticatedUser) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { verification: true }
@@ -156,7 +296,7 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    const [allOrders, reviews, reports, sentMessages] = await Promise.all([
+    const [allOrders, reviews, reports, sentMessages, followerCount, isFollowing] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           OR: [{ buyerId: userId }, { sellerId: userId }]
@@ -172,14 +312,28 @@ export class UsersService {
       }),
       this.prisma.message.count({
         where: { senderId: userId }
-      })
+      }),
+      this.prisma.userFollow.count({
+        where: { followingId: userId }
+      }),
+      currentUser
+        ? this.prisma.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: currentUser.id,
+                followingId: userId
+              }
+            },
+            select: { id: true }
+          })
+        : Promise.resolve(null)
     ]);
 
-    const completedOrders = allOrders.filter((order) => order.status === OrderStatus.COMPLETED).length;
-    const activeOrders = allOrders.filter((order) => order.status === OrderStatus.IN_PROGRESS || order.status === OrderStatus.PENDING).length;
-    const waitingReviews = allOrders.filter((order) => order.status === OrderStatus.WAITING_REVIEW).length;
+    const completedOrders = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.COMPLETED).length;
+    const activeOrders = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.IN_PROGRESS || order.status === OrderStatus.PENDING).length;
+    const waitingReviews = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.WAITING_REVIEW).length;
     const averageRating = reviews.length
-      ? Number((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1))
+      ? Number((reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length).toFixed(1))
       : 4.8;
     const responseRate = Math.min(99, user.verificationStatus === VerificationStatus.APPROVED ? 88 + Math.min(10, Math.floor(sentMessages / 4)) : 72 + Math.min(12, Math.floor(sentMessages / 5)));
 
@@ -188,6 +342,7 @@ export class UsersService {
       displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       creditScore: user.creditScore,
       creditLevel: getCreditLevel(user.creditScore),
       verificationStatus: user.verificationStatus,
@@ -197,8 +352,225 @@ export class UsersService {
       activeOrders,
       waitingReviews,
       reportCount: reports,
+      followerCount,
+      isFollowing: Boolean(isFollowing),
       responseRate,
       averageRating
+    };
+  }
+
+  async listBrowsingHistory(params: UserHistoryListParams) {
+    const authUser = requireAuthenticatedUser(params.currentUser);
+    const { page, pageSize, skip } = normalizePagination(params.page, params.pageSize);
+
+    const behaviorRows = await this.prisma.userBehavior.findMany({
+      where: {
+        userId: authUser.id,
+        eventType: 'VIEW'
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      select: {
+        productId: true,
+        createdAt: true
+      }
+    });
+
+    const latestByProduct = new Map<number, Date>();
+    behaviorRows.forEach((item) => {
+      if (!latestByProduct.has(item.productId)) {
+        latestByProduct.set(item.productId, item.createdAt);
+      }
+    });
+
+    const allProductIds = [...latestByProduct.keys()];
+    const total = allProductIds.length;
+    const pagedProductIds = allProductIds.slice(skip, skip + pageSize);
+
+    const products = pagedProductIds.length
+      ? await this.prisma.product.findMany({
+          where: { id: { in: pagedProductIds } }
+        })
+      : [];
+
+    const cards = await this.buildProductCards(products, authUser.id);
+    const cardMap = new Map(cards.map((item) => [item.id, item]));
+    const items = pagedProductIds
+      .map((productId) => {
+        const product = cardMap.get(productId);
+        if (!product) {
+          return null;
+        }
+
+        return {
+          ...product,
+          viewedAt: latestByProduct.get(productId)?.toISOString() ?? null
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize))
+      }
+    };
+  }
+
+  async listFollowingUsers(params: UserFollowingListParams) {
+    const authUser = requireAuthenticatedUser(params.currentUser);
+    const { page, pageSize, skip } = normalizePagination(params.page, params.pageSize);
+
+    const [total, follows] = await Promise.all([
+      this.prisma.userFollow.count({
+        where: { followerId: authUser.id }
+      }),
+      this.prisma.userFollow.findMany({
+        where: { followerId: authUser.id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include: {
+          following: {
+            include: {
+              verification: {
+                select: { college: true }
+              }
+            }
+          }
+        }
+      })
+    ]);
+
+    const followingIds = follows.map((item) => item.followingId);
+    const [productCounts, followerCounts] = followingIds.length
+      ? await Promise.all([
+          this.prisma.product.groupBy({
+            by: ['sellerId'],
+            where: {
+              sellerId: { in: followingIds },
+              status: ProductStatus.ON_SALE
+            },
+            _count: { _all: true }
+          }),
+          this.prisma.userFollow.groupBy({
+            by: ['followingId'],
+            where: {
+              followingId: { in: followingIds }
+            },
+            _count: { _all: true }
+          })
+        ])
+      : [[], []];
+
+    const productCountMap = new Map(productCounts.map((item) => [item.sellerId, item._count._all]));
+    const followerCountMap = new Map(followerCounts.map((item) => [item.followingId, item._count._all]));
+
+    return {
+      items: follows.map((item) => this.mapFollowUser({
+        id: item.following.id,
+        displayName: item.following.displayName,
+        studentId: item.following.studentId,
+        email: item.following.email,
+        avatarUrl: item.following.avatarUrl,
+        creditScore: item.following.creditScore,
+        verificationStatus: item.following.verificationStatus,
+        accountStatus: item.following.accountStatus,
+        verification: item.following.verification,
+        activeProductCount: productCountMap.get(item.followingId) ?? 0,
+        followerCount: followerCountMap.get(item.followingId) ?? 0
+      }, item.createdAt)),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize))
+      }
+    };
+  }
+
+  async followUser(targetUserId: number, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    if (authUser.id === targetUserId) {
+      throw new BadRequestException('不能关注自己');
+    }
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        displayName: true,
+        studentId: true,
+        email: true,
+        avatarUrl: true,
+        creditScore: true,
+        verificationStatus: true,
+        accountStatus: true,
+        verification: {
+          select: { college: true }
+        }
+      }
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('用户不存在');
+    }
+
+    const follow = await this.prisma.userFollow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId: authUser.id,
+          followingId: targetUserId
+        }
+      },
+      update: {},
+      create: {
+        followerId: authUser.id,
+        followingId: targetUserId
+      }
+    });
+
+    const followerCount = await this.prisma.userFollow.count({
+      where: { followingId: targetUserId }
+    });
+    const activeProductCount = await this.prisma.product.count({
+      where: {
+        sellerId: targetUserId,
+        status: ProductStatus.ON_SALE
+      }
+    });
+
+    return {
+      isFollowing: true,
+      followedAt: follow.createdAt.toISOString(),
+      followerCount,
+      user: this.mapFollowUser({
+        ...targetUser,
+        activeProductCount,
+        followerCount
+      }, follow.createdAt)
+    };
+  }
+
+  async unfollowUser(targetUserId: number, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+
+    await this.prisma.userFollow.deleteMany({
+      where: {
+        followerId: authUser.id,
+        followingId: targetUserId
+      }
+    });
+
+    const followerCount = await this.prisma.userFollow.count({
+      where: { followingId: targetUserId }
+    });
+
+    return {
+      isFollowing: false,
+      followerCount
     };
   }
 
@@ -222,6 +594,7 @@ export class UsersService {
     const nextRealName = payload.realName?.trim();
     const nextCollege = payload.college?.trim();
     const nextPhone = payload.phone?.trim();
+    const nextAvatarUrl = payload.avatarUrl?.trim();
 
     if (payload.displayName !== undefined && !nextDisplayName) {
       throw new BadRequestException('展示名不能为空');
@@ -232,7 +605,7 @@ export class UsersService {
         throw new BadRequestException('邮箱不能为空');
       }
 
-      if (!nextEmail.includes('@')) {
+      if (nextEmail !== user.email && !nextEmail.includes('@')) {
         throw new BadRequestException('请输入正确的邮箱地址');
       }
     }
@@ -256,6 +629,7 @@ export class UsersService {
         data: {
           displayName: nextDisplayName ?? undefined,
           email: nextEmail ?? undefined,
+          avatarUrl: payload.avatarUrl !== undefined ? (nextAvatarUrl || null) : undefined,
           verification: {
             upsert: {
               update: {
@@ -529,6 +903,7 @@ export class UsersService {
         displayName: user.displayName,
         email: user.email,
         studentId: user.studentId,
+        avatarUrl: user.avatarUrl,
         creditScore: user.creditScore,
         verificationStatus: user.verificationStatus,
         accountStatus: user.accountStatus,

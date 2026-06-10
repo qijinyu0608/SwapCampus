@@ -16,6 +16,8 @@ import { FavoritesService } from './modules/favorites/favorites.service';
 import { MessagesController } from './modules/messages/messages.controller';
 import { MessagesGateway } from './modules/messages/messages.gateway';
 import { MessagesService } from './modules/messages/messages.service';
+import { MediaController } from './modules/media/media.controller';
+import { MediaService } from './modules/media/media.service';
 import { OrdersController } from './modules/orders/orders.controller';
 import { OrdersService } from './modules/orders/orders.service';
 import { ProductsController } from './modules/products/products.controller';
@@ -35,6 +37,7 @@ import { PrismaService } from './prisma/prisma.service';
     AuthController,
     CampusServicesController,
     FavoritesController,
+    MediaController,
     MessagesController,
     ProductsController,
     OrdersController,
@@ -50,6 +53,7 @@ import { PrismaService } from './prisma/prisma.service';
     SuperTokensService,
     CampusServicesService,
     FavoritesService,
+    MediaService,
     MessagesGateway,
     MessagesService,
     ProductsService,

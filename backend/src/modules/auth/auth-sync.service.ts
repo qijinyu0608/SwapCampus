@@ -1,5 +1,7 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { AccountStatus, Prisma, UserRole, VerificationStatus } from '@prisma/client';
+import { convertToRecipeUserId, listUsersByAccountInfo } from 'supertokens-node';
+import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import UserRoles from 'supertokens-node/recipe/userroles';
 import { PrismaService } from '../../prisma/prisma.service';
 import { APP_ROLES, DEFAULT_TENANT_ID } from './auth.constants';
@@ -11,13 +13,56 @@ type AuthProfileInput = {
   displayName: string;
   studentId?: string | null;
   college?: string | null;
+  avatarUrl?: string | null;
   role?: UserRole;
   verificationStatus?: VerificationStatus;
   accountStatus?: AccountStatus;
 };
 
+type DevAccountSeed = {
+  email: string;
+  password: string;
+  displayName: string;
+  studentId: string;
+  college: string;
+  role: UserRole;
+  creditScore: number;
+  verificationStatus: VerificationStatus;
+  accountStatus: AccountStatus;
+};
+
+const DEV_ACCOUNTS: DevAccountSeed[] = [
+  {
+    email: 'admin@swapcampus.local',
+    password: 'admin',
+    displayName: 'ADMIN',
+    studentId: 'admin',
+    college: '信息学院',
+    role: UserRole.ADMIN,
+    creditScore: 100,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user@swapcampus.local',
+    password: 'user',
+    displayName: 'USER',
+    studentId: 'user',
+    college: '信息学院',
+    role: UserRole.USER,
+    creditScore: 60,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  }
+];
+
 function normalizeStudentId(studentId?: string | null) {
   const next = studentId?.trim();
+  return next || null;
+}
+
+function normalizeAvatarUrl(avatarUrl?: string | null) {
+  const next = avatarUrl?.trim();
   return next || null;
 }
 
@@ -44,11 +89,6 @@ export class AuthSyncService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService
   ) {}
-
-  private buildGeneratedStudentId(sourceId: string) {
-    const digits = sourceId.replace(/\D/g, '');
-    return `2026${digits.slice(-6).padStart(6, '0')}`;
-  }
 
   private toRoleName(role: UserRole) {
     return role === UserRole.ADMIN ? APP_ROLES.ADMIN : APP_ROLES.USER;
@@ -83,14 +123,130 @@ export class AuthSyncService {
     }
   }
 
+  private async ensureSuperTokensUser(email: string, password: string, existingSuperTokensUserId?: string | null) {
+    let supertokensUserId = existingSuperTokensUserId?.trim() || null;
+
+    if (supertokensUserId) {
+      const result = await EmailPassword.updateEmailOrPassword({
+        recipeUserId: convertToRecipeUserId(supertokensUserId),
+        email,
+        password,
+        userContext: {}
+      });
+
+      if (result.status !== 'UNKNOWN_USER_ID_ERROR') {
+        return supertokensUserId;
+      }
+
+      supertokensUserId = null;
+    }
+
+    const signUpResult = await EmailPassword.signUp(DEFAULT_TENANT_ID, email, password);
+    if (signUpResult.status === 'OK') {
+      return signUpResult.user.id;
+    }
+
+    if (signUpResult.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
+      const matchedUsers = await listUsersByAccountInfo(DEFAULT_TENANT_ID, { email });
+      const matchedUserId = matchedUsers[0]?.id;
+      if (!matchedUserId) {
+        throw new ConflictException(`认证账号 ${email} 已存在但无法关联`);
+      }
+
+      await EmailPassword.updateEmailOrPassword({
+        recipeUserId: convertToRecipeUserId(matchedUserId),
+        email,
+        password,
+        userContext: {}
+      });
+      return matchedUserId;
+    }
+
+    throw new ConflictException(`认证账号 ${email} 初始化失败`);
+  }
+
+  async ensureDevAccounts() {
+    for (const account of DEV_ACCOUNTS) {
+      const existing = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: account.email },
+            { studentId: account.studentId }
+          ]
+        },
+        select: {
+          id: true,
+          supertokensUserId: true
+        }
+      });
+
+      const supertokensUserId = await this.ensureSuperTokensUser(
+        account.email,
+        account.password,
+        existing?.supertokensUserId
+      );
+
+      const user = existing
+        ? await this.prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            supertokensUserId,
+            studentId: account.studentId,
+            displayName: account.displayName,
+            email: account.email,
+            role: account.role,
+            creditScore: account.creditScore,
+            verificationStatus: account.verificationStatus,
+            accountStatus: account.accountStatus,
+            verification: {
+              upsert: {
+                update: {
+                  realName: account.displayName,
+                  college: account.college,
+                  phone: '待填写'
+                },
+                create: {
+                  realName: account.displayName,
+                  college: account.college,
+                  phone: '待填写'
+                }
+              }
+            }
+          }
+        })
+        : await this.prisma.user.create({
+          data: {
+            supertokensUserId,
+            studentId: account.studentId,
+            displayName: account.displayName,
+            email: account.email,
+            role: account.role,
+            creditScore: account.creditScore,
+            verificationStatus: account.verificationStatus,
+            accountStatus: account.accountStatus,
+            verification: {
+              create: {
+                realName: account.displayName,
+                college: account.college,
+                phone: '待填写'
+              }
+            }
+          }
+        });
+
+      await this.syncUserRole(supertokensUserId, user.role);
+    }
+  }
+
   async syncUserProfile(input: AuthProfileInput) {
     const email = input.email.trim().toLowerCase();
     const displayName = normalizeDisplayName(input.displayName);
     const role = input.role ?? UserRole.USER;
     const verificationStatus = input.verificationStatus ?? VerificationStatus.PENDING;
     const accountStatus = input.accountStatus ?? AccountStatus.ACTIVE;
-    const studentId = normalizeStudentId(input.studentId) ?? this.buildGeneratedStudentId(input.supertokensUserId);
+    const studentId = normalizeStudentId(input.studentId);
     const college = normalizeCollege(input.college);
+    const avatarUrl = normalizeAvatarUrl(input.avatarUrl);
 
     try {
       const user = await this.prisma.user.upsert({
@@ -99,6 +255,7 @@ export class AuthSyncService {
           email,
           displayName,
           studentId,
+          avatarUrl,
           role,
           verificationStatus,
           accountStatus,
@@ -121,6 +278,7 @@ export class AuthSyncService {
           email,
           displayName,
           studentId,
+          avatarUrl,
           role,
           creditScore: 60,
           verificationStatus,

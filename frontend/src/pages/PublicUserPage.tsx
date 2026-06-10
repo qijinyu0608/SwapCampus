@@ -1,18 +1,23 @@
-import { Skeleton } from 'antd';
+import { Button, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
 import { PageHeader, SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { SectionCard } from '../components/ui';
 import {
   fetchProducts,
+  followUser,
+  unfollowUser,
   fetchUserTrustSummary,
   getApiErrorMessage,
   ProductSummary,
   UserTrustSummary
 } from '../services/api';
+import { useAuthState } from '../services/auth-state';
+import { hasTradingAccess } from '../services/session';
 import { getProductImage } from '../utils/productCover';
 import {
   getUserPresentation
@@ -21,11 +26,14 @@ import {
 export function PublicUserPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuthState();
   const userId = Number(id);
   const [user, setUser] = useState<UserTrustSummary | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [following, setFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     async function loadUserHome() {
@@ -42,6 +50,7 @@ export function PublicUserPage() {
           fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 })
         ]);
         setUser(summary);
+        setFollowing(summary.isFollowing);
         setProducts(productList.items);
         setError('');
       } catch (err) {
@@ -53,6 +62,10 @@ export function PublicUserPage() {
 
     void loadUserHome();
   }, [userId]);
+
+  useEffect(() => {
+    setFollowing(user?.isFollowing ?? false);
+  }, [user?.id, user?.isFollowing]);
 
   const publishedProducts = useMemo(
     () => products.filter((item) => item.sellerId === userId && item.status === 'ON_SALE'),
@@ -82,18 +95,65 @@ export function PublicUserPage() {
     `评分 ${user.averageRating.toFixed(1)}`
   ];
   const userPresentation = getUserPresentation(user);
+  const currentUserId = currentUser?.id ?? null;
+  const targetUserId = user.id;
+  const canFollow = hasTradingAccess(currentUser) && currentUserId !== targetUserId;
+
+  async function handleToggleFollow() {
+    if (!canFollow) {
+      if (!currentUser) {
+        void navigate('/login', { state: { from: `/users/${targetUserId}` } });
+      }
+      return;
+    }
+
+    setFollowLoading(true);
+    try {
+      if (following) {
+        await unfollowUser(targetUserId);
+        setFollowing(false);
+        message.success('已取消关注');
+      } else {
+        await followUser(targetUserId);
+        setFollowing(true);
+        message.success('已关注');
+      }
+    } catch (err) {
+      message.error(getApiErrorMessage(err, following ? '取消关注失败' : '关注失败'));
+    } finally {
+      setFollowLoading(false);
+    }
+  }
 
   return (
     <div className="page-grid public-user-page">
       <PageHeader
         title={user.displayName}
         subtitle="公开校园主页"
-        meta={<span>{`${publishedProducts.length} 件在售闲置`}</span>}
+        meta={(
+          <div className="public-user-page-meta">
+            <span>{`${publishedProducts.length} 件在售闲置`}</span>
+            <Button
+              type={following ? 'default' : 'primary'}
+              size="small"
+              onClick={() => void handleToggleFollow()}
+              loading={followLoading}
+              disabled={!canFollow && Boolean(currentUser)}
+            >
+              {following ? '已关注' : '关注'}
+            </Button>
+          </div>
+        )}
       />
       <section className="profile-hero-card public-user-hero">
         <div className="profile-hero-copy">
           <div className="profile-avatar-badge">
-            <span>{userPresentation.initial}</span>
+            <UserAvatar
+              src={userPresentation.avatarUrl}
+              alt={`${userPresentation.displayName}的头像`}
+              fallbackLabel={userPresentation.initial}
+              className="profile-avatar-image"
+            />
           </div>
           <div className="profile-hero-meta">
             <div className="profile-hero-title-row">

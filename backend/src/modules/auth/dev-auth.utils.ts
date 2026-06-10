@@ -19,14 +19,16 @@ export async function resolveDevFallbackUser(
           studentId: true;
           displayName: true;
           email: true;
+          avatarUrl: true;
           role: true;
           accountStatus: true;
         };
       }) => Promise<{
         id: number;
-        studentId: string;
+        studentId: string | null;
         displayName: string;
         email: string;
+        avatarUrl: string | null;
         role: UserRole;
         accountStatus: 'ACTIVE' | 'BANNED';
       } | null>;
@@ -51,6 +53,7 @@ export async function resolveDevFallbackUser(
       studentId: true,
       displayName: true,
       email: true,
+      avatarUrl: true,
       role: true,
       accountStatus: true
     }
@@ -65,6 +68,7 @@ export async function resolveDevFallbackUser(
     studentId: user.studentId,
     displayName: user.displayName,
     email: user.email,
+    avatarUrl: user.avatarUrl,
     role: user.role,
     authSource: 'dev-fallback'
   };

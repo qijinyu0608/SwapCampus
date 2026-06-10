@@ -77,7 +77,7 @@ async function main() {
   for (const user of users) {
     const displayName = user.displayName.trim() || `用户${user.id}`;
     const email = user.email.trim().toLowerCase();
-    const studentId = user.studentId.trim();
+    const studentId = user.studentId?.trim() || null;
     const verificationStatus = VERIFICATION_STATUS_VALUES.includes(user.verificationStatus as (typeof VERIFICATION_STATUS_VALUES)[number])
       ? user.verificationStatus
       : VerificationStatus.PENDING;

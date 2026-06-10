@@ -1,15 +1,17 @@
 import {
   AppstoreOutlined,
+  EditOutlined,
   EyeOutlined,
   HeartOutlined,
   ShopOutlined,
   ShoppingOutlined,
   StarOutlined
 } from '@ant-design/icons';
-import { Empty, Skeleton, Tag } from 'antd';
+import { Button, Empty, Form, Input, Skeleton, Tag, message } from 'antd';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
+import { ImageCropUploadModal } from '../components/image-upload';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import {
@@ -19,19 +21,27 @@ import {
   fetchBrowsingHistory,
   fetchOrders,
   fetchProducts,
+  fetchUserProfile,
+  fetchUserTrustSummary,
+  getApiErrorMessage,
   type CampusServiceListItem,
   type FavoriteItem,
   type FollowingUser,
   type HistoryItem,
   type OrderItem,
-  type ProductSummary
+  type ProductSummary,
+  uploadImageAsset,
+  updateUserProfile,
+  type UserProfile,
+  type UserTrustSummary
 } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 import { hasTradingAccess, isGuestUser } from '../services/session';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { getProductImage } from '../utils/productCover';
 import { getUserPresentation } from '../utils/userPresentation';
 
-type ProfileSection = 'items' | 'orders-buying' | 'orders-selling' | 'favorites' | 'history' | 'following';
+type ProfileSection = 'items' | 'orders-buying' | 'orders-selling' | 'favorites' | 'history' | 'following' | 'profile';
 type PublishedScope = 'products' | 'campus-services';
 
 type SidebarItem = {
@@ -70,7 +80,7 @@ function getOrderStatusColor(status: string) {
 export function ProfilePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser } = useAuthState();
+  const { currentUser, refreshCurrentUser } = useAuthState();
   const routeState = location.state as RouteState | null;
   const [activeSection, setActiveSection] = useState<ProfileSection>(() => {
     if (routeState?.section === 'favorites') {
@@ -81,6 +91,9 @@ export function ProfilePage() {
     }
     if (routeState?.section === 'following') {
       return 'following';
+    }
+    if (routeState?.section === 'profile') {
+      return 'profile';
     }
     if (routeState?.section === 'orders') {
       return routeState.orderScope === 'selling' ? 'orders-selling' : 'orders-buying';
@@ -100,6 +113,19 @@ export function ProfilePage() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingFollowing, setLoadingFollowing] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [trustSummary, setTrustSummary] = useState<UserTrustSummary | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null>(null);
+  const [form] = Form.useForm<UserProfile & { phone: string; realName: string }>();
+
+  useEffect(() => () => {
+    if (pendingAvatarUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(pendingAvatarUrl);
+    }
+  }, [pendingAvatarUrl]);
 
   useEffect(() => {
     if (!hasTradingAccess(currentUser) || !currentUser) {
@@ -115,6 +141,9 @@ export function ProfilePage() {
       setLoadingHistory(false);
       setLoadingFollowing(false);
       setLoadingOrders(false);
+      setLoadingProfile(false);
+      setProfile(null);
+      setTrustSummary(null);
       return;
     }
 
@@ -229,13 +258,44 @@ export function ProfilePage() {
         }
       });
 
+    Promise.all([
+      fetchUserProfile(currentUser.id),
+      fetchUserTrustSummary(currentUser.id)
+    ])
+      .then(([profileResult, trustResult]) => {
+        if (!cancelled) {
+          setProfile(profileResult);
+          setTrustSummary(trustResult);
+          setPendingAvatarUrl(null);
+          form.setFieldsValue({
+            displayName: profileResult.displayName,
+            email: profileResult.email,
+            realName: profileResult.realName,
+            college: profileResult.college,
+            phone: profileResult.phone,
+            avatarUrl: profileResult.avatarUrl ?? ''
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProfile(null);
+          setTrustSummary(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingProfile(false);
+        }
+      });
+
     return () => {
       cancelled = true;
     };
-  }, [currentUser]);
+  }, [currentUser, form]);
 
   const guestMode = isGuestUser(currentUser);
-  const userPresentation = getUserPresentation(currentUser);
+  const userPresentation = getUserPresentation(trustSummary ?? profile ?? currentUser);
 
   const publishedProducts = useMemo(
     () => currentUser
@@ -265,7 +325,8 @@ export function ProfilePage() {
     { key: 'orders-selling', icon: <ShopOutlined />, label: '我卖出的', count: sellingOrders.length },
     { key: 'favorites', icon: <StarOutlined />, label: '我的收藏', count: favoriteItems.length },
     { key: 'history', icon: <EyeOutlined />, label: '历史浏览', count: historyItems.length },
-    { key: 'following', icon: <HeartOutlined />, label: '我的关注', count: followingUsers.length }
+    { key: 'following', icon: <HeartOutlined />, label: '我的关注', count: followingUsers.length },
+    { key: 'profile', icon: <EditOutlined />, label: '资料编辑' }
   ];
 
   function renderPublishedScope() {
@@ -358,6 +419,11 @@ export function ProfilePage() {
       return;
     }
 
+    if (routeState?.section === 'profile') {
+      setActiveSection('profile');
+      return;
+    }
+
     if (routeState?.section === 'orders') {
       setActiveSection(routeState.orderScope === 'selling' ? 'orders-selling' : 'orders-buying');
       return;
@@ -405,6 +471,123 @@ export function ProfilePage() {
         <SectionHeader title={title} className="is-prominent is-spacious" />
         <div className={contentClasses}>{content}</div>
       </section>
+    );
+  }
+
+  async function handleProfileSubmit(values: {
+    displayName: string;
+    email: string;
+    realName: string;
+    college: string;
+    phone: string;
+    avatarUrl?: string;
+  }) {
+    if (!currentUser) {
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      const result = await updateUserProfile(currentUser.id, values);
+      const trustResult = await fetchUserTrustSummary(currentUser.id);
+      if (pendingAvatarUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(pendingAvatarUrl);
+      }
+      setProfile(result);
+      setTrustSummary(trustResult);
+      setPendingAvatarUrl(null);
+      form.setFieldsValue({
+        ...values,
+        avatarUrl: result.avatarUrl ?? ''
+      });
+      message.success('资料已更新');
+      await refreshCurrentUser();
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '资料更新失败'));
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function handleAvatarConfirm(file: File, previewUrl: string) {
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      const uploaded = await uploadImageAsset(file, 'avatar');
+      if (pendingAvatarUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(pendingAvatarUrl);
+      }
+      setPendingAvatarUrl(previewUrl);
+      form.setFieldValue('avatarUrl', uploaded.url);
+      setAvatarModalOpen(false);
+      message.success('头像已上传，保存资料后生效');
+    } catch (error) {
+      URL.revokeObjectURL(previewUrl);
+      message.error(getApiErrorMessage(error, '头像上传失败'));
+    }
+  }
+
+  function renderProfileEditor() {
+    if (loadingProfile) {
+      return renderSectionPanel('资料编辑', <Skeleton active paragraph={{ rows: 8 }} />);
+    }
+
+    return renderSectionPanel(
+      '资料编辑',
+      <Form
+        form={form}
+        layout="vertical"
+        className="profile-edit-form"
+        onFinish={(values) => void handleProfileSubmit(values as {
+          displayName: string;
+          email: string;
+          realName: string;
+          college: string;
+          phone: string;
+          avatarUrl?: string;
+        })}
+      >
+        <div className="profile-section-head">
+          <div className="profile-avatar-upload-row">
+            <div className="profile-avatar-badge is-editable">
+              <UserAvatar
+                src={pendingAvatarUrl || form.getFieldValue('avatarUrl') || userPresentation.avatarUrl}
+                alt={`${userPresentation.displayName}的头像`}
+                fallbackLabel={userPresentation.initial}
+                className="profile-avatar-image"
+              />
+            </div>
+            <Button icon={<EditOutlined />} onClick={() => setAvatarModalOpen(true)}>上传头像</Button>
+          </div>
+        </div>
+        <Form.Item name="avatarUrl" hidden>
+          <Input />
+        </Form.Item>
+        <div className="profile-form-grid">
+          <Form.Item label="展示名" name="displayName" rules={[{ required: true, message: '请输入展示名' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入正确邮箱' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="真实姓名" name="realName" rules={[{ required: true, message: '请输入真实姓名' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="学院" name="college" rules={[{ required: true, message: '请输入学院' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="手机号" name="phone" rules={[{ required: true, message: '请输入手机号' }]}>
+            <Input />
+          </Form.Item>
+        </div>
+        <div className="profile-form-actions">
+          <Button type="primary" htmlType="submit" loading={profileSaving}>保存资料</Button>
+          <Button onClick={() => navigate('/profile/detail')}>查看资料详情</Button>
+        </div>
+      </Form>,
+      'profile-editor-panel'
     );
   }
 
@@ -564,7 +747,11 @@ export function ProfilePage() {
       );
     }
 
-    return renderFollowingList(followingUsers, loadingFollowing);
+    if (activeSection === 'following') {
+      return renderFollowingList(followingUsers, loadingFollowing);
+    }
+
+    return renderProfileEditor();
   }
 
   if (!hasTradingAccess(currentUser)) {
@@ -602,7 +789,12 @@ export function ProfilePage() {
           <section className="profile-hero-card">
             <div className="profile-hero-copy">
               <div className="profile-avatar-badge">
-                <img src="/images/default-avatar.png" alt="默认头像" />
+                <UserAvatar
+                  src={userPresentation.avatarUrl}
+                  alt={`${userPresentation.displayName}的头像`}
+                  fallbackLabel={userPresentation.initial}
+                  className="profile-avatar-image"
+                />
               </div>
               <div className="profile-hero-meta">
                 <div className="profile-hero-title-row">
@@ -611,7 +803,6 @@ export function ProfilePage() {
                     <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
                       <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
                     </div>
-                    <span>{userPresentation.verificationLabel}</span>
                   </div>
                 </div>
               </div>
@@ -621,6 +812,17 @@ export function ProfilePage() {
           {renderActiveSection()}
         </div>
       </div>
+
+      <ImageCropUploadModal
+        open={avatarModalOpen}
+        title="上传头像"
+        shape="round"
+        aspect={1}
+        outputWidth={512}
+        outputHeight={512}
+        onCancel={() => setAvatarModalOpen(false)}
+        onConfirm={handleAvatarConfirm}
+      />
     </div>
   );
 }

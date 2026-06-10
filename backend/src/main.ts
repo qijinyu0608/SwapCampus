@@ -38,7 +38,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
   const appInfo = getAppInfo();
   app.enableCors({
-    origin: buildCorsOrigins(appInfo.websiteDomain),
+    origin: process.env.NODE_ENV !== 'production' ? true : buildCorsOrigins(appInfo.websiteDomain),
     credentials: true,
     allowedHeaders: ['content-type', DEV_AUTH_HEADER, ...SuperTokens.getAllCORSHeaders()],
     exposedHeaders: [...SuperTokens.getAllCORSHeaders()]
@@ -47,6 +47,13 @@ async function bootstrap() {
     await app.get(AuthSyncService).ensureRoles();
   } catch (error) {
     console.warn('SuperTokens bootstrap skipped:', error);
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      await app.get(AuthSyncService).ensureDevAccounts();
+    } catch (error) {
+      console.warn('Dev account bootstrap skipped:', error);
+    }
   }
   await app.listen(process.env.PORT || 3000);
 }

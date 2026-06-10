@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -118,10 +118,6 @@ export class FavoritesService {
     sellerId: number;
     status: ProductStatus;
   }, userId: number) {
-    if (product.sellerId === userId) {
-      throw new ForbiddenException('不能收藏自己发布的商品');
-    }
-
     if (product.status !== ProductStatus.ON_SALE) {
       throw new BadRequestException('当前商品不可收藏');
     }

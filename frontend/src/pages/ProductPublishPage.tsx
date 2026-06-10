@@ -1,60 +1,204 @@
-import { Alert, Button, Form, Input, InputNumber, Select } from 'antd';
-import { useEffect, useState } from 'react';
-import { InfoList, TagList } from '../components/data-display';
-import { FoldSection } from '../components/disclosure';
-import { ActionRow, InlineMeta, PageCard } from '../components/layout';
-import { PRODUCT_CATEGORY_NAMES } from '../constants/productCategories';
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent
+} from '@dnd-kit/core';
+import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, message as antMessage } from 'antd';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
+import { ImageCropUploadModal } from '../components/image-upload';
+import { ActionRow, InlineMeta, SectionHeader } from '../components/layout';
+import {
+  defaultAllowedCategories,
+  defaultCommunityNotices,
+  defaultDormElectricalWhitelist,
+  defaultProhibitedKeywords,
+  defaultReviewFlow,
+  defaultRuleHighlights,
+  defaultTrustSignals,
+  PublishRulesDocument
+} from '../components/product';
+import { SectionCard } from '../components/ui';
 import { PRODUCT_CONDITION_VALUES } from '../constants/productConditions';
 import { useAuthState } from '../services/auth-state';
-import { createProduct, fetchPublishingRules, getApiErrorMessage, PublishingRules } from '../services/api';
+import { fetchPublishingRules, getApiErrorMessage, type PublishingRules } from '../services/api';
+import { createProductWithImages, uploadProductImageAsset } from '../services/product-publish';
 import { hasTradingAccess, isGuestUser } from '../services/session';
 
-const descriptionTemplates = [
-  {
-    key: 'student',
-    title: '学生自用版',
-    content: '之前自己用的，现在用不上了所以出了。东西没啥问题，正常使用，具体成色看图。可以校内面交，图书馆、学一食堂、学研中心A座附近都方便。诚心要的话可以小刀。'
-  },
-  {
-    key: 'graduate',
-    title: '毕业清仓版',
-    content: '毕业清东西所以出掉，自用闲置，功能正常。放着也用不到了，低价转给有需要的同学。成色看图，有正常使用痕迹，校内自提或面交都可以。'
-  },
-  {
-    key: 'dorm',
-    title: '搬宿舍版',
-    content: '搬宿舍清闲置，买来之后用过一段时间，现在不太需要了。东西正常，没有影响使用的问题，细节都在图里。13号公寓、学二食堂、东门附近都能面交，价格可以小刀。'
-  },
-  {
-    key: 'digital',
-    title: '数码验货版',
-    content: '学生自用，功能都正常，平时主要拿来上课、记笔记、看网课。外观有正常使用痕迹，具体看图，配件如图，有需要可以当面验货。校内面交优先。'
-  },
-  {
-    key: 'book',
-    title: '教材资料版',
-    content: '这学期用完了，现在用不上了。内容完整，可能会有少量笔记和划线，不影响继续使用，复习的时候反而能参考。校内面交方便，省得走邮寄。'
-  },
-  {
-    key: 'cheap',
-    title: '低价回血版',
-    content: '闲置回血，不是二道贩子。功能正常，成色如图，价格已经按二手价放低了。诚心要的话可以小刀，校内面交优先。'
-  }
-] as const;
+const PUBLISH_RULES_STORAGE_KEY = 'swapcampus:publish-rules-dismiss-until';
+const PUBLISH_RULES_SUPPRESS_DAYS = 7;
+const PUBLISH_RULES_WAIT_SECONDS = 8;
+const MAX_PRODUCT_IMAGES = 6;
 
-const defaultAllowedCategories = [...PRODUCT_CATEGORY_NAMES];
-const defaultDormElectricalWhitelist = ['电脑', '非充电台灯', '手机', '平板电脑', '20000mAh以下充电宝', '电动牙刷', '电动剃须刀', '相机'];
-const defaultCommunityNotices = [
-  '宿舍电器只允许白名单内物品发布，吹风机、电热饭盒、热水壶等会被系统直接驳回。',
-  '交易优先选择图书馆、食堂、公寓楼下等校内公共区域，建议当面验货后再确认。',
-  '商品标题和描述请写清成色、配件、容量或版本，避免同学误判。'
-];
-const defaultRuleHighlights = [
-  '禁售词命中直接驳回',
-  '白名单外宿舍电器禁止发布',
-  '充电宝需标明容量且不超过 20000mAh',
-  '通过后仍保留人工巡检'
-];
+type ProductPublishFormValues = {
+  title: string;
+  category: string;
+  price: number;
+  condition: string;
+  description: string;
+  tags?: string;
+};
+
+type UploadedProductImage = {
+  key: string;
+  url: string;
+  previewUrl: string;
+  width: number;
+  height: number;
+};
+
+type DragOverlaySize = {
+  width: number;
+  height: number;
+};
+
+function ImageEditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 20h4.5L18.6 9.9a1.5 1.5 0 0 0 0-2.1l-2.4-2.4a1.5 1.5 0 0 0-2.1 0L4 15.5V20Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.8 6.8 17.2 11.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ImageDeleteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M5 7.5h14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 7.5V5.8c0-.7.6-1.3 1.3-1.3h3.4c.7 0 1.3.6 1.3 1.3v1.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.3 9.5v8.1c0 1 .8 1.8 1.8 1.8h3.8c1 0 1.8-.8 1.8-1.8V9.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10.4 11.4v5.3M13.6 11.4v5.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+type PublishImageTileBodyProps = {
+  item: UploadedProductImage;
+  index: number;
+  onEdit: () => void;
+  onRemove: () => void;
+};
+
+function PublishImageTileBody({ item, index, onEdit, onRemove }: PublishImageTileBodyProps) {
+  return (
+    <>
+      <img src={item.previewUrl} alt={`商品图片 ${index + 1}`} />
+      <div className="publish-image-topbar">
+        {index === 0 ? <span className="publish-image-cover-badge">封面</span> : null}
+        <div className="publish-image-actions">
+          <button
+            type="button"
+            className="publish-image-action"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={onEdit}
+            aria-label={`编辑商品图片 ${index + 1}`}
+          >
+            <ImageEditIcon />
+          </button>
+          <button
+            type="button"
+            className="publish-image-action is-danger"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={onRemove}
+            aria-label={`删除商品图片 ${index + 1}`}
+          >
+            <ImageDeleteIcon />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+type StaticPublishImageTileProps = PublishImageTileBodyProps & {
+  className?: string;
+  style?: CSSProperties;
+};
+
+function StaticPublishImageTile({ item, index, onEdit, onRemove, className, style }: StaticPublishImageTileProps) {
+  return (
+    <div className={['publish-image-tile is-filled', className].filter(Boolean).join(' ')} style={style}>
+      <PublishImageTileBody item={item} index={index} onEdit={onEdit} onRemove={onRemove} />
+    </div>
+  );
+}
+
+type SortablePublishImageTileProps = PublishImageTileBodyProps;
+
+function SortablePublishImageTile({ item, index, onEdit, onRemove }: SortablePublishImageTileProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.key,
+    transition: {
+      duration: 220,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+    }
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={['publish-image-tile is-filled', isDragging ? 'is-dragging' : ''].filter(Boolean).join(' ')}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 2 : undefined
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <PublishImageTileBody item={item} index={index} onEdit={onEdit} onRemove={onRemove} />
+    </div>
+  );
+}
 
 function buildPublishTags(values: {
   title: string;
@@ -70,40 +214,97 @@ function buildPublishTags(values: {
 
 export function ProductPublishPage() {
   const { currentUser } = useAuthState();
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<ProductPublishFormValues>();
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [rules, setRules] = useState<PublishingRules | null>(null);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  const [rememberRulesChoice, setRememberRulesChoice] = useState(false);
+  const [hasReachedRuleEnd, setHasReachedRuleEnd] = useState(false);
+  const [rulesCountdown, setRulesCountdown] = useState(PUBLISH_RULES_WAIT_SECONDS);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<UploadedProductImage[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [activeImageKey, setActiveImageKey] = useState<string | null>(null);
+  const [dragOverlaySize, setDragOverlaySize] = useState<DragOverlaySize | null>(null);
+  const rulesScrollRef = useRef<HTMLDivElement | null>(null);
+  const uploadedImagesRef = useRef<UploadedProductImage[]>([]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8
+      }
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates
+    })
+  );
+
   const allowedCategories = rules?.allowedCategories ?? defaultAllowedCategories;
   const dormElectricalWhitelist = rules?.dormElectricalWhitelist ?? defaultDormElectricalWhitelist;
   const communityNotices = rules?.communityNotices ?? defaultCommunityNotices;
   const ruleHighlights = rules?.ruleHighlights ?? defaultRuleHighlights;
-  const categoryTagItems = allowedCategories.map((item) => ({ key: item, label: item }));
-  const whitelistTagItems = dormElectricalWhitelist.map((item) => ({ key: item, label: item, tone: 'success' as const }));
-  const reviewInfoItems = [
-    {
-      key: 'prohibited',
-      title: '禁售词',
-      detail: (rules?.prohibitedKeywords ?? ['刀具', '代抢', '账号']).slice(0, 5).join(' / ')
-    },
-    {
-      key: 'review-flow',
-      title: '审核流',
-      detail: (rules?.reviewFlow ?? ['实名认证', '内容校验', '人工审核']).join(' · ')
-    }
-  ];
+  const prohibitedKeywords = rules?.prohibitedKeywords ?? defaultProhibitedKeywords;
+  const reviewFlow = rules?.reviewFlow ?? defaultReviewFlow;
+  const trustSignals = rules?.trustSignals ?? defaultTrustSignals;
 
   useEffect(() => {
     fetchPublishingRules().then(setRules).catch(() => setRules(null));
   }, []);
 
-  async function handleSubmit(values: {
-    title: string;
-    category: string;
-    price: number;
-    condition: string;
-    description: string;
-    tags?: string;
-  }) {
+  useEffect(() => {
+    uploadedImagesRef.current = uploadedImages;
+  }, [uploadedImages]);
+
+  useEffect(() => () => {
+    uploadedImagesRef.current.forEach((item) => {
+      if (item.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PUBLISH_RULES_STORAGE_KEY);
+      if (raw) {
+        const dismissUntil = Number(raw);
+        if (Number.isFinite(dismissUntil) && dismissUntil > Date.now()) {
+          return;
+        }
+        window.localStorage.removeItem(PUBLISH_RULES_STORAGE_KEY);
+      }
+    } catch {
+      // ignore local storage failures and fall through to modal gate
+    }
+
+    setRulesModalOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!rulesModalOpen || !hasReachedRuleEnd || rulesCountdown <= 0) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setRulesCountdown((value) => Math.max(value - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [hasReachedRuleEnd, rulesCountdown, rulesModalOpen]);
+
+  useEffect(() => {
+    if (!rulesModalOpen || !rulesScrollRef.current) {
+      return;
+    }
+
+    const node = rulesScrollRef.current;
+    if (node.scrollHeight <= node.clientHeight + 4) {
+      setHasReachedRuleEnd(true);
+    }
+  }, [allowedCategories.length, communityNotices.length, dormElectricalWhitelist.length, rulesModalOpen]);
+
+  async function handleSubmit(values: ProductPublishFormValues) {
     if (!hasTradingAccess(currentUser)) {
       setMessage({ type: 'error', text: isGuestUser(currentUser) ? '浏览账号不可发布商品。' : '请先登录后再发布商品。' });
       return;
@@ -111,148 +312,311 @@ export function ProductPublishPage() {
 
     const finalTags = buildPublishTags(values);
 
+    setSubmittingProduct(true);
     try {
-      const result = await createProduct({
+      const result = await createProductWithImages({
         title: values.title,
         description: values.description,
         price: values.price,
         category: values.category,
         condition: values.condition,
-        tags: finalTags
+        tags: finalTags,
+        imageUrls: uploadedImages.map((item) => item.url)
       });
 
       setMessage({ type: 'success', text: `商品已提交：${result.title}（ID ${result.id}，状态 ${result.status}）` });
       form.resetFields();
+      setUploadedImages((current) => {
+        current.forEach((item) => {
+          if (item.previewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        });
+        return [];
+      });
     } catch (error) {
       setMessage({
         type: 'error',
         text: getApiErrorMessage(error, '发布失败，请稍后重试。')
       });
+    } finally {
+      setSubmittingProduct(false);
     }
   }
 
-  function applyTemplate(content: string) {
-    form.setFieldValue('description', content);
+  function handleRulesScroll() {
+    const node = rulesScrollRef.current;
+    if (!node || hasReachedRuleEnd) {
+      return;
+    }
+
+    if (node.scrollTop + node.clientHeight >= node.scrollHeight - 12) {
+      setHasReachedRuleEnd(true);
+    }
   }
 
+  function handleRulesAccept() {
+    if (!hasReachedRuleEnd || rulesCountdown > 0) {
+      return;
+    }
+
+    try {
+      if (rememberRulesChoice) {
+        window.localStorage.setItem(
+          PUBLISH_RULES_STORAGE_KEY,
+          String(Date.now() + PUBLISH_RULES_SUPPRESS_DAYS * 24 * 60 * 60 * 1000)
+        );
+      } else {
+        window.localStorage.removeItem(PUBLISH_RULES_STORAGE_KEY);
+      }
+    } catch {
+      // ignore local storage failures and continue
+    }
+
+    setRulesModalOpen(false);
+  }
+
+  async function handleProductImageConfirm(file: File, previewUrl: string) {
+    if (uploadedImages.length >= MAX_PRODUCT_IMAGES) {
+      URL.revokeObjectURL(previewUrl);
+      antMessage.error(`最多上传 ${MAX_PRODUCT_IMAGES} 张商品图`);
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const uploaded = await uploadProductImageAsset(file);
+      setUploadedImages((current) => [
+        ...current,
+        {
+          key: uploaded.objectKey,
+          url: uploaded.url,
+          previewUrl,
+          width: uploaded.width,
+          height: uploaded.height
+        }
+      ]);
+      setUploadModalOpen(false);
+      antMessage.success('商品图片已上传');
+    } catch (error) {
+      URL.revokeObjectURL(previewUrl);
+      antMessage.error(getApiErrorMessage(error, '商品图片上传失败'));
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  function handleRemoveImage(key: string) {
+    setUploadedImages((current) => {
+      const target = current.find((item) => item.key === key);
+      if (target?.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return current.filter((item) => item.key !== key);
+    });
+  }
+
+  function handleImageDragStart(event: DragStartEvent) {
+    setActiveImageKey(String(event.active.id));
+    const initialRect = event.active.rect.current.initial;
+    setDragOverlaySize(
+      initialRect
+        ? {
+            width: initialRect.width,
+            height: initialRect.height
+          }
+        : null
+    );
+  }
+
+  function handleImageDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setUploadedImages((current) => {
+        const oldIndex = current.findIndex((item) => item.key === active.id);
+        const newIndex = current.findIndex((item) => item.key === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) {
+          return current;
+        }
+
+        return arrayMove(current, oldIndex, newIndex);
+      });
+    }
+
+    setActiveImageKey(null);
+    setDragOverlaySize(null);
+  }
+
+  function handleImageDragCancel() {
+    setActiveImageKey(null);
+    setDragOverlaySize(null);
+  }
+
+  function handleImageEditPlaceholder() {
+    antMessage.info('图片编辑功能暂未开放');
+  }
+
+  const rulesGateReady = hasReachedRuleEnd && rulesCountdown === 0;
+  const rulesGateButtonLabel = !hasReachedRuleEnd
+    ? '请先拉到底'
+    : rulesCountdown > 0
+      ? `${rulesCountdown}s 后可同意`
+      : '已阅读并同意';
+  const activeDraggedImage = activeImageKey ? uploadedImages.find((item) => item.key === activeImageKey) ?? null : null;
+  const activeDraggedImageIndex = activeDraggedImage ? uploadedImages.findIndex((item) => item.key === activeDraggedImage.key) : -1;
+
   return (
-    <div className="page-grid publish-page">
-      <section className="page-topbar">
-        <div className="page-topbar-copy">
-          <h1>发布商品</h1>
-          <span>同校转手</span>
+    <div id="publish-top" className="page-grid publish-page publish-workbench-page">
+      <Modal
+        title="发布规则确认"
+        open={rulesModalOpen}
+        closable={false}
+        maskClosable={false}
+        keyboard={false}
+        width={720}
+        footer={(
+          <div className="publish-rules-modal-footer">
+            <Checkbox checked={rememberRulesChoice} onChange={(event) => setRememberRulesChoice(event.target.checked)}>
+              {`${PUBLISH_RULES_SUPPRESS_DAYS} 天内不再显示`}
+            </Checkbox>
+            <Button type="primary" disabled={!rulesGateReady} onClick={handleRulesAccept}>
+              {rulesGateButtonLabel}
+            </Button>
+          </div>
+        )}
+      >
+        <div ref={rulesScrollRef} className="publish-rules-modal-scroll" onScroll={handleRulesScroll}>
+          <PublishRulesDocument
+            allowedCategories={allowedCategories}
+            communityNotices={communityNotices}
+            dormElectricalWhitelist={dormElectricalWhitelist}
+            prohibitedKeywords={prohibitedKeywords}
+            reviewFlow={reviewFlow}
+            ruleHighlights={ruleHighlights}
+            trustSignals={trustSignals}
+          />
         </div>
-        <div className="page-topbar-tags">
-          <span>校内面交</span>
-        </div>
-      </section>
+      </Modal>
 
       <div className="publish-layout">
-        <PageCard>
-          {message ? <Alert style={{ marginBottom: 16 }} type={message.type} showIcon message={message.text} /> : null}
-          <Form form={form} layout="vertical" onFinish={handleSubmit} className="form-shell publish-form">
-            <div className="publish-form-section publish-form-section-main">
-              <Form.Item name="title" label="商品标题" rules={[{ required: true }]}>
-                <Input placeholder="例如：九成新计算机网络教材" />
-              </Form.Item>
-              <Form.Item name="category" label="分类" rules={[{ required: true }]}>
-                <Select options={allowedCategories.map((item) => ({ value: item }))} />
-              </Form.Item>
-              <div className="publish-form-inline">
-                <Form.Item name="price" label="价格" rules={[{ required: true }]}>
-                  <InputNumber min={0} style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item name="condition" label="成色" rules={[{ required: true }]}>
-                  <Select options={PRODUCT_CONDITION_VALUES.map((value) => ({ value }))} />
-                </Form.Item>
+        <div className="publish-workbench-main">
+          <SectionCard
+            className="publish-main-card publish-editor-card"
+            title={<SectionHeader title="商品信息" description="按真实状态填写标题、价格、成色与说明。" className="is-prominent" />}
+            extra={<InlineMeta>发布后默认进入审核</InlineMeta>}
+          >
+            {message ? <Alert style={{ marginBottom: 16 }} type={message.type} showIcon message={message.text} /> : null}
+            <Form form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)} className="form-shell publish-form">
+              <div className="publish-media-section">
+                <SectionHeader
+                  title="商品图片"
+                  aside={(
+                    <Button
+                      type="default"
+                      icon={<PlusOutlined />}
+                      onClick={() => setUploadModalOpen(true)}
+                      disabled={uploadedImages.length >= MAX_PRODUCT_IMAGES || uploadingImage}
+                    >
+                      {uploadingImage ? '上传中' : '添加图片'}
+                    </Button>
+                  )}
+                />
+                <div className={`publish-image-stage${uploadedImages.length ? '' : ' is-empty'}`}>
+                  {uploadedImages.length ? (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={handleImageDragStart}
+                      onDragEnd={handleImageDragEnd}
+                      onDragCancel={handleImageDragCancel}
+                    >
+                      <SortableContext items={uploadedImages.map((item) => item.key)} strategy={rectSortingStrategy}>
+                        <div className="publish-image-grid" aria-label="商品图片排序区">
+                          {uploadedImages.map((item, index) => (
+                            <SortablePublishImageTile
+                              key={item.key}
+                              item={item}
+                              index={index}
+                              onEdit={handleImageEditPlaceholder}
+                              onRemove={() => handleRemoveImage(item.key)}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                      <DragOverlay dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }}>
+                        {activeDraggedImage ? (
+                          <StaticPublishImageTile
+                            item={activeDraggedImage}
+                            index={activeDraggedImageIndex}
+                            onEdit={() => undefined}
+                            onRemove={() => undefined}
+                            className="is-overlay"
+                            style={dragOverlaySize ?? undefined}
+                          />
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
+                  ) : (
+                    <div className="publish-image-empty-state" aria-live="polite" />
+                  )}
+                </div>
               </div>
-              <Form.Item name="description" label="描述" rules={[{ required: true }]}>
-                <Input.TextArea rows={4} placeholder="使用情况、配件、交易地点" />
-              </Form.Item>
-            </div>
-            <FoldSection title="补充信息" meta="标签 / 写法 / 规则" compact>
-              <div className="publish-form-section">
+
+              <div className="publish-form-grid">
+                <Form.Item name="title" label="商品标题" rules={[{ required: true, message: '请输入商品标题' }]}>
+                  <Input placeholder="例如：九成新计算机网络教材" maxLength={40} showCount />
+                </Form.Item>
+                <Form.Item name="category" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
+                  <Select options={allowedCategories.map((item) => ({ value: item }))} placeholder="请选择分类" />
+                </Form.Item>
+                <Form.Item name="price" label="价格" rules={[{ required: true, message: '请输入价格' }]}>
+                  <InputNumber min={0} style={{ width: '100%' }} controls={false} prefix="¥" placeholder="88" />
+                </Form.Item>
+                <Form.Item name="condition" label="成色" rules={[{ required: true, message: '请选择成色' }]}>
+                  <Select options={PRODUCT_CONDITION_VALUES.map((value) => ({ value }))} placeholder="请选择成色" />
+                </Form.Item>
+                <div className="publish-form-span-2 publish-description-group">
+                  <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入商品描述' }]}>
+                    <Input.TextArea rows={7} placeholder="写清使用情况、配件、容量/版本、可交易地点。" maxLength={240} showCount />
+                  </Form.Item>
+                </div>
+              </div>
+
+              <div className="publish-subsection">
+                <SectionHeader title="补充信息" description="标签会用于搜索和推荐，不填也可发布。" />
                 <Form.Item name="tags" label="标签">
-                  <Input placeholder="例如：教材,考试周；不填会自动生成" />
+                  <Input placeholder="例如：教材, 考试周, 可验货" />
                 </Form.Item>
               </div>
-            </FoldSection>
-            <ActionRow className="publish-submit-row" leading={<InlineMeta>默认按校内面交发布</InlineMeta>}>
-              <Button type="primary" htmlType="submit">发布</Button>
-            </ActionRow>
-          </Form>
-        </PageCard>
 
-        <div className="page-grid publish-side-stack">
-          <PageCard>
-            <FoldSection title="常用写法" meta={`${descriptionTemplates.length} 条`} compact>
-              <div className="publish-template-list">
-                {descriptionTemplates.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className="publish-template-card"
-                    onClick={() => applyTemplate(item.content)}
-                  >
-                    <strong>{item.title}</strong>
-                    <span>{item.content}</span>
-                  </button>
-                ))}
-              </div>
-            </FoldSection>
-          </PageCard>
-
-          <PageCard>
-            <FoldSection title="发布提示" meta="4 条" compact>
-              <div className="publish-summary-list">
-                <div>
-                  <strong>自动审核</strong>
-                  <span>禁售词和违规宿舍电器会直接驳回</span>
-                </div>
-                <div>
-                  <strong>电器白名单</strong>
-                  <span>只发布手册允许的宿舍电器</span>
-                </div>
-                <div>
-                  <strong>容量表达</strong>
-                  <span>充电宝请写明 mAh 容量</span>
-                </div>
-                <div>
-                  <strong>成交习惯</strong>
-                  <span>面交地点写明白</span>
-                </div>
-              </div>
-            </FoldSection>
-          </PageCard>
-
-          <PageCard>
-            <FoldSection title="规则" meta={`${allowedCategories.length} 类`} compact>
-              <TagList items={categoryTagItems} />
-              <div className="publish-rule-block">
-                <strong>社区公告</strong>
-                <div className="publish-notice-list">
-                  {communityNotices.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-              </div>
-              <div className="publish-rule-block">
-                <strong>宿舍电器白名单</strong>
-                <TagList items={whitelistTagItems} compact />
-              </div>
-              <div className="publish-rule-block">
-                <strong>审核说明</strong>
-                <div className="publish-rule-points">
-                  {ruleHighlights.map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
-                </div>
-              </div>
-              <InfoList className="compact-list" items={reviewInfoItems} />
-            </FoldSection>
-          </PageCard>
+              <ActionRow
+                className="publish-submit-row"
+                leading={<InlineMeta>{uploadedImages.length ? `已上传 ${uploadedImages.length} 张商品图，首张将作为封面` : '建议至少上传一张商品图'}</InlineMeta>}
+              >
+                <Button type="primary" htmlType="submit" loading={submittingProduct}>发布商品</Button>
+              </ActionRow>
+            </Form>
+          </SectionCard>
         </div>
       </div>
+
+      <div className="publish-rules-link-row">
+        <Link className="publish-rules-anchor" to="/publish/rules">查看商品发布规则</Link>
+      </div>
+
+      <ImageCropUploadModal
+        open={uploadModalOpen}
+        title="上传商品图片"
+        shape="rect"
+        aspect={1}
+        outputWidth={1200}
+        outputHeight={1200}
+        confirmText="保存图片"
+        onCancel={() => setUploadModalOpen(false)}
+        onConfirm={handleProductImageConfirm}
+      />
     </div>
   );
 }

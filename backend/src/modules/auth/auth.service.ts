@@ -12,14 +12,9 @@ import { RegisterDto } from './dto/register.dto';
 import type { AuthenticatedUser } from './auth.types';
 import type { SessionRequest, SessionResponse } from './supertokens.types';
 
-const DEFAULT_ADMIN_EMAIL = 'admin@swapcampus.cn';
-const DEFAULT_ADMIN_PASSWORD = 'SwapCampusAdmin2026';
-const DEFAULT_USER_PASSWORD = 'SwapCampusUser2026';
-const DEMO_USER_EMAIL = 'qjinyu0608@qq.com';
-const DEMO_USER_PASSWORD = '123456';
-const TEST_ADMIN_EMAIL = 'admin';
+const TEST_ADMIN_ACCOUNT = 'admin';
 const TEST_ADMIN_PASSWORD = 'admin';
-const TEST_USER_EMAIL = 'user';
+const TEST_USER_ACCOUNT = 'user';
 const TEST_USER_PASSWORD = 'user';
 
 @Injectable()
@@ -43,9 +38,10 @@ export class AuthService {
   private buildAuthUser(user: {
     id: number;
     supertokensUserId: string;
-    studentId: string;
+    studentId: string | null;
     displayName: string;
     email: string;
+    avatarUrl: string | null;
     role: UserRole;
     creditScore: number;
     verificationStatus: VerificationStatus;
@@ -57,6 +53,7 @@ export class AuthService {
       studentId: user.studentId,
       displayName: user.displayName,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -73,26 +70,17 @@ export class AuthService {
   }
 
   private getDevFallbackPassword(user: {
-    email: string;
-    role: UserRole;
+    studentId: string | null;
   }) {
-    if (user.email === TEST_ADMIN_EMAIL) {
+    if (user.studentId === TEST_ADMIN_ACCOUNT) {
       return TEST_ADMIN_PASSWORD;
     }
 
-    if (user.email === TEST_USER_EMAIL) {
+    if (user.studentId === TEST_USER_ACCOUNT) {
       return TEST_USER_PASSWORD;
     }
 
-    if (user.email === DEMO_USER_EMAIL) {
-      return DEMO_USER_PASSWORD;
-    }
-
-    if (user.role === UserRole.ADMIN || user.email === DEFAULT_ADMIN_EMAIL) {
-      return DEFAULT_ADMIN_PASSWORD;
-    }
-
-    return DEFAULT_USER_PASSWORD;
+    return null;
   }
 
   private async createSession(
@@ -101,9 +89,10 @@ export class AuthService {
     user: {
       id: number;
       supertokensUserId: string;
-      studentId: string;
+      studentId: string | null;
       displayName: string;
       email: string;
+      avatarUrl: string | null;
       role: UserRole;
       accountStatus: AccountStatus;
     }
@@ -115,9 +104,10 @@ export class AuthService {
       convertToRecipeUserId(user.supertokensUserId),
       {
         userId: user.id,
-        studentId: user.studentId,
+        studentId: user.studentId ?? null,
         displayName: user.displayName,
         email: user.email,
+        avatarUrl: user.avatarUrl ?? null,
         role: user.role,
         accountStatus: user.accountStatus
       },
@@ -136,6 +126,7 @@ export class AuthService {
     const displayName = payload.displayName.trim();
     const studentId = payload.studentId?.trim() || undefined;
     const college = payload.college?.trim() || undefined;
+    const avatarUrl = payload.avatarUrl?.trim() || undefined;
 
     let signUpResult: Awaited<ReturnType<typeof EmailPassword.signUp>>;
     try {
@@ -154,6 +145,7 @@ export class AuthService {
       displayName,
       studentId,
       college,
+      avatarUrl,
       role: UserRole.USER,
       verificationStatus: VerificationStatus.PENDING,
       accountStatus: AccountStatus.ACTIVE
@@ -179,7 +171,8 @@ export class AuthService {
       }
     });
 
-    if (isDevAuthFallbackEnabled() && candidate && payload.password === this.getDevFallbackPassword(candidate)) {
+    const devFallbackPassword = candidate ? this.getDevFallbackPassword(candidate) : null;
+    if (isDevAuthFallbackEnabled() && candidate && devFallbackPassword && payload.password === devFallbackPassword) {
       if (candidate.accountStatus === AccountStatus.BANNED) {
         throw new ForbiddenException('账号已被封禁');
       }
@@ -190,6 +183,7 @@ export class AuthService {
         studentId: candidate.studentId,
         displayName: candidate.displayName,
         email: candidate.email,
+        avatarUrl: candidate.avatarUrl,
         role: candidate.role,
         creditScore: candidate.creditScore,
         verificationStatus: candidate.verificationStatus,
@@ -269,6 +263,7 @@ export class AuthService {
         studentId: true,
         displayName: true,
         email: true,
+        avatarUrl: true,
         role: true,
         creditScore: true,
         verificationStatus: true,

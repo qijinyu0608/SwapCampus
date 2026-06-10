@@ -1,11 +1,8 @@
+import { StarFilled, StarOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Modal, Radio, Select, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
-import {
-  ListingDetailHero,
-  ListingDetailMetaPanel
-} from '../components/listing';
 import { DetailShell, SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { getBjfuMeetupLabel } from '../constants/campus';
@@ -51,6 +48,7 @@ export function ProductDetailPage() {
   const [submitting, setSubmitting] = useState<'chat' | 'order' | 'report' | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [favoriteVersion, setFavoriteVersion] = useState(0);
+  const [favoriteAnimating, setFavoriteAnimating] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportForm] = Form.useForm<ReportFormValues>();
@@ -251,9 +249,18 @@ export function ProductDetailPage() {
       return;
     }
 
-    const nextState = await toggleFavorite(detail.id, currentUser);
-    setFavoriteVersion((value) => value + 1);
-    message.success(nextState ? '已加入想要' : '已取消想要');
+    try {
+      setFavoriteAnimating(false);
+      const nextState = await toggleFavorite(detail.id, currentUser);
+      setFavoriteVersion((value) => value + 1);
+      if (nextState) {
+        setFavoriteAnimating(true);
+        window.setTimeout(() => setFavoriteAnimating(false), 520);
+      }
+      message.success(nextState ? '已加入想要' : '已取消想要');
+    } catch (error) {
+      showActionError(error, '收藏操作失败');
+    }
   }
 
   if (loading) {
@@ -283,9 +290,6 @@ export function ProductDetailPage() {
     4
   );
   const currentImage = detailImages[activeImage] ?? detailImages[0];
-  const primaryMeetup = getBjfuMeetupLabel(detail.id);
-  const secondaryMeetup = getBjfuMeetupLabel(detail.id + 1);
-  const sellerMoreItems = detail.relatedProducts.slice(0, 3);
   const sellerPresentation = getUserPresentation(detail.seller);
   const detailDescription = descriptionExpanded || detail.detailBase.description.length <= 88
     ? detail.detailBase.description
@@ -295,8 +299,8 @@ export function ProductDetailPage() {
   const sellerStats = [
     detail.seller.college,
     `${detail.seller.responseRate}% 回复率`,
-    `卖出 ${detail.seller.completedOrders} 件宝贝`,
-    `好评率 ${Math.min(99, Math.max(82, Math.round(detail.seller.averageRating * 20)))}%`
+    `完成 ${detail.seller.completedOrders} 单`,
+    `评分 ${detail.seller.averageRating.toFixed(1)}`
   ];
 
   return (
@@ -309,7 +313,6 @@ export function ProductDetailPage() {
           className="detail-seller-strip-main detail-seller-link"
           aria-label={`打开${detail.seller.displayName}的主页`}
         >
-          <div className="detail-seller-avatar">{detail.seller.displayName.slice(0, 1)}</div>
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
               <strong>{detail.seller.displayName}</strong>
@@ -320,7 +323,6 @@ export function ProductDetailPage() {
             <MetaList items={sellerStats} className="detail-seller-strip-meta" />
           </div>
         </Link>
-        <div className="detail-seller-strip-badge">校园号</div>
       </section>
 
       <DetailShell
@@ -354,74 +356,75 @@ export function ProductDetailPage() {
         )}
         sidePanel={(
           <div className="detail-info-panel">
-            <div className="detail-heat-line">
-              <span>{detail.stats.wantCount} 人想要</span>
-              <span>{detail.stats.viewCount} 浏览</span>
+            <div className="detail-info-top">
+              <div className="detail-topline">
+                <div className="detail-heat-line">
+                  <span>{detail.stats.wantCount} 人想要</span>
+                  <span>{detail.stats.favoriteCount} 收藏</span>
+                  <span>{detail.stats.viewCount} 浏览</span>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label={favorited ? '取消收藏' : '收藏商品'}
+                  className={[
+                    'detail-favorite-star',
+                    favorited ? 'active' : '',
+                    favoriteAnimating ? 'is-popping' : ''
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => void handleToggleFavorite()}
+                >
+                  {favorited ? <StarFilled /> : <StarOutlined />}
+                </button>
+              </div>
+
+              <div className="detail-price-block">
+                <div className="listing-detail-amount">
+                  <strong>{detail.detailBase.amountLabel}</strong>
+                  <div className="detail-price-meta">
+                    <span className="detail-condition-inline">{detail.condition}</span>
+                    <span>同校面交</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <ListingDetailHero
-              detail={{
-                ...detail.detailBase,
-                description: detailDescription
-              }}
-              statusTone={statusPresentation.tone}
-              amountAside="同校面交"
-            />
-            {detail.detailBase.description.length > 88 ? (
-              <button
-                type="button"
-                className="detail-expand-button"
-                onClick={() => setDescriptionExpanded((current) => !current)}
-              >
-                {descriptionExpanded ? '收起' : '展开'}
-              </button>
-            ) : null}
-            <div className="detail-condition-mark">{detail.condition}</div>
-            <ListingDetailMetaPanel
-              detail={detail.detailBase}
-              extraItems={[
-                { key: 'meetup', label: '交易地点', value: `${primaryMeetup} / ${secondaryMeetup}` }
-              ]}
-              className="detail-main-meta-grid"
-            />
-
-            <div className="detail-main-actions">
-              <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
-                聊一聊
-              </Button>
-              <Button size="large" onClick={() => void handleCreateOrder()} loading={submitting === 'order'}>
-                立即购买
-              </Button>
-              <button type="button" className={favorited ? 'detail-favorite-button active' : 'detail-favorite-button'} onClick={handleToggleFavorite}>
-                {favorited ? '已收藏' : '收藏'}
-              </button>
+            <div className="detail-info-body">
+              <h1 className="detail-main-title">{detail.detailBase.title}</h1>
+              <div className="detail-description-block">
+                <p>{detailDescription}</p>
+                {detail.detailBase.description.length > 88 ? (
+                  <button
+                    type="button"
+                    className="detail-expand-button"
+                    onClick={() => setDescriptionExpanded((current) => !current)}
+                  >
+                    {descriptionExpanded ? '收起' : '展开'}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
-            <div className="detail-bottom-line">
-              <span>{detail.stats.favoriteCount} 收藏</span>
-              <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
-                {submitting === 'report' ? '提交中...' : '举报'}
-              </button>
+            <div className="detail-info-foot">
+              <div className="detail-main-actions">
+                <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
+                  聊一聊
+                </Button>
+                <Button size="large" onClick={() => void handleCreateOrder()} loading={submitting === 'order'}>
+                  立即购买
+                </Button>
+              </div>
+
+              <div className="detail-bottom-line">
+                <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
+                  {submitting === 'report' ? '提交中...' : '举报'}
+                </button>
+              </div>
             </div>
           </div>
         )}
         bottomContent={(
           <div className="detail-bottom-layout">
-            <div className="detail-card detail-balance-card">
-              <SectionHeader title="对方在售" description={`${sellerMoreItems.length} 件`} />
-              <div className="ui-split-list">
-                {sellerMoreItems.map((item) => (
-                  <Link key={item.id} to={`/products/${item.id}`} className="ui-split-list-row is-link">
-                    <div className="ui-split-list-copy">
-                      <strong>{item.title}</strong>
-                      <span>{item.condition} · {item.category}</span>
-                    </div>
-                    <span className="ui-split-list-aside is-highlight">¥{item.price}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
             <div className="detail-card detail-balance-card">
               <SectionHeader title="交易保障" description={statusPresentation.label} />
               <div className="ui-split-list">

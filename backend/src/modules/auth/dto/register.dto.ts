@@ -17,6 +17,10 @@ export class RegisterDto {
   college?: string;
 
   @IsString()
+  @IsOptional()
+  avatarUrl?: string;
+
+  @IsString()
   @MinLength(6)
   password!: string;
 }

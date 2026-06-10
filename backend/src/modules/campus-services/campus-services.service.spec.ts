@@ -13,7 +13,7 @@ describe('CampusServicesService', () => {
   const authUser = {
     id: 11,
     studentId: '2026001011',
-    email: 'user11@stu.swapcampus.cn',
+    email: 'user11@example.com',
     role: 'USER'
   } as any;
 

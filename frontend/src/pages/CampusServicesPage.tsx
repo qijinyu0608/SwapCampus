@@ -1,11 +1,11 @@
 import {
   Alert,
-  Button,
   Input,
   Modal,
   Pagination,
   Skeleton
 } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import { PeelBack, PeelBottom, PeelTop, PeelWrapper, usePeel } from 'react-peel';
 import { useNavigate } from 'react-router-dom';
@@ -174,6 +174,13 @@ export function CampusServicesPage() {
   const [pageSize] = useState(12);
   const [total, setTotal] = useState(0);
 
+  function submitKeywordSearch(nextKeyword: string) {
+    const trimmed = nextKeyword.trim();
+    setKeywordInput(nextKeyword);
+    setKeyword(trimmed);
+    setPage(1);
+  }
+
   async function loadTasks(nextPage = page) {
     setLoading(true);
     try {
@@ -262,6 +269,30 @@ export function CampusServicesPage() {
   return (
     <div className="page-grid campus-service-page service-market-page">
       <section className="page-topbar service-market-topbar">
+        <section className="fish-search-shell service-market-search" aria-label="校园服务搜索">
+          <div className="fish-search-row">
+            <div className="fish-search-box">
+              <Input
+                size="large"
+                prefix={<SearchOutlined />}
+                placeholder="搜索路线、地点、任务"
+                bordered={false}
+                allowClear
+                value={keywordInput}
+                onChange={(event) => setKeywordInput(event.target.value)}
+                onPressEnter={() => submitKeywordSearch(keywordInput)}
+              />
+              <button
+                type="button"
+                className="fish-search-button fish-search-button-home"
+                onClick={() => submitKeywordSearch(keywordInput)}
+              >
+                搜索
+              </button>
+            </div>
+          </div>
+        </section>
+
         <ServiceMarketCornerPeel />
       </section>
 
@@ -308,19 +339,6 @@ export function CampusServicesPage() {
             setActiveCreditFilter(key as ServiceCreditFilter);
             setPage(1);
           }}
-          trailingContent={(
-            <Input.Search
-              allowClear
-              placeholder="搜索路线、地点、任务"
-              value={keywordInput}
-              onChange={(event) => setKeywordInput(event.target.value)}
-              onSearch={(value) => {
-                setKeywordInput(value);
-                setKeyword(value);
-                setPage(1);
-              }}
-            />
-          )}
         />
 
         {loading ? (

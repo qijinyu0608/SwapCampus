@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
+import { AccountStatus, BehaviorEventType, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
@@ -9,7 +9,6 @@ import { isProductConditionValue, PRODUCT_CONDITION_VALUES } from './product-con
 import { CreateProductDto } from './dto/create-product.dto';
 import { SearchProductsDto } from './dto/search-products.dto';
 
-const TARGET_SEED_COUNT = 360;
 const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 
 const allowedCategories = [...PRODUCT_CATEGORY_NAMES];
@@ -575,7 +574,17 @@ export class ProductsService {
       throw new NotFoundException('商品不存在');
     }
 
-    const [seller, images, relatedProducts, reportCount, favoriteCount, sellerOrders, sellerMessages] = await Promise.all([
+    if (userId) {
+      await this.prisma.userBehavior.create({
+        data: {
+          userId,
+          productId: product.id,
+          eventType: 'VIEW'
+        }
+      });
+    }
+
+    const [seller, images, relatedProducts, reportCount, favoriteCount, viewCount, sellerOrders, sellerMessages] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: product.sellerId },
         include: { verification: true }
@@ -598,6 +607,12 @@ export class ProductsService {
       }),
       this.prisma.favorite.count({
         where: { productId: product.id }
+      }),
+      this.prisma.userBehavior.count({
+        where: {
+          productId: product.id,
+          eventType: BehaviorEventType.VIEW
+        }
       }),
       this.prisma.order.findMany({
         where: { sellerId: product.sellerId },
@@ -649,8 +664,8 @@ export class ProductsService {
       stats: {
         favoriteCount: detailCard.favoriteCount ?? favoriteCount,
         reportCount,
-        wantCount: (detailCard.favoriteCount ?? favoriteCount) + 12,
-        viewCount: (detailCard.favoriteCount ?? favoriteCount) * 7 + 126
+        wantCount: detailCard.favoriteCount ?? favoriteCount,
+        viewCount
       },
       compliance: {
         allowedCategory: allowedCategories.includes(normalizeProductCategoryName(product.category)),
@@ -703,16 +718,14 @@ export class ProductsService {
       return {
         userCount,
         productCount,
-        pendingCount,
-        targetSeedCount: TARGET_SEED_COUNT
+        pendingCount
       };
     } catch (error) {
       console.error('ProductsService.getDashboardStats fallback:', error);
       return {
         userCount: 3,
         productCount: 0,
-        pendingCount: 1,
-        targetSeedCount: TARGET_SEED_COUNT
+        pendingCount: 1
       };
     }
   }
@@ -727,6 +740,11 @@ export class ProductsService {
     }
 
     const normalizedTags = buildProductTags(payload);
+    const normalizedImageUrls = (payload.imageUrls ?? [])
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .filter((url, index, list) => list.indexOf(url) === index)
+      .slice(0, 6);
 
     const seller = await this.prisma.user.findUnique({
       where: { id: sellerUser.id },
@@ -758,7 +776,15 @@ export class ProductsService {
         category: payload.category,
         condition: payload.condition,
         tags: normalizedTags,
-        status: ProductStatus.PENDING
+        status: ProductStatus.PENDING,
+        images: normalizedImageUrls.length
+          ? {
+              create: normalizedImageUrls.map((imageUrl, index) => ({
+                imageUrl,
+                sortOrder: index
+              }))
+            }
+          : undefined
       }
     });
 

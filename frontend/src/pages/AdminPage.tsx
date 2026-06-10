@@ -632,7 +632,7 @@ export function AdminPage() {
                     <div className="admin-user-head">
                       <div>
                         <strong>{item.displayName}</strong>
-                        <span>{item.college} · {item.studentId} · 用户 #{item.id}</span>
+                        <span>{item.college} · {item.studentId || '未填写学号'} · 用户 #{item.id}</span>
                       </div>
                       <div className="admin-user-tags">
                         <Tag color={risk.color}>{risk.label} {item.riskScore}</Tag>

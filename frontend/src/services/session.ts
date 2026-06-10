@@ -39,6 +39,7 @@ function normalizeUser(user: Partial<SessionUser>): SessionUser | null {
     studentId: user.studentId ?? '',
     displayName: user.displayName,
     email: user.email ?? '',
+    avatarUrl: user.avatarUrl ?? null,
     role: normalizeRole(user.role),
     creditScore: user.creditScore,
     verificationStatus: user.verificationStatus,
@@ -97,7 +98,7 @@ export function clearCurrentUserStorage() {
   dispatchSessionChange();
 }
 
-export function saveDevAuthToken(token?: string | null) {
+export function saveDevAuthToken(token: string | null) {
   if (!token) {
     localStorage.removeItem(DEV_AUTH_TOKEN_KEY);
     dispatchSessionChange();

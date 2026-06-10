@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -7,12 +8,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import type { SessionRequest } from '../auth/supertokens.types';
+import { resolveOptionalAuthUser } from '../auth/auth-request.utils';
 
 @Controller('products')
 export class ProductsController {
   constructor(
     @Inject(ProductsService)
-    private readonly productsService: ProductsService
+    private readonly productsService: ProductsService,
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService
   ) {}
 
   @Get()
@@ -46,25 +50,10 @@ export class ProductsController {
   @Get(':id')
   getProductDetail(
     @Param('id', ParseIntPipe) id: number,
-    @Req() request: SessionRequest
+    @Req() request?: SessionRequest
   ) {
-    const session = request.session;
-    const accessTokenPayload = session?.getAccessTokenPayload();
-    const currentUserId = accessTokenPayload ? Number(accessTokenPayload.userId) : undefined;
-
-    if (currentUserId && session) {
-      const currentUser: AuthenticatedUser = {
-        id: currentUserId,
-        supertokensUserId: String(session.getUserId()),
-        studentId: String(accessTokenPayload?.studentId ?? ''),
-        displayName: typeof accessTokenPayload?.displayName === 'string' ? accessTokenPayload.displayName : undefined,
-        email: String(accessTokenPayload?.email ?? ''),
-        role: (accessTokenPayload?.role as UserRole) ?? UserRole.USER
-      };
-      return this.productsService.getProductDetail(id, currentUser.id);
-    }
-
-    return this.productsService.getProductDetail(id);
+    return resolveOptionalAuthUser(this.prisma, (request ?? {}) as SessionRequest & { user?: AuthenticatedUser })
+      .then((user) => this.productsService.getProductDetail(id, user?.id));
   }
 
   @Post()

@@ -16,8 +16,8 @@ const FAVORITES_KEY = 'swapcampus-favorites';
 const userSession = {
   id: 24,
   studentId: '2026001001',
-  name: '林舟',
-  email: 'user1@stu.swapcampus.cn',
+  name: '示例用户',
+  email: 'user@example.com',
   role: 'USER',
   creditScore: 68,
   verified: true
@@ -26,8 +26,8 @@ const userSession = {
 const adminSession = {
   id: 22,
   studentId: '2026000001',
-  name: '平台管理员',
-  email: 'admin@swapcampus.cn',
+  name: '示例管理员',
+  email: 'admin@example.com',
   role: 'ADMIN',
   creditScore: 100,
   verified: true

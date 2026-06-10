@@ -1705,11 +1705,11 @@
   font-size: 18px;
   line-height: 1;
   font-weight: 700;
-  color: #8c5310;
+  color: var(--primary);
 }
 
 .fish-feed-title-heart {
-  color: #8c5310;
+  color: var(--primary);
   font-size: 14px;
   line-height: 1;
 }

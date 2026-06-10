@@ -45,6 +45,10 @@
     grid-template-columns: 1fr;
   }
 
+  .publish-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .publish-head-strip,
   .message-strip,
   .profile-strip,
@@ -79,6 +83,11 @@
     grid-template-columns: 1fr;
   }
 
+  .fish-home-search .fish-search-row,
+  .service-market-search .fish-search-row {
+    width: 100%;
+  }
+
   .page-topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -86,6 +95,11 @@
 
   .page-topbar-tags {
     justify-content: flex-start;
+  }
+
+  .publish-image-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .fish-feed-grid {
@@ -248,6 +262,30 @@
 }
 
 @media (max-width: 720px) {
+  .publish-main-card .ui-section-card-head,
+  .publish-subsection .ui-section-header,
+  .publish-rules-modal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .publish-media-section .ui-section-header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .publish-image-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .publish-image-stage {
+    padding: 10px;
+  }
+
+  .publish-image-empty-state {
+    min-height: 140px;
+  }
+
   .fish-market-layout {
     --fish-home-stage-height: 320px;
     grid-template-columns: 112px minmax(0, 1fr);
@@ -382,26 +420,17 @@
   }
 
   .detail-thumb-column {
-    grid-auto-flow: column;
-    grid-auto-columns: 96px;
-    max-height: none;
-    overflow-y: visible;
-    overflow-x: auto;
-    padding-right: 0;
-    padding-bottom: 2px;
+    grid-auto-columns: 88px;
+    gap: 10px;
   }
 
   .detail-thumb {
-    width: 96px;
-    height: 96px;
+    width: 88px;
+    height: 88px;
   }
 
   .detail-main-photo-shell {
-    min-height: 540px;
-  }
-
-  .detail-main-photo {
-    height: min(72vh, 720px);
+    aspect-ratio: 1 / 1;
   }
 }
 
@@ -448,6 +477,14 @@
     grid-template-columns: 1fr;
   }
 
+  .publish-main-card .ant-input-textarea textarea {
+    min-height: 132px;
+  }
+
+  .publish-subsection {
+    padding: 14px;
+  }
+
   .admin-user-metrics {
     grid-template-columns: 1fr;
   }
@@ -483,22 +520,13 @@
   }
 
   .detail-main-photo-shell {
-    min-height: 360px;
     border-radius: 18px;
-  }
-
-  .detail-main-photo {
-    height: 360px;
+    aspect-ratio: 1 / 1;
   }
 
   .detail-thumb-column {
-    grid-auto-flow: column;
     grid-auto-columns: 72px;
-    max-height: none;
-    overflow-y: visible;
-    overflow-x: auto;
-    padding-right: 0;
-    padding-bottom: 2px;
+    gap: 8px;
   }
 
   .detail-thumb {
@@ -529,6 +557,11 @@
 
   .detail-main-actions {
     grid-template-columns: 1fr;
+  }
+
+  .detail-topline {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .detail-info-head,
@@ -562,4 +595,21 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+@media (max-width: 420px) {
+  .publish-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .publish-image-topbar {
+    padding: 8px;
+  }
+
+  .publish-image-action {
+    width: 28px;
+    height: 28px;
+  }
+
 }

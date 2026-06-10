@@ -68,7 +68,7 @@ export class MessagesGateway implements OnGatewayConnection {
       client.data.user = {
         id: Number(accessTokenPayload.userId),
         supertokensUserId: String(session.getUserId()),
-        studentId: String(accessTokenPayload.studentId ?? ''),
+        studentId: typeof accessTokenPayload.studentId === 'string' ? accessTokenPayload.studentId : null,
         displayName: typeof accessTokenPayload.displayName === 'string' ? accessTokenPayload.displayName : undefined,
         email: String(accessTokenPayload.email ?? ''),
         role: (accessTokenPayload.role as UserRole) ?? UserRole.USER

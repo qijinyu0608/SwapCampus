@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from './users.service';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -8,12 +9,16 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
+import type { SessionRequest } from '../auth/supertokens.types';
+import { resolveOptionalAuthUser } from '../auth/auth-request.utils';
 
 @Controller('users')
 export class UsersController {
   constructor(
     @Inject(UsersService)
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService
   ) {}
 
   @Get('moderation/list')
@@ -36,13 +41,60 @@ export class UsersController {
   }
 
   @Get(':id/trust-summary')
-  getTrustSummary(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.getTrustSummary(id);
+  getTrustSummary(@Param('id', ParseIntPipe) id: number, @Req() request?: SessionRequest) {
+    return resolveOptionalAuthUser(this.prisma, (request ?? {}) as SessionRequest & { user?: AuthenticatedUser })
+      .then((user) => this.usersService.getTrustSummary(id, user));
   }
 
   @Get(':id/profile')
   getProfile(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getProfile(id);
+  }
+
+  @Get('me/history')
+  @UseGuards(JwtAuthGuard)
+  listHistory(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @CurrentUser() user?: AuthenticatedUser
+  ) {
+    return this.usersService.listBrowsingHistory({
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      currentUser: user
+    });
+  }
+
+  @Get('me/following')
+  @UseGuards(JwtAuthGuard)
+  listFollowing(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @CurrentUser() user?: AuthenticatedUser
+  ) {
+    return this.usersService.listFollowingUsers({
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      currentUser: user
+    });
+  }
+
+  @Post(':id/follow')
+  @UseGuards(JwtAuthGuard)
+  followUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.usersService.followUser(id, user);
+  }
+
+  @Delete(':id/follow')
+  @UseGuards(JwtAuthGuard)
+  unfollowUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.usersService.unfollowUser(id, user);
   }
 
   @Patch(':id/profile')

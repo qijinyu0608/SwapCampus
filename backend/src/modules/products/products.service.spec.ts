@@ -4,7 +4,7 @@ describe('ProductsService', () => {
   const authUser = {
     id: 1,
     studentId: '2026001001',
-    email: 'user1@stu.swapcampus.cn',
+    email: 'user1@example.com',
     role: 'USER'
   } as any;
   const searchService = {
@@ -28,7 +28,6 @@ describe('ProductsService', () => {
 
     const stats = await service.getDashboardStats();
 
-    expect(stats.targetSeedCount).toBe(360);
     expect(stats.productCount).toBe(0);
     expect(stats.pendingCount).toBe(1);
   });
@@ -125,6 +124,47 @@ describe('ProductsService', () => {
 
     expect(product).toEqual({ id: 201, title: '10000mAh 充电宝', status: 'PENDING' });
     expect(productCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should persist uploaded product images with normalized unique urls', async () => {
+    const productCreate = jest.fn().mockResolvedValue({
+      id: 202,
+      title: '二手显示器',
+      status: 'PENDING'
+    });
+    const service = new ProductsService({
+      product: {
+        create: productCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
+      }
+    } as any, searchService);
+
+    await service.createProduct({
+      title: '二手显示器',
+      description: '配件齐全，可当面验货',
+      price: 180,
+      category: '数码电子',
+      condition: '8成新',
+      tags: ['显示器', '可验货'],
+      imageUrls: [
+        ' https://img.example.com/a.png ',
+        'https://img.example.com/b.png',
+        'https://img.example.com/a.png'
+      ]
+    }, authUser);
+
+    expect(productCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        images: {
+          create: [
+            { imageUrl: 'https://img.example.com/a.png', sortOrder: 0 },
+            { imageUrl: 'https://img.example.com/b.png', sortOrder: 1 }
+          ]
+        }
+      })
+    }));
   });
 
   it('should map Meilisearch pagination fields from totalHits and hitsPerPage', async () => {
@@ -228,6 +268,9 @@ describe('ProductsService', () => {
           { productId: 301, _count: { _all: 5 } }
         ]),
         findMany: jest.fn().mockResolvedValue([])
+      },
+      userBehavior: {
+        count: jest.fn().mockResolvedValue(23)
       },
       order: {
         findMany: jest.fn().mockResolvedValue([

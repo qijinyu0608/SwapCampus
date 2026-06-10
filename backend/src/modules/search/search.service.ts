@@ -183,8 +183,14 @@ export class SearchService implements OnModuleInit {
       .map((product) => this.toDocument(product))
       .filter((item): item is SearchableProductDocument => item !== null);
 
-    const task = await this.productsIndex.addDocuments(documents);
-    await this.waitForTask(task.taskUid);
+    const deleteTask = await this.productsIndex.deleteAllDocuments();
+    await this.waitForTask(deleteTask.taskUid);
+
+    if (documents.length > 0) {
+      const task = await this.productsIndex.addDocuments(documents);
+      await this.waitForTask(task.taskUid);
+    }
+
     this.logger.log(`Reindexed ${documents.length} products into Meilisearch`);
   }
 

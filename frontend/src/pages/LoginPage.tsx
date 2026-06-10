@@ -1,17 +1,33 @@
-import { Alert, Button, Form, Input } from 'antd';
-import { useState } from 'react';
+import { Alert, Button, Form, Input, message as antMessage } from 'antd';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getApiErrorMessage, loginUser, registerUser } from '../services/api';
+import { ImageCropUploadModal } from '../components/image-upload';
+import { UserAvatar } from '../components/user/UserAvatar';
+import { AVATAR_OPTIONS } from '../constants/avatarOptions';
+import { getApiErrorMessage, loginUser, registerUser, updateUserProfile, uploadImageAsset } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setCurrentUser } = useAuthState();
+  const [form] = Form.useForm<{
+    studentId?: string;
+    displayName: string;
+    email: string;
+    college?: string;
+    avatarUrl?: string;
+    password: string;
+    confirmPassword: string;
+  }>();
   const initialMode = (location.state as { mode?: unknown } | null)?.mode === 'register' ? 'register' : 'login';
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [customAvatarPreviewUrl, setCustomAvatarPreviewUrl] = useState<string | null>(null);
+  const [customAvatarFile, setCustomAvatarFile] = useState<File | null>(null);
+  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(AVATAR_OPTIONS[0]?.src ?? '');
   const nextPath = typeof (location.state as { from?: unknown } | null)?.from === 'string'
     ? (location.state as { from: string }).from
     : null;
@@ -26,18 +42,49 @@ export function LoginPage() {
           subtitle: '创建一个新的校园账号'
         };
 
+  useEffect(() => () => {
+    if (customAvatarPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(customAvatarPreviewUrl);
+    }
+  }, [customAvatarPreviewUrl]);
+
   async function handleRegister(values: {
     studentId?: string;
     displayName: string;
     email: string;
     college?: string;
+    avatarUrl?: string;
     password: string;
+    confirmPassword: string;
   }) {
     setLoading(true);
     try {
-      const result = await registerUser(values);
+      const { confirmPassword: _confirmPassword, ...payload } = values;
+      const registerPayload = {
+        ...payload,
+        avatarUrl: customAvatarFile ? undefined : selectedAvatarUrl || undefined
+      };
+      const result = await registerUser(registerPayload);
+      if (customAvatarFile) {
+        try {
+          const uploaded = await uploadImageAsset(customAvatarFile, 'avatar');
+          const profile = await updateUserProfile(result.user.id, {
+            displayName: values.displayName,
+            email: values.email,
+            realName: values.displayName,
+            college: values.college?.trim() || '待填写',
+            phone: '待填写',
+            avatarUrl: uploaded.url
+          });
+          result.user.avatarUrl = profile.avatarUrl ?? uploaded.url;
+        } catch (error) {
+          antMessage.warning(getApiErrorMessage(error, '注册成功，但头像上传失败，请稍后在资料页补充'));
+        }
+      }
       setCurrentUser(result.user);
-      setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.displayName}` });
+      if (!customAvatarFile) {
+        setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.displayName}` });
+      }
       void navigate(nextPath || '/');
     } catch (error: any) {
       setMessage({
@@ -48,6 +95,28 @@ export function LoginPage() {
       setLoading(false);
     }
   }
+
+  async function handleCustomAvatarConfirm(file: File, previewUrl: string) {
+    if (customAvatarPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(customAvatarPreviewUrl);
+    }
+    setCustomAvatarFile(file);
+    setCustomAvatarPreviewUrl(previewUrl);
+    setSelectedAvatarUrl(previewUrl);
+    setAvatarModalOpen(false);
+    antMessage.success('头像已准备好，注册后会自动上传');
+  }
+
+  function handlePresetAvatarSelect(src: string) {
+    if (customAvatarPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(customAvatarPreviewUrl);
+    }
+    setCustomAvatarPreviewUrl(null);
+    setCustomAvatarFile(null);
+    setSelectedAvatarUrl(src);
+  }
+
+  const usingCustomAvatar = Boolean(selectedAvatarUrl?.startsWith('blob:'));
 
   async function handleLogin(values: { account: string; password: string }) {
     setLoading(true);
@@ -104,7 +173,7 @@ export function LoginPage() {
               </Button>
             </Form>
           ) : (
-            <Form layout="vertical" onFinish={handleRegister} className="form-shell">
+            <Form form={form} layout="vertical" onFinish={handleRegister} className="form-shell">
               <Form.Item label="展示名" name="displayName" rules={[{ required: true }]}>
                 <Input placeholder="例如：王同学" />
               </Form.Item>
@@ -117,8 +186,58 @@ export function LoginPage() {
               <Form.Item label="学院" name="college">
                 <Input placeholder="选填，例如：林学院" />
               </Form.Item>
+              <Form.Item label="头像">
+                <div className="register-avatar-grid" role="radiogroup" aria-label="选择头像">
+                  {AVATAR_OPTIONS.map((item, index) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className={selectedAvatarUrl === item.src ? 'register-avatar-option active' : 'register-avatar-option'}
+                      onClick={() => {
+                        handlePresetAvatarSelect(item.src);
+                      }}
+                      aria-pressed={selectedAvatarUrl === item.src}
+                      aria-label={item.key === 'default' ? '选择默认头像' : `选择预设头像 ${index}`}
+                    >
+                      <UserAvatar src={item.src} alt="" fallbackLabel="" />
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={usingCustomAvatar ? 'register-avatar-option active custom' : 'register-avatar-option custom'}
+                    onClick={() => setAvatarModalOpen(true)}
+                    aria-pressed={usingCustomAvatar}
+                    aria-label="上传自定义头像"
+                  >
+                    {usingCustomAvatar ? (
+                      <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" />
+                    ) : (
+                      <span className="register-avatar-upload-placeholder" aria-hidden="true">+</span>
+                    )}
+                  </button>
+                </div>
+              </Form.Item>
               <Form.Item label="密码" name="password" rules={[{ required: true }]}>
                 <Input.Password placeholder="请设置登录密码" />
+              </Form.Item>
+              <Form.Item
+                label="确认密码"
+                name="confirmPassword"
+                dependencies={['password']}
+                rules={[
+                  { required: true, message: '请再次输入密码' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('password') === value) {
+                        return Promise.resolve();
+                      }
+
+                      return Promise.reject(new Error('两次输入的密码不一致'));
+                    }
+                  })
+                ]}
+              >
+                <Input.Password placeholder="请再次输入密码" />
               </Form.Item>
               <Button type="primary" htmlType="submit" loading={loading}>
                 注册
@@ -127,6 +246,16 @@ export function LoginPage() {
           )}
         </section>
       </div>
+      <ImageCropUploadModal
+        open={avatarModalOpen}
+        title="上传头像"
+        shape="round"
+        aspect={1}
+        outputWidth={512}
+        outputHeight={512}
+        onCancel={() => setAvatarModalOpen(false)}
+        onConfirm={handleCustomAvatarConfirm}
+      />
     </div>
   );
 }

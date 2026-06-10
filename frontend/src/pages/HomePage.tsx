@@ -38,6 +38,7 @@ import {
 import { useAuthState } from '../services/auth-state';
 import { subscribeFavorites, toggleFavorite } from '../services/favorites';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
 
@@ -310,9 +311,6 @@ export function HomePage() {
     if (item.status === 'PENDING') {
       return '商品审核中';
     }
-    if (currentUser?.id && item.sellerId === currentUser.id) {
-      return '这是你发布的商品';
-    }
     return null;
   }
 
@@ -494,7 +492,7 @@ export function HomePage() {
                     <div className="fish-home-user-guest">
                       <div className="fish-home-user-guest-top">
                         <span className="fish-home-user-guest-avatar">
-                          <img src="/images/default-avatar.png" alt="默认头像" />
+                          <UserAvatar alt="默认头像" fallbackLabel={guestGreeting.slice(0, 1)} />
                         </span>
                         <span className="fish-home-user-guest-kicker">{guestGreeting}！</span>
                       </div>
@@ -524,7 +522,11 @@ export function HomePage() {
                       <div className="fish-home-user-profile">
                         <div className="fish-home-user-head">
                           <span className="fish-home-user-avatar">
-                            <img src="/images/default-avatar.png" alt="默认头像" />
+                            <UserAvatar
+                              src={userPresentation.avatarUrl}
+                              alt={`${currentUser.displayName}的头像`}
+                              fallbackLabel={userPresentation.initial}
+                            />
                           </span>
                           <div className="fish-home-user-copy">
                             <strong>{currentUser.displayName}</strong>

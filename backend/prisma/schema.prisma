@@ -89,9 +89,10 @@ enum BehaviorEventType {
 model User {
   id                          Int                  @id @default(autoincrement())
   supertokensUserId           String?              @unique
-  studentId                   String               @unique
+  studentId                   String?              @unique
   displayName                 String
   email                       String               @unique
+  avatarUrl                   String?
   role                        UserRole             @default(USER)
   creditScore                 Int                  @default(60)
   verificationStatus          VerificationStatus   @default(PENDING)
@@ -112,6 +113,8 @@ model User {
   reportsHandled              Report[]             @relation("ReportHandler")
   auditLogs                   AuditLog[]           @relation("AuditLogActor")
   behaviors                   UserBehavior[]
+  following                   UserFollow[]         @relation("UserFollowing")
+  followers                   UserFollow[]         @relation("UserFollowers")
 }
 
 model StudentVerification {
@@ -323,4 +326,17 @@ model UserBehavior {
   @@index([userId, createdAt])
   @@index([userId, productId, createdAt])
   @@index([productId, eventType])
+}
+
+model UserFollow {
+  id           Int      @id @default(autoincrement())
+  followerId   Int
+  followingId  Int
+  createdAt    DateTime @default(now())
+  follower     User     @relation("UserFollowing", fields: [followerId], references: [id])
+  following    User     @relation("UserFollowers", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
 }

@@ -2,7 +2,18 @@ import axios from 'axios';
 import Session from 'supertokens-auth-react/recipe/session';
 import { clearCurrentUserStorage, getDevAuthToken, saveDevAuthToken } from './session';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+function resolveBrowserApiBaseUrl() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:3001/api`;
+}
+
+const API_BASE_URL = resolveBrowserApiBaseUrl()
+  ?? import.meta.env.VITE_API_BASE_URL
+  ?? 'http://localhost:3001/api';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL
@@ -13,6 +24,7 @@ const authClient = axios.create({
 });
 
 Session.addAxiosInterceptors(apiClient);
+Session.addAxiosInterceptors(authClient);
 
 apiClient.interceptors.request.use((config) => {
   const devAuthToken = getDevAuthToken();
@@ -179,7 +191,6 @@ export type DashboardStats = {
   userCount: number;
   productCount: number;
   pendingCount: number;
-  targetSeedCount: number;
 };
 
 export type RegisterPayload = {
@@ -187,6 +198,7 @@ export type RegisterPayload = {
   displayName: string;
   email: string;
   college?: string;
+  avatarUrl?: string;
   password: string;
 };
 
@@ -197,9 +209,10 @@ export type LoginPayload = {
 
 export type AuthUser = {
   id: number;
-  studentId: string;
+  studentId?: string | null;
   displayName: string;
   email: string;
+  avatarUrl?: string | null;
   role: 'USER' | 'ADMIN';
   creditScore?: number;
   verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -209,7 +222,7 @@ export type AuthUser = {
 export type AuthSessionResponse = {
   message: string;
   account?: string;
-  devAuthToken?: string;
+  devAuthToken?: string | null;
   user: AuthUser;
 };
 
@@ -220,6 +233,7 @@ export type ProductCreatePayload = {
   category: string;
   condition: string;
   tags: string[];
+  imageUrls?: string[];
 };
 
 export type OrderPayload = {
@@ -324,22 +338,6 @@ export type SendMessagePayload = {
 export type CreateConversationPayload = {
   productId: number;
   initialMessage?: string;
-};
-
-export type MessageDemoHydrateResponse = {
-  hydrated: boolean;
-  userId: number;
-  count: number;
-  user: {
-    id: number;
-    studentId: string;
-    displayName: string;
-    email: string;
-    role: 'USER' | 'ADMIN';
-    creditScore?: number;
-    verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
-    accountStatus?: 'ACTIVE' | 'BANNED';
-  };
 };
 
 export type CampusServiceCategory = 'ERRAND' | 'AGENCY' | 'GROUP_BUY' | 'HELP';
@@ -519,8 +517,9 @@ export type PublishingRules = {
 export type UserTrustSummary = {
   id: number;
   displayName: string;
-  studentId: string;
+  studentId?: string | null;
   email: string;
+  avatarUrl?: string | null;
   creditScore: number;
   creditLevel: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -530,6 +529,8 @@ export type UserTrustSummary = {
   activeOrders: number;
   waitingReviews: number;
   reportCount: number;
+  followerCount: number;
+  isFollowing: boolean;
   responseRate: number;
   averageRating: number;
 };
@@ -537,8 +538,9 @@ export type UserTrustSummary = {
 export type UserProfile = {
   id: number;
   displayName: string;
-  studentId: string;
+  studentId?: string | null;
   email: string;
+  avatarUrl?: string | null;
   role: 'USER' | 'ADMIN';
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -546,6 +548,52 @@ export type UserProfile = {
   realName: string;
   college: string;
   phone: string;
+};
+
+export type HistoryItem = ProductSummary & {
+  viewedAt: string | null;
+};
+
+export type BrowsingHistoryResponse = {
+  items: HistoryItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type FollowingUser = {
+  id: number;
+  displayName: string;
+  studentId?: string | null;
+  email: string;
+  avatarUrl?: string | null;
+  creditScore: number;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  accountStatus: 'ACTIVE' | 'BANNED';
+  college: string;
+  activeProductCount: number;
+  followerCount: number;
+  followedAt: string | null;
+};
+
+export type FollowingListResponse = {
+  items: FollowingUser[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type FollowMutationResponse = {
+  isFollowing: boolean;
+  followerCount: number;
+  followedAt?: string;
+  user?: FollowingUser;
 };
 
 export type ReportItem = {
@@ -575,7 +623,8 @@ export type ModerationUserItem = {
   id: number;
   displayName: string;
   email: string;
-  studentId: string;
+  studentId?: string | null;
+  avatarUrl?: string | null;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -715,6 +764,30 @@ export async function fetchCurrentSession() {
 export async function logoutUser() {
   const response = await apiClient.post<{ message: string }>('/auth/logout');
   saveDevAuthToken(null);
+  return response.data;
+}
+
+export async function fetchBrowsingHistory(params?: { page?: number; pageSize?: number }) {
+  const response = await apiClient.get<BrowsingHistoryResponse>('/users/me/history', {
+    params
+  });
+  return response.data;
+}
+
+export async function fetchFollowingUsers(params?: { page?: number; pageSize?: number }) {
+  const response = await apiClient.get<FollowingListResponse>('/users/me/following', {
+    params
+  });
+  return response.data;
+}
+
+export async function followUser(userId: number) {
+  const response = await apiClient.post<FollowMutationResponse>(`/users/${userId}/follow`);
+  return response.data;
+}
+
+export async function unfollowUser(userId: number) {
+  const response = await apiClient.delete<FollowMutationResponse>(`/users/${userId}/follow`);
   return response.data;
 }
 
@@ -865,9 +938,29 @@ export async function updateUserProfile(
     realName: string;
     college: string;
     phone: string;
+    avatarUrl?: string | null;
   }
 ) {
   const response = await apiClient.patch<UserProfile>(`/users/${id}/profile`, payload);
+  return response.data;
+}
+
+export async function uploadImageAsset(file: File, purpose: 'avatar' | 'product' = 'avatar') {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('purpose', purpose);
+  const response = await apiClient.post<{
+    objectKey: string;
+    url: string;
+    width: number;
+    height: number;
+    mimeType: string;
+    size: number;
+  }>('/media/images', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
   return response.data;
 }
 

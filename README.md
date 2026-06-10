@@ -71,10 +71,7 @@ SwapCampus
 │   ├── prisma
 │   │   ├── schema.prisma
 │   │   ├── init.ts
-│   │   ├── seed.ts
-│   │   ├── sync-default-accounts.ts
-│   │   ├── ensure-category-products.ts
-│   │   ├── ensure-campus-services.ts
+│   │   ├── remove-demo-data.ts
 │   │   └── verify-category-products.ts
 │   └── src
 │       ├── app.module.ts
@@ -168,24 +165,14 @@ make start
 说明：
 - `db-init` 现在是一次性初始化任务，放在 `init` profile 下
 - 首次启动或需要重置数据时，先执行 `db-init`
+- `db-init` 只负责建表与基础初始化，不再自动写入商品、服务、用户演示数据
 - 日常开发重启 `backend` / `frontend` 不会再重复触发数据库 reset 和 seed
-- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens`、`backend`、`frontend`
+- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`backend`、`frontend`
 - 前端生产镜像使用 `nginx` 托管静态资源
 - 默认认证 Core 使用容器内自托管 `http://supertokens:3567`
-- SuperTokens 默认使用官方 PostgreSQL Core 镜像的内存存储，适合本地开发和演示；需要持久化认证数据时再接 PostgreSQL
+- SuperTokens 通过独立 PostgreSQL 容器持久化认证数据，容器重启后账号不会丢失
 - `backend` 会等待 `supertokens` 健康后再启动，避免认证接口在默认开发环境下处于不可用状态
 - `make start` / `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
-
-### 测试账号
-```bash
-cd backend
-DATABASE_URL=mysql://swapcampus:swapcampus@127.0.0.1:3306/swapcampus \
-SUPERTOKENS_CONNECTION_URI=http://127.0.0.1:3567 \
-npm run db:sync-test-account
-```
-
-- 账号：`admin`
-- 密码：`admin`
 
 ### 访问地址
 - Frontend：`http://10.66.0.11:5178`
@@ -223,28 +210,11 @@ make backend-test
 make frontend-build
 ```
 
-## 默认账号与演示路径
-### 默认账号
-- 管理员：`admin@swapcampus.cn / SwapCampusAdmin2026`
-- 普通演示用户：`qjinyu0608@qq.com / 123456`
-- 种子普通用户：`user1@stu.swapcampus.cn` 至 `user30@stu.swapcampus.cn`
-- 普通种子用户默认密码：`SwapCampusUser2026`
-
-### 当前初始化口径
-- 管理员账号：1 个
-- 固定普通演示账号：1 个
-- 批量种子普通用户：30 个
-- 商品种子数据：360 条
-- 校园服务任务：8 条
-
+## 演示路径
 ### 推荐演示路径
 1. 打开 `http://localhost:5178`
-2. 使用普通演示账号登录
-3. 浏览首页商品流并进入详情页
-4. 尝试发布一个新商品并观察其进入待审核状态
-5. 进入消息页查看已有会话并发送消息
-6. 退出后使用管理员账号登录后台
-7. 在后台对待审核商品执行“通过”或“下架”
+2. 先注册或通过测试脚本创建账号
+3. 发布商品或校园服务后再浏览首页、详情、消息和后台流程
 
 ## 后续微服务拆分建议
 当前系统仍适合维持单体后端，不建议为了课程项目过早拆微服务。更合理的演进顺序如下：

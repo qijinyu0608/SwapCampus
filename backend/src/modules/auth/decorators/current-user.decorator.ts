@@ -21,7 +21,7 @@ export const CurrentUser = createParamDecorator((_: unknown, context: ExecutionC
   return {
     id: Number(accessTokenPayload.userId),
     supertokensUserId: String(session.getUserId()),
-    studentId: String(accessTokenPayload.studentId ?? ''),
+    studentId: typeof accessTokenPayload.studentId === 'string' ? accessTokenPayload.studentId : null,
     displayName: typeof accessTokenPayload.displayName === 'string' ? accessTokenPayload.displayName : undefined,
     email: String(accessTokenPayload.email ?? ''),
     role: (accessTokenPayload.role as UserRole) ?? UserRole.USER,

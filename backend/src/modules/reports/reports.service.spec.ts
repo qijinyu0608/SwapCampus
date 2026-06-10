@@ -6,7 +6,7 @@ describe('ReportsService', () => {
   const adminUser = {
     id: 22,
     studentId: '2026000022',
-    email: 'admin@swapcampus.cn',
+    email: 'admin@example.com',
     role: 'ADMIN'
   } as any;
 
