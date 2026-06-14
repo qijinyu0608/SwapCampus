@@ -22,6 +22,7 @@ import {
   loadCampusServiceActivityStats
 } from '../campus-services/campus-service-moderation';
 import { SearchService } from '../search/search.service';
+import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -160,6 +161,7 @@ type FollowUserSummary = {
   email: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
+  avatarFrameUnlocked?: boolean;
   creditScore: number;
   verificationStatus: VerificationStatus;
   accountStatus: AccountStatus;
@@ -233,14 +235,16 @@ export class UsersService {
       college: string;
       phone: string;
     } | null;
-  }) {
+  }, options?: { avatarFrameUnlocked?: boolean }) {
+    const avatarFrameUnlocked = options?.avatarFrameUnlocked ?? false;
     return {
       id: user.id,
       displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
-      avatarFrame: user.avatarFrame,
+      avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
+      avatarFrameUnlocked,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -341,7 +345,8 @@ export class UsersService {
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
-      avatarFrame: user.avatarFrame,
+      avatarFrame: user.avatarFrameUnlocked ? user.avatarFrame : null,
+      avatarFrameUnlocked: Boolean(user.avatarFrameUnlocked),
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
       accountStatus: user.accountStatus,
@@ -362,7 +367,8 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    return this.mapProfile(user);
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
+    return this.mapProfile(user, { avatarFrameUnlocked });
   }
 
   async getTrustSummary(userId: number, currentUser?: AuthenticatedUser) {
@@ -412,13 +418,16 @@ export class UsersService {
       ? Number((reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length).toFixed(1))
       : null;
 
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
+
     return {
       id: user.id,
       displayName: user.displayName,
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
-      avatarFrame: user.avatarFrame,
+      avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
+      avatarFrameUnlocked,
       creditScore: user.creditScore,
       creditLevel: getCreditLevel(user.creditScore),
       verificationStatus: user.verificationStatus,
@@ -627,6 +636,18 @@ export class UsersService {
 
     const productCountMap = new Map(productCounts.map((item) => [item.sellerId, item._count._all]));
     const followerCountMap = new Map(followerCounts.map((item) => [item.followingId, item._count._all]));
+    const unlockedFollowingIds = followingIds.length
+      ? new Set(
+          (await this.prisma.creditRedeemOrder.findMany({
+            where: {
+              userId: { in: followingIds },
+              rewardCode: 'PROFILE_FRAME_BLUE',
+              status: 'FULFILLED'
+            },
+            select: { userId: true }
+          })).map((item) => item.userId)
+        )
+      : new Set<number>();
 
     return {
       items: follows.map((item) => this.mapFollowUser({
@@ -636,6 +657,7 @@ export class UsersService {
         email: item.following.email,
         avatarUrl: item.following.avatarUrl,
         avatarFrame: item.following.avatarFrame,
+        avatarFrameUnlocked: unlockedFollowingIds.has(item.followingId),
         creditScore: item.following.creditScore,
         verificationStatus: item.following.verificationStatus,
         accountStatus: item.following.accountStatus,
@@ -703,6 +725,7 @@ export class UsersService {
         status: ProductStatus.ON_SALE
       }
     });
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, targetUserId);
 
     return {
       isFollowing: true,
@@ -711,6 +734,7 @@ export class UsersService {
       user: this.mapFollowUser({
         ...targetUser,
         avatarFrame: targetUser.avatarFrame,
+        avatarFrameUnlocked,
         activeProductCount,
         followerCount
       }, follow.createdAt)
@@ -791,6 +815,11 @@ export class UsersService {
       throw new BadRequestException('手机号不能为空');
     }
 
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
+    if (payload.avatarFrame !== undefined && nextAvatarFrame && !avatarFrameUnlocked) {
+      throw new BadRequestException('请先前往信用中心兑换头像框权益');
+    }
+
     try {
       await this.syncCredentialEmail(user, nextEmail);
       const updated = await this.prisma.user.update({
@@ -821,7 +850,7 @@ export class UsersService {
 
       await this.searchService.syncSellerProducts(userId);
 
-      return this.mapProfile(updated);
+      return this.mapProfile(updated, { avatarFrameUnlocked });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('邮箱已被使用');

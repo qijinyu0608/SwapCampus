@@ -11,6 +11,7 @@ import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { MessagesPage } from '../pages/MessagesPage';
 import { OrderCheckoutPage } from '../pages/OrderCheckoutPage';
+import { OrderDetailPage } from '../pages/OrderDetailPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductPublishPage } from '../pages/ProductPublishPage';
 import { ProductPublishRulesPage } from '../pages/ProductPublishRulesPage';
@@ -38,6 +39,7 @@ export const appRoutes: AppRouteDefinition[] = [
   { path: '/favorites', element: <FavoritesPage />, navigationLabel: '收藏' },
   { path: '/products/:id', element: <ProductDetailPage /> },
   { path: '/orders/checkout', element: <RequireUser><OrderCheckoutPage /></RequireUser> },
+  { path: '/orders/:id', element: <RequireUser><OrderDetailPage /></RequireUser> },
   { path: '/users/:id', element: <PublicUserPage /> },
   { path: '/publish', element: <RequireUser><ProductPublishPage /></RequireUser> },
   { path: '/publish/rules', element: <RequireUser><ProductPublishRulesPage /></RequireUser> },

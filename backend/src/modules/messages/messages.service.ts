@@ -3,9 +3,11 @@ import {
   AccountStatus,
   CampusServiceCategory,
   CampusServiceListingStatus,
-  CampusServiceOrderStatus
+  CampusServiceOrderStatus,
+  MessageType
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AVATAR_FRAME_REWARD_CODE, hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
@@ -19,6 +21,31 @@ import {
   type MessageConversationAccessRecord
 } from './message-conversation.helpers';
 
+type MessageAttachment = {
+  kind: 'image' | 'video';
+  objectKey: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  originalName?: string;
+};
+
+type ProductOrderEventMessage = {
+  kind: 'product-order-event';
+  event: string;
+  title: string;
+  summary: string;
+  orderId: number;
+  productId: number;
+  orderCode: string;
+  actionLabel?: string | null;
+  actionTarget?: string | null;
+  badge?: string | null;
+  meta?: Array<{ label: string; value: string }>;
+};
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -27,6 +54,175 @@ export class MessagesService {
     @Inject(MessagesGateway)
     private readonly messagesGateway: MessagesGateway
   ) {}
+
+  private getMessagePreview(type: MessageType, content: string) {
+    if (type === MessageType.IMAGE) {
+      return '[图片]';
+    }
+
+    if (type === MessageType.VIDEO) {
+      return '[视频]';
+    }
+
+    if (type === MessageType.ORDER_EVENT) {
+      return '[订单动态]';
+    }
+
+    return content;
+  }
+
+  private parseMessageAttachment(type: MessageType, content: string): MessageAttachment | null {
+    if (type !== MessageType.IMAGE && type !== MessageType.VIDEO) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(content) as Partial<MessageAttachment>;
+      if (
+        typeof parsed?.objectKey !== 'string'
+        || typeof parsed?.url !== 'string'
+        || typeof parsed?.mimeType !== 'string'
+        || typeof parsed?.size !== 'number'
+      ) {
+        return null;
+      }
+
+      return {
+        kind: type === MessageType.IMAGE ? 'image' : 'video',
+        objectKey: parsed.objectKey,
+        url: parsed.url,
+        mimeType: parsed.mimeType,
+        size: parsed.size,
+        width: typeof parsed.width === 'number' ? parsed.width : undefined,
+        height: typeof parsed.height === 'number' ? parsed.height : undefined,
+        originalName: typeof parsed.originalName === 'string' ? parsed.originalName : undefined
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private parseOrderEventPayload(type: MessageType, content: string): ProductOrderEventMessage | null {
+    if (type !== MessageType.ORDER_EVENT) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(content) as Partial<ProductOrderEventMessage>;
+      if (
+        parsed?.kind !== 'product-order-event'
+        || typeof parsed.orderId !== 'number'
+        || typeof parsed.productId !== 'number'
+        || typeof parsed.title !== 'string'
+        || typeof parsed.summary !== 'string'
+      ) {
+        return null;
+      }
+
+      return {
+        kind: 'product-order-event',
+        event: typeof parsed.event === 'string' ? parsed.event : 'CREATED',
+        title: parsed.title,
+        summary: parsed.summary,
+        orderId: parsed.orderId,
+        productId: parsed.productId,
+        orderCode: typeof parsed.orderCode === 'string' ? parsed.orderCode : '',
+        actionLabel: typeof parsed.actionLabel === 'string' || parsed.actionLabel === null ? parsed.actionLabel : null,
+        actionTarget: typeof parsed.actionTarget === 'string' || parsed.actionTarget === null ? parsed.actionTarget : null,
+        badge: typeof parsed.badge === 'string' || parsed.badge === null ? parsed.badge : null,
+        meta: Array.isArray(parsed.meta)
+          ? parsed.meta.filter((item): item is { label: string; value: string } => Boolean(item) && typeof item.label === 'string' && typeof item.value === 'string')
+          : []
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private mapMessageResponse(message: {
+    id: number;
+    senderId: number;
+    content: string;
+    type: MessageType;
+    createdAt: Date;
+    sender: {
+      displayName: string;
+      avatarUrl?: string | null;
+      avatarFrame?: string | null;
+    };
+  }, avatarFrameUnlocked = false) {
+    const attachment = this.parseMessageAttachment(message.type, message.content);
+    const orderEvent = this.parseOrderEventPayload(message.type, message.content);
+    const previewText = this.getMessagePreview(message.type, message.content);
+
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      senderName: message.sender.displayName,
+      senderAvatarUrl: message.sender.avatarUrl ?? null,
+      senderAvatarFrame: avatarFrameUnlocked ? (message.sender.avatarFrame ?? null) : null,
+      content: message.type === MessageType.TEXT || message.type === MessageType.EMOJI ? message.content : '',
+      type: message.type,
+      attachment,
+      orderEvent,
+      previewText,
+      createdAt: message.createdAt
+    };
+  }
+
+  private normalizeOutgoingMessage(dto: SendMessageDto) {
+    const type = dto.type ?? MessageType.TEXT;
+
+    if (type === MessageType.TEXT || type === MessageType.EMOJI) {
+      const content = dto.content?.trim() ?? '';
+      if (!content) {
+        throw new BadRequestException('消息内容不能为空');
+      }
+
+      return {
+        type,
+        content
+      };
+    }
+
+    const attachment = dto.attachment;
+    if (!attachment || typeof attachment !== 'object') {
+      throw new BadRequestException('缺少附件信息');
+    }
+
+    if (
+      typeof attachment.objectKey !== 'string'
+      || typeof attachment.url !== 'string'
+      || typeof attachment.mimeType !== 'string'
+      || typeof attachment.size !== 'number'
+    ) {
+      throw new BadRequestException('附件信息不完整');
+    }
+
+    if (type === MessageType.IMAGE && !attachment.mimeType.startsWith('image/')) {
+      throw new BadRequestException('图片消息附件类型不正确');
+    }
+
+    if (type === MessageType.VIDEO && !attachment.mimeType.startsWith('video/')) {
+      throw new BadRequestException('视频消息附件类型不正确');
+    }
+
+    const payload: MessageAttachment = {
+      kind: type === MessageType.IMAGE ? 'image' : 'video',
+      objectKey: attachment.objectKey,
+      url: attachment.url,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      width: typeof attachment.width === 'number' ? attachment.width : undefined,
+      height: typeof attachment.height === 'number' ? attachment.height : undefined,
+      originalName: typeof attachment.originalName === 'string' ? attachment.originalName : undefined
+    };
+
+    return {
+      type,
+      content: JSON.stringify(payload)
+    };
+  }
 
   private mapCampusConversationStatus(params: {
     listingStatus: CampusServiceListingStatus | null;
@@ -224,6 +420,7 @@ export class MessagesService {
             id: true,
             displayName: true,
             avatarUrl: true,
+            avatarFrame: true,
             verification: {
               select: {
                 college: true
@@ -327,7 +524,7 @@ export class MessagesService {
             }
           : null,
         campusServiceDisplay,
-        preview: latestMessage?.content ?? '点击查看消息',
+        preview: latestMessage ? this.getMessagePreview(latestMessage.type, latestMessage.content) : '点击查看消息',
         updatedAt: conversation.updatedAt,
         latestMessageSenderId: latestMessage?.senderId ?? null,
         latestMessageAt: latestMessage?.createdAt ?? conversation.updatedAt,
@@ -336,6 +533,7 @@ export class MessagesService {
           id: counterpart?.id ?? counterpartId ?? null,
           displayName: counterpart?.displayName ?? '同校同学',
           avatarUrl: counterpart?.avatarUrl ?? null,
+          avatarFrame: counterpart?.avatarFrame ?? null,
           college: counterpart?.verification?.college ?? null,
           isSeller: Boolean(productSellerId && counterpartId === productSellerId)
         },
@@ -413,7 +611,8 @@ export class MessagesService {
         data: {
           conversationId: conversation.id,
           senderId: buyerUser.id,
-          content: initialMessage
+          content: initialMessage,
+          type: MessageType.TEXT
         }
       });
     }
@@ -455,12 +654,13 @@ export class MessagesService {
           orderBy: { createdAt: 'asc' },
           include: {
             sender: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true
+                select: {
+                  id: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  avatarFrame: true
+                }
               }
-            }
           }
           }
         }
@@ -470,15 +670,18 @@ export class MessagesService {
       return [];
     }
 
-    return conversation.messages.map((message) => ({
-      id: message.id,
-      senderId: message.senderId,
-      senderName: message.sender.displayName,
-      senderAvatarUrl: message.sender.avatarUrl ?? null,
-      content: message.content,
-      type: message.type,
-      createdAt: message.createdAt
-    }));
+    const unlockedUserIds = new Set<number>(
+      (await this.prisma.creditRedeemOrder.findMany({
+        where: {
+          userId: { in: [...new Set(conversation.messages.map((message) => message.senderId))] },
+          rewardCode: AVATAR_FRAME_REWARD_CODE,
+          status: 'FULFILLED'
+        },
+        select: { userId: true }
+      })).map((item) => item.userId)
+    );
+
+    return conversation.messages.map((message) => this.mapMessageResponse(message, unlockedUserIds.has(message.senderId)));
   }
 
   async sendMessage(conversationId: number, dto: SendMessageDto, currentUser: AuthenticatedUser) {
@@ -486,7 +689,7 @@ export class MessagesService {
     const [sender, accessContext] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: authUser.id },
-        select: { id: true, accountStatus: true, displayName: true, avatarUrl: true }
+        select: { id: true, accountStatus: true, displayName: true, avatarUrl: true, avatarFrame: true }
       }),
       this.getConversationAccessContext(conversationId)
     ]);
@@ -514,11 +717,14 @@ export class MessagesService {
       throw new ForbiddenException('当前账号无权发送此会话消息');
     }
 
+    const normalized = this.normalizeOutgoingMessage(dto);
+
     const message = await this.prisma.message.create({
       data: {
         conversationId,
         senderId: authUser.id,
-        content: dto.content
+        content: normalized.content,
+        type: normalized.type
       }
     });
 
@@ -527,15 +733,16 @@ export class MessagesService {
       data: { updatedAt: new Date() }
     });
 
-    const response = {
-      id: message.id,
-      senderId: message.senderId,
-      senderName: sender.displayName,
-      senderAvatarUrl: sender.avatarUrl ?? null,
-      content: message.content,
-      type: message.type,
-      createdAt: message.createdAt
-    };
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, authUser.id);
+
+    const response = this.mapMessageResponse({
+      ...message,
+      sender: {
+        displayName: sender.displayName,
+        avatarUrl: sender.avatarUrl ?? null,
+        avatarFrame: sender.avatarFrame ?? null
+      }
+    }, avatarFrameUnlocked);
 
     this.messagesGateway.emitNewMessage({
       conversationId,

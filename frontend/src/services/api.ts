@@ -76,7 +76,9 @@ export type ListingSummary = {
 export type ListingParticipantBase = {
   id: number;
   displayName: string;
+  studentId?: string | null;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -215,6 +217,7 @@ export type AuthUser = {
   email: string;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  avatarFrameUnlocked?: boolean;
   role: 'USER' | 'ADMIN';
   creditScore?: number;
   verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -298,6 +301,7 @@ export type CreditRewardItem = {
   pointsCost: number;
   minCreditScore: number;
   canRedeem: boolean;
+  redeemed: boolean;
 };
 
 export type CreditRewardListResponse = {
@@ -332,12 +336,18 @@ export type OrderPayload = {
 
 export type OrderItem = {
   id: number;
+  orderCode: string;
   productId: number;
   buyerId: number;
   sellerId: number;
   status: string;
   meetupLocation?: string | null;
   note?: string | null;
+  paymentIntent?: string | null;
+  autoConfirmAt?: string | null;
+  autoConfirmCountdownSeconds?: number;
+  canBuyerComplete?: boolean;
+  canReview?: boolean;
   createdAt: string;
   updatedAt: string;
   productTitle: string;
@@ -348,11 +358,51 @@ export type OrderItem = {
   productImageUrl: string | null;
   conversationId: number | null;
   buyerName: string;
+  buyerAvatarUrl?: string | null;
+  buyerAvatarFrame?: string | null;
   buyerCreditScore: number | null;
   buyerVerified: boolean;
   sellerName: string;
+  sellerAvatarUrl?: string | null;
+  sellerAvatarFrame?: string | null;
   sellerCreditScore: number | null;
   sellerVerified: boolean;
+};
+
+export type OrderReviewItem = {
+  id: number;
+  rating: number;
+  content: string;
+  createdAt: string;
+  reviewerId: number;
+  reviewerName: string;
+};
+
+export type OrderDetail = OrderItem & {
+  completedAt?: string | null;
+  canceledAt?: string | null;
+  orderSnapshot: {
+    productId: number;
+    title: string;
+    description: string;
+    price: number;
+    category: string;
+    condition: string;
+    imageUrl: string | null;
+    sellerId: number;
+    sellerName: string | null;
+  };
+  timeline: Array<{
+    label: string;
+    value: string;
+  }>;
+  reviews: OrderReviewItem[];
+  actionState: {
+    canComplete: boolean;
+    canReview: boolean;
+    canAppeal: boolean;
+    canOpenConversation: boolean;
+  };
 };
 
 export type OrderListParams = {
@@ -437,13 +487,48 @@ export type ConversationMessage = {
   senderId: number;
   senderName: string;
   senderAvatarUrl?: string | null;
+  senderAvatarFrame?: string | null;
   content: string;
   type: string;
+  attachment?: {
+    kind: 'image' | 'video';
+    objectKey: string;
+    url: string;
+    mimeType: string;
+    size: number;
+    width?: number;
+    height?: number;
+    originalName?: string;
+  } | null;
+  orderEvent?: {
+    kind: 'product-order-event';
+    event: string;
+    title: string;
+    summary: string;
+    orderId: number;
+    productId: number;
+    orderCode: string;
+    actionLabel?: string | null;
+    actionTarget?: string | null;
+    badge?: string | null;
+    meta?: Array<{ label: string; value: string }>;
+  } | null;
+  previewText?: string;
   createdAt: string;
 };
 
 export type SendMessagePayload = {
-  content: string;
+  content?: string;
+  type?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'EMOJI';
+  attachment?: {
+    objectKey: string;
+    url: string;
+    mimeType: string;
+    size: number;
+    width?: number;
+    height?: number;
+    originalName?: string;
+  };
 };
 
 export type CreateConversationPayload = {
@@ -766,6 +851,7 @@ export type UserTrustSummary = {
   email: string;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  avatarFrameUnlocked?: boolean;
   creditScore: number;
   creditLevel: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -787,6 +873,7 @@ export type UserProfile = {
   email: string;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  avatarFrameUnlocked?: boolean;
   role: 'USER' | 'ADMIN';
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -843,6 +930,7 @@ export type FollowingUser = {
   email: string;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  avatarFrameUnlocked?: boolean;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -1082,6 +1170,11 @@ export async function fetchOrders(params?: OrderListParams) {
   return response.data;
 }
 
+export async function fetchOrderDetail(id: number) {
+  const response = await apiClient.get<OrderDetail>(`/orders/${id}`);
+  return response.data;
+}
+
 export async function createOrder(payload: OrderPayload) {
   const response = await apiClient.post('/orders', payload);
   return response.data;
@@ -1276,6 +1369,25 @@ export async function uploadImageAsset(file: File, purpose: 'avatar' | 'product'
     mimeType: string;
     size: number;
   }>('/media/images', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return response.data;
+}
+
+export async function uploadMessageAttachment(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await apiClient.post<{
+    objectKey: string;
+    url: string;
+    mimeType: string;
+    size: number;
+    width?: number;
+    height?: number;
+    originalName?: string;
+  }>('/media/messages', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }

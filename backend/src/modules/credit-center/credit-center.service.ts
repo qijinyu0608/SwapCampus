@@ -21,6 +21,11 @@ import {
   REWARD_DEFINITIONS,
   WEEKLY_CREDIT_GAIN_CAP
 } from './credit-center.definitions';
+import {
+  AVATAR_FRAME_REWARD_DURATION_DAYS,
+  hasAvatarFrameRewardUnlocked,
+  hasFulfilledReward
+} from './credit-center.utils';
 
 type UserCreditAssetRecord = {
   userId: number;
@@ -341,6 +346,14 @@ export class CreditCenterService {
       throw new NotFoundException('用户不存在');
     }
 
+    const redeemedItems = await Promise.all(REWARD_DEFINITIONS.map(async (reward) => ({
+      code: reward.code,
+      redeemed: reward.code === 'PROFILE_FRAME_BLUE'
+        ? await hasAvatarFrameRewardUnlocked(this.prisma, authUser.id)
+        : await hasFulfilledReward(this.prisma, authUser.id, reward.code)
+    })));
+    const redeemedMap = new Map(redeemedItems.map((item) => [item.code, item.redeemed]));
+
     return {
       items: REWARD_DEFINITIONS.map((reward) => ({
         code: reward.code,
@@ -348,7 +361,8 @@ export class CreditCenterService {
         description: reward.description,
         pointsCost: reward.pointsCost,
         minCreditScore: reward.minCreditScore,
-        canRedeem: user.creditScore >= reward.minCreditScore && asset.availablePoints >= reward.pointsCost
+        canRedeem: !redeemedMap.get(reward.code) && user.creditScore >= reward.minCreditScore && asset.availablePoints >= reward.pointsCost,
+        redeemed: redeemedMap.get(reward.code) ?? false
       }))
     };
   }
@@ -379,6 +393,17 @@ export class CreditCenterService {
 
       if (asset.availablePoints < reward.pointsCost) {
         throw new BadRequestException('当前积分不足');
+      }
+
+      const redeemed = rewardCode === 'PROFILE_FRAME_BLUE'
+        ? await hasAvatarFrameRewardUnlocked(tx as { creditRedeemOrder: { findFirst: (args: any) => Promise<{ fulfilledAt: Date | null } | null> } }, authUser.id)
+        : await hasFulfilledReward(tx as Pick<PrismaService, 'creditRedeemOrder'>, authUser.id, rewardCode);
+      if (redeemed) {
+        throw new BadRequestException(
+          rewardCode === 'PROFILE_FRAME_BLUE'
+            ? `头像框权益仍在有效期内，单次激活可维持 ${AVATAR_FRAME_REWARD_DURATION_DAYS} 天`
+            : '该权益已兑换，无需重复操作'
+        );
       }
 
       const updatedAsset = await tx.userCreditAsset.update({

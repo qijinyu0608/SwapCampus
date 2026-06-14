@@ -4,6 +4,7 @@ import { convertToRecipeUserId } from 'supertokens-node';
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import Session from 'supertokens-node/recipe/session';
 import { PrismaService } from '../../prisma/prisma.service';
+import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
 import { DEFAULT_TENANT_ID } from './auth.constants';
 import { buildDevFallbackHeaderValue, isDevAuthFallbackEnabled } from './dev-auth.utils';
 import { AuthSyncService } from './auth-sync.service';
@@ -47,7 +48,9 @@ export class AuthService {
     creditScore: number;
     verificationStatus: VerificationStatus;
     accountStatus: AccountStatus;
-  }) {
+  }, options?: { avatarFrameUnlocked?: boolean }) {
+    const avatarFrameUnlocked = options?.avatarFrameUnlocked ?? false;
+
     return {
       id: user.id,
       supertokensUserId: user.supertokensUserId,
@@ -55,7 +58,8 @@ export class AuthService {
       displayName: user.displayName,
       email: user.email,
       avatarUrl: user.avatarUrl,
-      avatarFrame: user.avatarFrame,
+      avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
+      avatarFrameUnlocked,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -159,9 +163,11 @@ export class AuthService {
     const linkedUser = this.requireLinkedSuperTokensUser(user);
     await this.createSession(request, response, linkedUser);
 
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+
     return {
       message: '注册成功',
-      user: this.buildAuthUser(linkedUser)
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
     };
   }
 
@@ -182,6 +188,8 @@ export class AuthService {
         throw new ForbiddenException('账号已被封禁');
       }
 
+      const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, candidate.id);
+
       const authUser = {
         id: candidate.id,
         supertokensUserId: candidate.supertokensUserId ?? undefined,
@@ -193,7 +201,8 @@ export class AuthService {
         role: candidate.role,
         creditScore: candidate.creditScore,
         verificationStatus: candidate.verificationStatus,
-        accountStatus: candidate.accountStatus
+        accountStatus: candidate.accountStatus,
+        avatarFrameUnlocked
       };
 
       return {
@@ -233,10 +242,12 @@ export class AuthService {
     await this.authSyncService.syncUserRole(linkedUser.supertokensUserId, linkedUser.role);
     await this.createSession(request, response, linkedUser);
 
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+
     return {
       message: '登录成功',
       account,
-      user: this.buildAuthUser(linkedUser)
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
     };
   }
 
@@ -282,8 +293,11 @@ export class AuthService {
       throw new UnauthorizedException('登录状态已失效，请重新登录');
     }
 
+    const linkedUser = this.requireLinkedSuperTokensUser(user);
+    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+
     return {
-      user: this.buildAuthUser(this.requireLinkedSuperTokensUser(user))
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
     };
   }
 }

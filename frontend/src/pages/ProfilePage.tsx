@@ -54,7 +54,8 @@ import {
 import { useAuthState } from '../services/auth-state';
 import { hasTradingAccess, isGuestUser } from '../services/session';
 import { UserAvatar } from '../components/user/UserAvatar';
-import { getProductImage } from '../utils/productCover';
+import { getListingStatusPresentation } from '../utils/listingStatus';
+import { getProductImage, resolvePrimaryProductImage } from '../utils/productCover';
 import { getUserPresentation } from '../utils/userPresentation';
 import type { PublisherOrderGroupKey } from '../components/listing/CampusServicePublisherOrderWorkbench';
 
@@ -252,6 +253,46 @@ function summarizeCampusServiceListingGroup(items: CampusServiceListItem[]): Cam
     endedOrderCount: 0,
     totalOrderCount: 0
   });
+}
+
+function renderPublishedProductCard(
+  item: ProductSummary,
+  index: number,
+  navigate: ReturnType<typeof useNavigate>
+) {
+  const status = getListingStatusPresentation(item.status);
+
+  return (
+    <ProductSummaryCard
+      key={item.id}
+      className={index % 3 === 2 ? 'offset' : ''}
+      item={item}
+      imageSrc={getProductImage(item, index)}
+      priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.wantCount ?? 0} 人想要`}
+      onOpen={() => navigate(`/products/${item.id}`)}
+    />
+  );
+}
+
+function renderCampusServiceMarketCard(
+  item: CampusServiceListItem,
+  navigate: ReturnType<typeof useNavigate>
+) {
+  return (
+    <ProductSummaryCard
+      key={item.id}
+      item={item}
+      imageSrc={resolvePrimaryProductImage({
+        title: item.title,
+        category: item.categoryLabel,
+        price: item.reward,
+        imageUrl: item.imageUrl
+      }, item.id)}
+      className="service-task-card"
+      priceValue={item.rewardLabel}
+      onOpen={() => navigate(`/campus-services/${item.id}`)}
+    />
+  );
 }
 
 export function ProfilePage() {
@@ -722,97 +763,73 @@ export function ProfilePage() {
             <ProductGrid
               items={group.items}
               renderItem={(item) => (
-                <ProductSummaryCard
-                  key={item.id}
-                  item={item}
-                  imageSrc="/images/products/demo-square.png"
-                  className="profile-fish-card service-task-card"
-                  coverMeta={(
-                    <div className="service-card-cover-stack">
-                      <span className="service-card-cover-type">{item.intentLabel}</span>
-                      <span className="service-card-cover-type">{item.serviceType.label}</span>
-                      <span className="service-card-cover-deadline">{item.deadlineLabel}</span>
-                    </div>
-                  )}
-                  bodyMeta={item.participantSummary.participantLabel
-                    ? `${item.participantSummary.publisherLabel} · ${item.participantSummary.participantLabel}`
-                    : item.participantSummary.publisherLabel}
-                  priceValue={item.rewardLabel}
-                  priceMeta={item.schedule.summary}
-                  tagItems={item.summaryTags.slice(0, 4)}
-                  secondaryActions={(
-                    <>
-                      {item.pendingOrderCount > 0 ? (
-                        <button
-                          type="button"
-                          className="service-inline-status is-active is-clickable"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setPublisherOrderWorkbenchListing(item);
-                            setPublisherOrderWorkbenchGroup('PENDING');
-                            setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                          }}
-                        >
-                          {`待确认 ${item.pendingOrderCount}`}
-                        </button>
-                      ) : null}
-                      {item.waitingCompleteOrderCount > 0 ? (
-                        <button
-                          type="button"
-                          className="service-inline-status is-success is-clickable"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setPublisherOrderWorkbenchListing(item);
-                            setPublisherOrderWorkbenchGroup('WAITING_COMPLETE');
-                            setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                          }}
-                        >
-                          {`待完成 ${item.waitingCompleteOrderCount}`}
-                        </button>
-                      ) : null}
+                <div key={item.id} className="profile-published-service-card">
+                  {renderCampusServiceMarketCard(item, navigate)}
+                  <div className="profile-published-service-actions">
+                    {item.pendingOrderCount > 0 ? (
                       <button
                         type="button"
-                        className="service-inline-status is-default is-clickable"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setPublisherOrderWorkbenchListing(item);
-                          setPublisherOrderWorkbenchGroup('ACTIVE');
-                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                        }}
-                      >
-                        {`进行中 ${item.activeOrderCount}`}
-                      </button>
-                      {item.endedOrderCount > 0 ? (
-                        <button
-                          type="button"
-                          className="service-inline-status is-muted is-clickable"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setPublisherOrderWorkbenchListing(item);
-                            setPublisherOrderWorkbenchGroup('ENDED');
-                            setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                          }}
-                        >
-                          {`已结束 ${item.endedOrderCount}`}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="fish-item-link active"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        className="service-inline-status is-active is-clickable"
+                        onClick={() => {
                           setPublisherOrderWorkbenchListing(item);
                           setPublisherOrderWorkbenchGroup('PENDING');
                           setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
                         }}
                       >
-                        <InboxOutlined />
-                        <span>订单管理</span>
+                        {`待确认 ${item.pendingOrderCount}`}
                       </button>
-                    </>
-                  )}
-                  onOpen={() => navigate(`/campus-services/${item.id}`)}
-                />
+                    ) : null}
+                    {item.waitingCompleteOrderCount > 0 ? (
+                      <button
+                        type="button"
+                        className="service-inline-status is-success is-clickable"
+                        onClick={() => {
+                          setPublisherOrderWorkbenchListing(item);
+                          setPublisherOrderWorkbenchGroup('WAITING_COMPLETE');
+                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+                        }}
+                      >
+                        {`待完成 ${item.waitingCompleteOrderCount}`}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="service-inline-status is-default is-clickable"
+                      onClick={() => {
+                        setPublisherOrderWorkbenchListing(item);
+                        setPublisherOrderWorkbenchGroup('ACTIVE');
+                        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+                      }}
+                    >
+                      {`进行中 ${item.activeOrderCount}`}
+                    </button>
+                    {item.endedOrderCount > 0 ? (
+                      <button
+                        type="button"
+                        className="service-inline-status is-muted is-clickable"
+                        onClick={() => {
+                          setPublisherOrderWorkbenchListing(item);
+                          setPublisherOrderWorkbenchGroup('ENDED');
+                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+                        }}
+                      >
+                        {`已结束 ${item.endedOrderCount}`}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="fish-item-link active"
+                      onClick={() => {
+                        setPublisherOrderWorkbenchListing(item);
+                        setPublisherOrderWorkbenchGroup('PENDING');
+                        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+                      }}
+                    >
+                      <InboxOutlined />
+                      <span>订单管理</span>
+                    </button>
+                  </div>
+                </div>
               )}
             />
           </section>
@@ -854,7 +871,12 @@ export function ProfilePage() {
                   <article key={item.id} className="profile-order-card profile-campus-order-card">
                     <div className="profile-order-top">
                       <div className="profile-order-user">
-                        <span>{counterpartPresentation.initial}</span>
+                        <UserAvatar
+                          src={item.counterpart.avatarUrl}
+                          alt={`${counterpartPresentation.displayName}的头像`}
+                          fallbackLabel={counterpartPresentation.initial}
+                          frame={(counterpartPresentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
+                        />
                         <div className="profile-order-user-copy">
                           <strong>{item.title}</strong>
                           <em>{item.roleLabel} · 对方 {counterpartPresentation.displayName}</em>
@@ -1076,16 +1098,20 @@ export function ProfilePage() {
     return (
       <ProductGrid
         items={items}
+        className={publishedScope === 'products' ? 'fish-feed-grid' : undefined}
         renderItem={(item, index) => (
-	          <ProductSummaryCard
-	            key={item.id}
-	            className="profile-fish-card"
-	            item={item}
-	            imageSrc={getProductImage(item, index)}
-	            priceMeta={options?.hidePriceMeta ? undefined : item.status === 'ON_SALE' ? undefined : '交易留痕'}
-	            tagItems={[item.status === 'ON_SALE' ? '在售' : item.status]}
-	            onOpen={() => navigate(`/products/${item.id}`)}
-	          />
+          options?.hidePriceMeta
+            ? (
+              <ProductSummaryCard
+                key={item.id}
+                item={item}
+                imageSrc={getProductImage(item, index)}
+                priceMeta={undefined}
+                tagItems={[item.status === 'ON_SALE' ? '在售' : item.status]}
+                onOpen={() => navigate(`/products/${item.id}`)}
+              />
+            )
+            : renderPublishedProductCard(item, index, navigate)
         )}
       />
     );
@@ -1244,6 +1270,11 @@ export function ProfilePage() {
   }
 
   function handleAvatarFrameSelect(frame: AvatarFrameKey | 'none') {
+    if (frame !== 'none' && !profile?.avatarFrameUnlocked) {
+      message.warning('请先前往信用中心兑换头像框权益');
+      return;
+    }
+
     setSelectedAvatarFrame(frame);
     form.setFieldValue('avatarFrame', frame);
   }
@@ -1254,6 +1285,7 @@ export function ProfilePage() {
     }
 
     const isCustomAvatarSelected = Boolean(selectedAvatarUrl) && !PRESET_AVATAR_URLS.has(selectedAvatarUrl);
+    const avatarFrameUnlocked = Boolean(profile?.avatarFrameUnlocked);
 
     return renderSectionPanel(
       '资料编辑',
@@ -1309,30 +1341,54 @@ export function ProfilePage() {
         <div className="register-section">
           <div className="register-section-head">
             <strong>头像框</strong>
+            <span>{avatarFrameUnlocked ? '已激活' : '需先在信用中心兑换后才能选择'}</span>
           </div>
-          <div className="register-avatar-grid profile-avatar-frame-grid" role="radiogroup" aria-label="选择头像框">
+          {avatarFrameUnlocked ? (
+            <div className="register-avatar-grid profile-avatar-frame-grid" role="radiogroup" aria-label="选择头像框">
+              <button
+                type="button"
+                className={selectedAvatarFrame === 'none' ? 'register-avatar-option active' : 'register-avatar-option'}
+                onClick={() => handleAvatarFrameSelect('none')}
+                aria-pressed={selectedAvatarFrame === 'none'}
+                aria-label="不使用头像框"
+              >
+                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" />
+              </button>
+              {AVATAR_FRAMES.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={selectedAvatarFrame === item.key ? 'register-avatar-option active' : 'register-avatar-option'}
+                  onClick={() => handleAvatarFrameSelect(item.key)}
+                  aria-pressed={selectedAvatarFrame === item.key}
+                  aria-label={`选择头像框 ${item.label}`}
+                >
+                  <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame={item.key} />
+                </button>
+              ))}
+            </div>
+          ) : (
             <button
               type="button"
-              className={selectedAvatarFrame === 'none' ? 'register-avatar-option active' : 'register-avatar-option'}
-              onClick={() => handleAvatarFrameSelect('none')}
-              aria-pressed={selectedAvatarFrame === 'none'}
-              aria-label="不使用头像框"
+              className="profile-avatar-frame-locked-card"
+              onClick={() => navigate('/credit-center')}
+              aria-label="前往信用中心兑换头像框"
             >
-              <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" />
+              <span className="profile-avatar-frame-locked-preview" aria-hidden="true">
+                <span className="profile-avatar-frame-locked-stack">
+                  <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame="blue-glow" />
+                  <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame="gold-ring" />
+                  <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame="aurora" />
+                </span>
+                <span className="profile-avatar-frame-locked-badge">5 款可兑换</span>
+              </span>
+              <span className="profile-avatar-frame-locked-copy">
+                <strong>解锁头像框</strong>
+                <span>前往信用中心兑换后，可在个人主页和消息列表中使用。</span>
+              </span>
+              <span className="profile-avatar-frame-locked-action">去信用中心</span>
             </button>
-            {AVATAR_FRAMES.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={selectedAvatarFrame === item.key ? 'register-avatar-option active' : 'register-avatar-option'}
-                onClick={() => handleAvatarFrameSelect(item.key)}
-                aria-pressed={selectedAvatarFrame === item.key}
-                aria-label={`选择头像框 ${item.label}`}
-              >
-                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame={item.key} />
-              </button>
-            ))}
-          </div>
+          )}
         </div>
         <div className="register-section">
           <div className="register-section-head">
@@ -1385,42 +1441,71 @@ export function ProfilePage() {
     } else if (items.length) {
       content = (
         <div className="compact-list profile-orders-list">
-          {items.map((item, index) => (
-            <article key={item.id} className="profile-order-card">
-              <div className="profile-order-top">
-                <div className="profile-order-user">
-                  <span>{(item.buyerId === currentUser?.id ? item.sellerName : item.buyerName).slice(0, 1)}</span>
-                  <div className="profile-order-user-copy">
-                    <strong>{item.productTitle}</strong>
-                    <em>{item.productCategory ?? '校园闲置'}</em>
+          {items.map((item, index) => {
+            const isBuyerView = item.buyerId === currentUser?.id;
+            const counterpartName = isBuyerView ? item.sellerName : item.buyerName;
+            const counterpartAvatarUrl = isBuyerView ? item.sellerAvatarUrl : item.buyerAvatarUrl;
+            const counterpartAvatarFrame = isBuyerView ? item.sellerAvatarFrame : item.buyerAvatarFrame;
+            const counterpartCreditScore = isBuyerView ? item.sellerCreditScore : item.buyerCreditScore;
+            const counterpartVerified = isBuyerView ? item.sellerVerified : item.buyerVerified;
+            const counterpartRoleLabel = isBuyerView ? '卖家' : '买家';
+            const counterpartMeta = [
+              counterpartRoleLabel,
+              counterpartCreditScore === null ? null : `信用 ${counterpartCreditScore}`,
+              counterpartVerified ? '已认证' : null
+            ].filter(Boolean).join(' · ');
+
+            return (
+              <article key={item.id} className="profile-order-card">
+                <div className="profile-order-top">
+                  <div className="profile-order-user">
+                    <UserAvatar
+                      src={counterpartAvatarUrl}
+                      alt={`${counterpartName}的头像`}
+                      fallbackLabel={counterpartName.slice(0, 1)}
+                      className="profile-order-avatar"
+                      frame={(counterpartAvatarFrame as AvatarFrameKey | null) ?? undefined}
+                    />
+                    <div className="profile-order-user-copy">
+                      <span className="profile-order-user-label">{counterpartRoleLabel}</span>
+                      <strong>{counterpartName}</strong>
+                      <em>{counterpartMeta}</em>
+                    </div>
                   </div>
+                  <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
                 </div>
-                <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
-              </div>
-              <div className="profile-order-product">
-                <img
-                  src={item.productImageUrl || getProductImage({
-                    id: item.productId,
-                    title: item.productTitle,
-                    description: '',
-                    price: item.productPrice ?? 0,
-                    category: item.productCategory ?? '其他',
-                    condition: item.productCondition ?? '线下面交',
-                    sellerName: item.sellerName,
-                    status: item.productStatus ?? 'ON_SALE',
-                    tags: []
-                  } as ProductSummary, index)}
-                  alt={item.productTitle}
-                />
-                <div>
-                  <h3>{item.productTitle}</h3>
-                  <p>{item.productCondition ?? '线下面交'}</p>
-                  <strong>{item.productPrice === null ? '价格待确认' : `¥${item.productPrice.toFixed(2)}`}</strong>
-                  <span>{item.meetupLocation || '待双方约定线下面交时间地点'}</span>
-                </div>
-              </div>
-            </article>
-          ))}
+                <div className="profile-order-product">
+                  <img
+                    src={item.productImageUrl || getProductImage({
+                      id: item.productId,
+                      title: item.productTitle,
+                      description: '',
+                      price: item.productPrice ?? 0,
+                      category: item.productCategory ?? '其他',
+                      condition: item.productCondition ?? '线下面交',
+                      sellerName: item.sellerName,
+                      status: item.productStatus ?? 'ON_SALE',
+                      tags: []
+                    } as ProductSummary, index)}
+                    alt={item.productTitle}
+                  />
+                    <div className="profile-order-product-copy">
+                      <div className="profile-order-product-head">
+                        <h3>{item.productTitle}</h3>
+                        <span className="profile-order-product-category">{item.productCategory ?? '校园闲置'}</span>
+                      </div>
+                      <p>{item.productCondition ?? '线下面交'}</p>
+                      <strong>{item.productPrice === null ? '价格待确认' : `¥${item.productPrice.toFixed(2)}`}</strong>
+                      <span>{item.meetupLocation || '待双方约定线下面交时间地点'}</span>
+                      <span>订单编号：{item.orderCode}</span>
+                    </div>
+                    <div className="profile-order-actions">
+                      <Button type="link" onClick={() => navigate(`/orders/${item.id}`)}>查看详情</Button>
+                    </div>
+                  </div>
+                </article>
+              );
+          })}
         </div>
       );
     } else {

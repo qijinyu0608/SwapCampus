@@ -8,6 +8,7 @@ export type AuthenticatedUser = {
   email: string;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  avatarFrameUnlocked?: boolean;
   role: UserRole;
   authSource?: 'supertokens' | 'dev-fallback';
 };

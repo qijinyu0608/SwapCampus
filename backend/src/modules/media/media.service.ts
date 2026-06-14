@@ -3,8 +3,20 @@ import sharp from 'sharp';
 import { Client as MinioClient } from 'minio';
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
-import { MEDIA_DEFAULT_MAX_UPLOAD_SIZE, MEDIA_IMAGE_MIME_TYPES, type MediaPurpose } from './media.constants';
-import type { UploadImageInput, UploadedImageAsset } from './media.types';
+import {
+  MEDIA_DEFAULT_MAX_UPLOAD_SIZE,
+  MEDIA_IMAGE_MIME_TYPES,
+  MEDIA_MESSAGE_MAX_UPLOAD_SIZE,
+  MEDIA_PURPOSES,
+  MEDIA_VIDEO_MIME_TYPES,
+  type MediaPurpose
+} from './media.constants';
+import type {
+  UploadImageInput,
+  UploadMessageAttachmentInput,
+  UploadedImageAsset,
+  UploadedMediaAsset
+} from './media.types';
 
 function requireEnv(name: string, fallback?: string) {
   const value = process.env[name]?.trim() || fallback;
@@ -86,6 +98,44 @@ export class MediaService {
     }
   }
 
+  private assertValidMessageAttachment(input: UploadMessageAttachmentInput) {
+    const isSupportedImage = MEDIA_IMAGE_MIME_TYPES.includes(input.mimeType as (typeof MEDIA_IMAGE_MIME_TYPES)[number]);
+    const isSupportedVideo = MEDIA_VIDEO_MIME_TYPES.includes(input.mimeType as (typeof MEDIA_VIDEO_MIME_TYPES)[number]);
+
+    if (!isSupportedImage && !isSupportedVideo) {
+      throw new BadRequestException('仅支持 JPG、PNG、WEBP、MP4、WEBM、MOV 文件');
+    }
+
+    if (!input.fileBuffer?.length) {
+      throw new BadRequestException('附件内容不能为空');
+    }
+
+    if (input.fileBuffer.length > MEDIA_MESSAGE_MAX_UPLOAD_SIZE) {
+      throw new BadRequestException('附件大小不能超过 25MB');
+    }
+  }
+
+  private buildPublicUrl(objectKey: string) {
+    return `${this.publicBaseUrl}?key=${encodeURIComponent(objectKey)}`;
+  }
+
+  private async putObject(params: {
+    objectKey: string;
+    buffer: Buffer;
+    mimeType: string;
+  }) {
+    await this.minioClient.putObject(
+      this.bucketName,
+      params.objectKey,
+      params.buffer,
+      params.buffer.byteLength,
+      {
+        'Content-Type': params.mimeType,
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }
+    );
+  }
+
   private async transformImage(input: UploadImageInput) {
     this.assertValidInput(input);
 
@@ -145,24 +195,76 @@ export class MediaService {
       extension: transformed.extension || originalExtension || '.jpg'
     });
 
-    await this.minioClient.putObject(
-      this.bucketName,
+    await this.putObject({
       objectKey,
-      transformed.buffer,
-      transformed.buffer.byteLength,
-      {
-        'Content-Type': transformed.mimeType,
-        'Cache-Control': 'public, max-age=31536000, immutable'
-      }
-    );
+      buffer: transformed.buffer,
+      mimeType: transformed.mimeType
+    });
 
     return {
       objectKey,
-      url: `${this.publicBaseUrl}?key=${encodeURIComponent(objectKey)}`,
+      url: this.buildPublicUrl(objectKey),
       width: transformed.info.width ?? 0,
       height: transformed.info.height ?? 0,
       mimeType: transformed.mimeType,
       size: transformed.buffer.byteLength
+    };
+  }
+
+  async uploadMessageAttachment(input: UploadMessageAttachmentInput): Promise<UploadedMediaAsset> {
+    this.assertValidMessageAttachment(input);
+    await this.ensureBucketReady();
+
+    const isImage = MEDIA_IMAGE_MIME_TYPES.includes(input.mimeType as (typeof MEDIA_IMAGE_MIME_TYPES)[number]);
+
+    if (isImage) {
+      const transformed = await this.transformImage({
+        ...input,
+        purpose: MEDIA_PURPOSES.MESSAGE
+      });
+      const objectKey = buildObjectKey({
+        purpose: MEDIA_PURPOSES.MESSAGE,
+        ownerId: input.ownerId,
+        extension: transformed.extension || extname(input.originalName || '').toLowerCase() || '.jpg'
+      });
+
+      await this.putObject({
+        objectKey,
+        buffer: transformed.buffer,
+        mimeType: transformed.mimeType
+      });
+
+      return {
+        objectKey,
+        url: this.buildPublicUrl(objectKey),
+        mimeType: transformed.mimeType,
+        size: transformed.buffer.byteLength,
+        width: transformed.info.width ?? undefined,
+        height: transformed.info.height ?? undefined,
+        originalName: input.originalName
+      };
+    }
+
+    const originalExtension = extname(input.originalName || '').toLowerCase()
+      || (input.mimeType === 'video/webm' ? '.webm' : input.mimeType === 'video/quicktime' ? '.mov' : '.mp4');
+    const objectKey = buildObjectKey({
+      purpose: MEDIA_PURPOSES.MESSAGE,
+      ownerId: input.ownerId,
+      extension: originalExtension
+    });
+
+    await this.putObject({
+      objectKey,
+      buffer: input.fileBuffer,
+      mimeType: input.mimeType
+    });
+
+    return {
+      objectKey,
+      url: this.buildPublicUrl(objectKey),
+      mimeType: input.mimeType,
+      size: input.fileBuffer.byteLength,
+      originalName: input.originalName
     };
   }
 

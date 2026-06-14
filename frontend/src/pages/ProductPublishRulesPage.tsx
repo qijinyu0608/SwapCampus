@@ -24,7 +24,7 @@ export function ProductPublishRulesPage() {
       </div>
 
       <section className="publish-rules-page-body">
-        {!loading ? <h1 style={{ marginBottom: 16 }}>SwapCampus 最新发布规则</h1> : null}
+        {!loading ? <h1 style={{ marginBottom: 16 }}>SwapCampus 发布规则</h1> : null}
         {loading ? <Skeleton active paragraph={{ rows: 12 }} /> : <PublishRulesDocument {...documentProps} />}
       </section>
     </div>

@@ -1,12 +1,12 @@
-import { CalendarOutlined, EnvironmentOutlined, PayCircleOutlined } from '@ant-design/icons';
-import { Alert, Button, Form, Input, Radio, Skeleton, message } from 'antd';
+import { MessageOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Input, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { UserAvatar } from '../components/user/UserAvatar';
-import { ActionRow, SectionHeader } from '../components/layout';
+import { ActionRow } from '../components/layout';
 import { SectionCard } from '../components/ui';
 import {
   acceptCampusServiceListing,
+  createConversation,
   createOrder,
   fetchCampusServiceDetail,
   fetchProductDetail,
@@ -22,41 +22,28 @@ import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/prod
 type CheckoutMode = 'product' | 'service';
 
 type CheckoutFormValues = {
-  location?: string;
-  time: string;
   note?: string;
-  paymentIntent: string;
-  deliveryMode?: 'offline_meetup' | 'locker_dropoff';
 };
 
-function getDefaultTimeLabel() {
-  const date = new Date(Date.now() + 2 * 60 * 60 * 1000);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${month}-${day} ${hours}:${minutes}`;
-}
+type CheckoutMetaItem = {
+  key: string;
+  label: string;
+  value: string;
+};
 
-function buildServiceFallbackLocation(detail: CampusServiceDetailView) {
-  if (detail.fulfillment.routeLabel && detail.fulfillment.routeLabel !== '待协商') {
-    return detail.fulfillment.routeLabel;
+function formatDateTimeLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
-  if (detail.locationFrom && detail.locationTo && detail.locationFrom !== detail.locationTo) {
-    return `${detail.locationFrom} -> ${detail.locationTo}`;
-  }
-  return detail.locationFrom || detail.locationTo || '校内地点待协商';
-}
 
-function resolveProductMeetupLocation(deliveryMode?: CheckoutFormValues['deliveryMode']) {
-  if (deliveryMode === 'locker_dropoff') {
-    return '柜机代存（占位，后续与卖家确认）';
-  }
-  return '线下面交（下单后与卖家协商具体地点）';
-}
-
-function resolveProductMeetupTime() {
-  return '交易时间待协商（下单后与卖家确认）';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
 }
 
 export function OrderCheckoutPage() {
@@ -68,8 +55,8 @@ export function OrderCheckoutPage() {
   const [service, setService] = useState<CampusServiceDetailView | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [chatSubmitting, setChatSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const deliveryMode = Form.useWatch('deliveryMode', form);
 
   const mode = searchParams.get('type') === 'service' ? 'service' : 'product';
   const rawId = Number(searchParams.get(mode === 'service' ? 'serviceId' : 'productId'));
@@ -98,9 +85,6 @@ export function OrderCheckoutPage() {
           }
           setService(detail);
           form.setFieldsValue({
-            location: buildServiceFallbackLocation(detail),
-            time: getDefaultTimeLabel(),
-            paymentIntent: detail.reward > 0 ? '线下面交后付款' : '无需支付',
             note: detail.intent === 'REQUEST'
               ? `我来接“${detail.title}”，可按约定时间地点服务。`
               : `我想预约“${detail.title}”，请确认时间地点。`
@@ -112,8 +96,6 @@ export function OrderCheckoutPage() {
           }
           setProduct(detail);
           form.setFieldsValue({
-            deliveryMode: 'offline_meetup',
-            paymentIntent: '线下面交后付款',
             note: `想约“${detail.title}”当面交易`
           });
         }
@@ -149,7 +131,19 @@ export function OrderCheckoutPage() {
         title: service.title,
         amount: service.rewardLabel,
         image,
-        publisher: service.publisher
+        publisher: service.publisher,
+        mainColumnLabel: '服务内容',
+        columnLabel: '服务信息',
+        attrItems: [
+          { key: 'category', label: '分类', value: service.categoryLabel },
+          { key: 'deadline', label: '时效', value: service.fulfillment.deadlineLabel },
+          { key: 'fulfillment', label: '履约', value: service.fulfillment.modeLabel },
+          { key: 'contact', label: '联系', value: service.contactPreferenceLabel }
+        ] satisfies CheckoutMetaItem[],
+        sideItems: [
+          { key: 'intent', label: '订单类型', value: orderTypeLabelForMode('service') },
+          { key: 'createdAt', label: '发布时间', value: formatDateTimeLabel(service.createdAt) }
+        ] satisfies CheckoutMetaItem[]
       };
     }
 
@@ -158,7 +152,17 @@ export function OrderCheckoutPage() {
         title: product.title,
         amount: product.detailBase.amountLabel,
         image: resolvePrimaryProductImage(product),
-        publisher: product.seller
+        publisher: product.seller,
+        mainColumnLabel: '商品信息',
+        columnLabel: '商品属性',
+        attrItems: [
+          { key: 'category', label: '分类', value: product.detailBase.metaItems.find((item) => item.key === 'category')?.value ?? product.category },
+          { key: 'sellerStatus', label: '卖家状态', value: product.detailBase.metaItems.find((item) => item.key === 'seller-status')?.value ?? '普通账号' }
+        ] satisfies CheckoutMetaItem[],
+        sideItems: [
+          { key: 'orderType', label: '订单类型', value: orderTypeLabelForMode('product') },
+          { key: 'publishedAt', label: '发布时间', value: formatDateTimeLabel(product.publishedAt) }
+        ] satisfies CheckoutMetaItem[]
       };
     }
 
@@ -170,10 +174,6 @@ export function OrderCheckoutPage() {
     [summary]
   );
   const orderTypeLabel = mode === 'service' ? '服务订单' : '商品订单';
-  const orderPriceLabel = mode === 'service' ? '服务价格' : '成交价格';
-  const orderFormDescription = mode === 'service'
-    ? '确认服务时间、地点和支付方式示意。'
-    : '确认交付方式和支付方式示意。';
   const orderFlowSteps = mode === 'service'
     ? ['提交订单', service?.autoConfirm ? '进入待服务' : '等待确认', '服务完成']
     : ['提交订单', '待面交确认', '完成订单'];
@@ -208,10 +208,7 @@ export function OrderCheckoutPage() {
           throw new Error('服务信息不存在');
         }
         await acceptCampusServiceListing(service.id, {
-          initialMessage: values.note?.trim() || undefined,
-          serviceLocation: values.location?.trim() || buildServiceFallbackLocation(service),
-          serviceTime: values.time.trim(),
-          paymentIntent: values.paymentIntent
+          initialMessage: values.note?.trim() || undefined
         });
         message.success(service.autoConfirm ? '下单成功，已进入待服务' : '下单成功，等待发布者确认');
         void navigate('/profile', { state: { section: 'items', publishedScope: 'campus-services-booking' } });
@@ -223,9 +220,6 @@ export function OrderCheckoutPage() {
       }
       await createOrder({
         productId: product.id,
-        meetupLocation: resolveProductMeetupLocation(values.deliveryMode),
-        meetupTime: resolveProductMeetupTime(),
-        paymentIntent: values.paymentIntent,
         note: values.note?.trim() || undefined
       });
       message.success('下单成功，订单已进入待面交');
@@ -237,13 +231,42 @@ export function OrderCheckoutPage() {
     }
   }
 
+  async function handleOpenChat() {
+    if (!ensureAccess()) {
+      return;
+    }
+
+    if (mode === 'service') {
+      if (!service?.conversationId) {
+        message.error('当前服务暂时没有可用会话');
+        return;
+      }
+      void navigate(`/messages?conversationId=${service.conversationId}`);
+      return;
+    }
+
+    if (!product) {
+      return;
+    }
+
+    setChatSubmitting(true);
+    try {
+      const conversation = await createConversation({ productId: product.id });
+      void navigate('/messages', {
+        state: {
+          conversationId: conversation.id,
+          channel: 'trade'
+        }
+      });
+    } catch (chatError) {
+      message.error(getApiErrorMessage(chatError, '打开会话失败，请稍后重试。'));
+    } finally {
+      setChatSubmitting(false);
+    }
+  }
+
   return (
     <div className="page-grid checkout-page">
-      <SectionHeader
-        title={mode === 'service' ? '确认服务订单' : '确认交易订单'}
-        className="is-prominent is-spacious"
-      />
-
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
       {loading ? (
@@ -257,7 +280,7 @@ export function OrderCheckoutPage() {
               <div className="checkout-topbar-copy">
                 <strong>{orderTypeLabel}</strong>
               </div>
-              <div className="checkout-step-strip" aria-label="订单流程示意">
+              <div className="checkout-step-strip" aria-label="订单流程">
                 {orderFlowSteps.map((step, index) => (
                   <div key={step} className="checkout-step-item">
                     <i>{index + 1}</i>
@@ -267,114 +290,107 @@ export function OrderCheckoutPage() {
               </div>
             </div>
 
-            {sellerPresentation ? (
-              <div className="checkout-seller-strip" aria-label="当前卖家信息">
-                <div className="checkout-seller-leading">
-                  <UserAvatar
-                    src={sellerPresentation.avatarUrl}
-                    alt={`${sellerPresentation.displayName}的头像`}
-                    fallbackLabel={sellerPresentation.initial}
-                    className="checkout-seller-avatar"
-                  />
-                  <div className="checkout-seller-copy">
-                    <strong>{sellerPresentation.displayName}</strong>
-                    <span>{sellerPresentation.collegeLabel}</span>
+            <div className="checkout-order-card">
+              <div className="checkout-order-card-title">确认订单信息</div>
+
+              <div className="checkout-order-meta-strip">
+                {summary.sideItems.map((item) => (
+                  <div key={item.key} className="checkout-side-item">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="checkout-order-header" aria-hidden="true">
+                <div>{summary.mainColumnLabel}</div>
+                <div>{summary.columnLabel}</div>
+                <div>价格</div>
+              </div>
+
+              <div className="checkout-shop-card">
+                {sellerPresentation ? (
+                  <div className="checkout-shop-info" aria-label="当前卖家信息">
+                    <div className="checkout-shop-copy is-inline">
+                      <strong>{sellerPresentation.displayName}</strong>
+                      <span>{summary.publisher.studentId ? `学号 ${summary.publisher.studentId}` : '学号未公开'}</span>
+                      <Button
+                        className="checkout-chat-button is-icon-only"
+                        onClick={() => void handleOpenChat()}
+                        loading={chatSubmitting}
+                        aria-label="聊一聊"
+                        icon={<MessageOutlined />}
+                      />
+                    </div>
+                    <div className="checkout-shop-actions">
+                      <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
+                        <span className="ui-credit-badge-label">{sellerPresentation.creditBadge.label}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="checkout-order-item">
+                  <div className="checkout-item-main">
+                    <img src={summary.image} alt={summary.title} />
+                    <div className="checkout-item-copy">
+                      <h1>{summary.title}</h1>
+                    </div>
+                  </div>
+
+                  <div className="checkout-item-attrs">
+                    {summary.attrItems.map((item) => (
+                      <span key={item.key}>{item.label}：{item.value}</span>
+                    ))}
+                  </div>
+
+                  <div className="checkout-item-price">
+                    <strong>{summary.amount}</strong>
                   </div>
                 </div>
-                <em className="checkout-seller-caption">卖家信息</em>
-                <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
-                  <span className="ui-credit-badge-label">{sellerPresentation.creditBadge.label}</span>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="checkout-summary">
-              <img src={summary.image} alt={summary.title} />
-              <div className="checkout-summary-copy">
-                <h1>{summary.title}</h1>
-              </div>
-              <div className="checkout-price-strip">
-                <span>{orderPriceLabel}</span>
-                <strong>{summary.amount}</strong>
               </div>
             </div>
 
-            <SectionHeader
-              title="订单信息"
-              className="is-spacious checkout-form-header"
-            />
-
             <div className="checkout-form-pane">
-            <Form form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
-              {mode === 'service' ? (
-                <Form.Item
-                  label="服务地点"
-                  name="location"
-                  rules={[{ required: true, message: '请填写地点' }]}
-                >
-                  <Input prefix={<EnvironmentOutlined />} placeholder="例如：图书馆一层大厅" />
-                </Form.Item>
-              ) : (
-                <Form.Item
-                  label="交付方式"
-                  name="deliveryMode"
-                  rules={[{ required: true, message: '请选择交付方式' }]}
-                >
-                  <Radio.Group className="checkout-delivery-options">
-                    <Radio.Button value="offline_meetup">线下面交</Radio.Button>
-                    <Radio.Button value="locker_dropoff">柜机代存</Radio.Button>
-                  </Radio.Group>
-                </Form.Item>
-              )}
-
-              {mode === 'product' ? (
-                <div className="checkout-delivery-placeholder">
-                  <EnvironmentOutlined />
-                  <div>
-                    <strong>{deliveryMode === 'locker_dropoff' ? '柜机代存占位' : '线下面交待协商'}</strong>
+              <Form form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
+                <div className="checkout-order-ext">
+                  <div className="checkout-order-ext-left">
+                    <div className="checkout-order-ext-title">订单备注</div>
+                    <div className="checkout-order-ext-desc">付款后对方可见，建议提前沟通一致。</div>
+                    <Form.Item
+                      label={null}
+                      name="note"
+                      className="checkout-note-field"
+                    >
+                      <Input.TextArea
+                        rows={3}
+                        maxLength={200}
+                        showCount
+                        placeholder="请输入，提交后对方可见"
+                        className="checkout-note-textarea"
+                      />
+                    </Form.Item>
                   </div>
                 </div>
-              ) : null}
 
-              {mode === 'service' ? (
-                <Form.Item
-                  label="服务时间"
-                  name="time"
-                  rules={[{ required: true, message: '请填写时间' }]}
+                <ActionRow
+                  leading={<Link to={mode === 'service' ? `/campus-services/${rawId}` : `/products/${rawId}`}>返回详情</Link>}
+                  className="checkout-action-row"
                 >
-                  <Input prefix={<CalendarOutlined />} placeholder="例如：今天 18:30" />
-                </Form.Item>
-              ) : null}
-
-              <Form.Item label="支付示意" name="paymentIntent" rules={[{ required: true, message: '请选择支付方式' }]}>
-                <Radio.Group className="checkout-payment-options">
-                  <Radio.Button value="线下面交后付款"><PayCircleOutlined /> 线下面交后付款</Radio.Button>
-                  <Radio.Button value="平台支付占位"><PayCircleOutlined /> 平台支付占位</Radio.Button>
-                  <Radio.Button value="无需支付"><PayCircleOutlined /> 无需支付</Radio.Button>
-                </Radio.Group>
-              </Form.Item>
-
-              <div className="checkout-payment-placeholder">
-                <PayCircleOutlined />
-                <div>
-                  <strong>支付能力预留</strong>
-                </div>
-              </div>
-
-              <ActionRow
-                leading={<Link to={mode === 'service' ? `/campus-services/${rawId}` : `/products/${rawId}`}>返回详情</Link>}
-                className="checkout-action-row"
-              >
-                <Button onClick={() => navigate(-1)}>取消</Button>
-                <Button type="primary" htmlType="submit" loading={submitting}>
-                  确认下单
-                </Button>
-              </ActionRow>
-            </Form>
+                  <Button onClick={() => navigate(-1)}>取消</Button>
+                  <Button type="primary" htmlType="submit" loading={submitting}>
+                    确认下单
+                  </Button>
+                </ActionRow>
+              </Form>
             </div>
           </div>
         </SectionCard>
       ) : null}
     </div>
   );
+}
+
+function orderTypeLabelForMode(mode: CheckoutMode) {
+  return mode === 'service' ? '服务订单' : '商品订单';
 }

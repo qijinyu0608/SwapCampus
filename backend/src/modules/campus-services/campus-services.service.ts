@@ -26,6 +26,7 @@ import {
   VerificationStatus
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AVATAR_FRAME_REWARD_CODE } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { AcceptCampusServiceDto } from './dto/accept-campus-service.dto';
@@ -178,7 +179,9 @@ type ListingContext = {
   userMap: Map<number, {
     id: number;
     displayName: string;
+    studentId: string | null;
     avatarUrl: string | null;
+    avatarFrame: string | null;
     creditScore: number;
     verificationStatus: VerificationStatus;
     accountStatus: AccountStatus;
@@ -197,6 +200,7 @@ type ListingContext = {
   reportCountMap: Map<number, number>;
   viewCountMap: Map<number, number>;
   favoritedListingIds: Set<number>;
+  unlockedUserIds: Set<number>;
 };
 
 function formatCurrency(amount: number | null | undefined) {
@@ -253,7 +257,7 @@ function buildCampusServiceOrderMessage(payload: AcceptCampusServiceDto, fallbac
     payload.initialMessage?.trim() || fallback,
     payload.serviceLocation?.trim() ? `约定地点：${payload.serviceLocation.trim()}` : null,
     payload.serviceTime?.trim() ? `约定时间：${payload.serviceTime.trim()}` : null,
-    payload.paymentIntent?.trim() ? `支付方式：${payload.paymentIntent.trim()}（示意，暂不真实支付）` : null
+    payload.paymentIntent?.trim() ? `支付方式：${payload.paymentIntent.trim()}` : null
   ].filter((item): item is string => Boolean(item)).join('\n');
 }
 
@@ -747,7 +751,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           displayName: true,
+          studentId: true,
           avatarUrl: true,
+          avatarFrame: true,
           creditScore: true,
           verificationStatus: true,
           accountStatus: true
@@ -823,13 +829,15 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     const extraUsers = missingUserIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: missingUserIds } },
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            creditScore: true,
-            verificationStatus: true,
-            accountStatus: true
+            select: {
+              id: true,
+              displayName: true,
+              studentId: true,
+              avatarUrl: true,
+              avatarFrame: true,
+              creditScore: true,
+              verificationStatus: true,
+              accountStatus: true
           }
         })
       : [];
@@ -853,6 +861,16 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       return map;
     }, new Map<number, number>());
     const viewCountMap = new Map<number, number>(viewGroups.map((item) => [item.listingId, item._count._all]));
+    const unlockedUserIds = new Set<number>(
+      (await this.prisma.creditRedeemOrder.findMany({
+        where: {
+          userId: { in: allUsers.map((user) => user.id) },
+          rewardCode: AVATAR_FRAME_REWARD_CODE,
+          status: 'FULFILLED'
+        },
+        select: { userId: true }
+      })).map((item) => item.userId)
+    );
 
     orders.forEach((order) => {
       if (!ordersByListingMap.has(order.listingId)) {
@@ -927,7 +945,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       favoriteCountMap,
       reportCountMap,
       viewCountMap,
-      favoritedListingIds: new Set(favoritedListingRows.map((item) => item.listingId))
+      favoritedListingIds: new Set(favoritedListingRows.map((item) => item.listingId)),
+      unlockedUserIds
     } satisfies ListingContext;
   }
 
@@ -1075,7 +1094,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       publisher: {
         id: listing.ownerId,
         displayName: ownerDisplayName,
+        studentId: owner?.studentId ?? null,
         avatarUrl: owner?.avatarUrl ?? null,
+        avatarFrame: context.unlockedUserIds.has(listing.ownerId) ? (owner?.avatarFrame ?? null) : null,
         creditScore: owner?.creditScore ?? 60,
         verificationStatus: owner?.verificationStatus ?? VerificationStatus.PENDING,
         accountStatus: owner?.accountStatus ?? AccountStatus.ACTIVE
@@ -1089,6 +1110,15 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
             avatarUrl: context.userMap.get(
               listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
             )?.avatarUrl ?? null,
+            avatarFrame: context.unlockedUserIds.has(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )
+              ? (
+                context.userMap.get(
+                  listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+                )?.avatarFrame ?? null
+              )
+              : null,
             creditScore: context.userMap.get(
               listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
             )?.creditScore ?? 60,
@@ -1378,6 +1408,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
             select: {
               id: true,
               displayName: true,
+              studentId: true,
               creditScore: true,
               verificationStatus: true,
               accountStatus: true
@@ -1521,6 +1552,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         publisher: {
           id: publisher?.id ?? listing.ownerId,
           displayName: publisher?.displayName ?? `用户#${listing.ownerId}`,
+          studentId: publisher?.studentId ?? null,
           creditScore: publisher?.creditScore ?? 60,
           verificationStatus: publisher?.verificationStatus ?? VerificationStatus.PENDING,
           accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE

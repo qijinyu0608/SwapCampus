@@ -19,3 +19,20 @@ export type UploadedImageAsset = {
   mimeType: string;
   size: number;
 };
+
+export type UploadMessageAttachmentInput = {
+  fileBuffer: Buffer;
+  mimeType: string;
+  originalName?: string;
+  ownerId: number;
+};
+
+export type UploadedMediaAsset = {
+  objectKey: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  originalName?: string;
+};

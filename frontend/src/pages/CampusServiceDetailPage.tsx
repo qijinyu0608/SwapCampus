@@ -1,4 +1,5 @@
 import { StarFilled, StarOutlined } from '@ant-design/icons';
+import FlipClockCountdown from '@leenguyen/react-flip-clock-countdown';
 import { Button, Form, Input, Modal, Radio, Select, Skeleton, Alert, message as antMessage } from 'antd';
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -9,7 +10,7 @@ import {
   ListingDetailMetaPanel,
   ListingDetailTagPanel
 } from '../components/listing';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import {
   acceptCampusServiceListing,
   addCampusServiceFavorite,
@@ -588,6 +589,17 @@ export function CampusServiceDetailPage() {
   ];
   const primaryActionLabel = listing.intent === 'REQUEST' ? '立即接单' : '立即预约';
   const detailDescription = listing.detailBase.description;
+  const deadlineDate = new Date(listing.fulfillment.validUntilAt);
+  const deadlineValid = !Number.isNaN(deadlineDate.getTime());
+  const compactMetaItems = listing.detailBase.metaItems.filter((item) => ![
+    'intent',
+    'route',
+    'deadline',
+    'fulfillment',
+    'capacity',
+    'publisher',
+    'trust-note'
+  ].includes(item.key));
 
   return (
     <div className="detail-page">
@@ -606,6 +618,7 @@ export function CampusServiceDetailPage() {
             alt={`${listing.publisher.displayName}的头像`}
             fallbackLabel={listing.publisher.displayName}
             className="detail-seller-avatar"
+            frame={(listing.publisher.avatarFrame as AvatarFrameKey | null) ?? undefined}
           />
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
@@ -745,18 +758,68 @@ export function CampusServiceDetailPage() {
         bottomContent={(
           <div className="service-detail-bottom-stack">
             <ListingDetailMetaPanel
-              detail={listing.detailBase}
-              extraItems={publisherPresentation
-                ? [{
-                    key: 'publisher-credit',
-                    label: '发布者信用',
-                    value: publisherPresentation.publicIdentityLabel
-                      ? `${publisherPresentation.creditBadge.label} · ${publisherPresentation.publicIdentityLabel}`
-                      : publisherPresentation.creditBadge.label
-                  }]
-                : undefined}
+              detail={{
+                ...listing.detailBase,
+                metaItems: compactMetaItems
+              }}
             />
-            <ListingDetailTagPanel detail={listing.detailBase} />
+
+            <div className="service-detail-summary-grid">
+              <section className="service-detail-summary-card is-deadline">
+                <div className="service-detail-summary-head">
+                  <span>有效期</span>
+                  <strong>{listing.deadlineLabel}</strong>
+                </div>
+                <div className="service-detail-deadline-clock">
+                  {deadlineValid ? (
+                    <FlipClockCountdown
+                      to={deadlineDate.getTime()}
+                      labels={['天', '时', '分', '秒']}
+                      showLabels
+                      showSeparators={false}
+                      digitBlockStyle={{
+                        width: 38,
+                        height: 50,
+                        fontSize: 24,
+                        fontWeight: 700,
+                        borderRadius: 10,
+                        background: '#111827',
+                        color: '#f9fafb'
+                      }}
+                      labelStyle={{
+                        marginTop: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#6b7280'
+                      }}
+                      spacing={{ clock: 8, digitBlock: 4 }}
+                    />
+                  ) : (
+                    <strong className="service-detail-summary-fallback">时间无效</strong>
+                  )}
+                </div>
+              </section>
+
+              <section className="service-detail-summary-card">
+                <div className="service-detail-summary-head">
+                  <span>容量</span>
+                </div>
+                <div className="service-detail-capacity-signals">
+                  <div className="service-detail-capacity-item">
+                    <span>进行中</span>
+                    <strong>{listing.fulfillment.activeOrderCount}</strong>
+                  </div>
+                  <div className="service-detail-capacity-item">
+                    <span>总计</span>
+                    <strong>{listing.fulfillment.totalOrderCount}</strong>
+                  </div>
+                  <div className="service-detail-capacity-item">
+                    <span>上限</span>
+                    <strong>{listing.fulfillment.maxTotalOrders ?? '不限'}</strong>
+                  </div>
+                </div>
+              </section>
+            </div>
 
             <div className="service-detail-actions">
               <Button onClick={() => navigate('/campus-services')}>返回列表</Button>

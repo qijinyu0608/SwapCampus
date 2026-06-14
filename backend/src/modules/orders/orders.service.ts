@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AccountStatus, MessageType, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AVATAR_FRAME_REWARD_CODE } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
@@ -17,16 +18,78 @@ const activeOrderStatuses = [
   OrderStatus.WAITING_REVIEW
 ];
 
+const AUTO_CONFIRM_RECEIPT_HOURS = 72;
+
+type ProductOrderSnapshot = {
+  productId: number;
+  title: string;
+  description: string;
+  price: number;
+  category: string;
+  condition: string;
+  imageUrl: string | null;
+  sellerId: number;
+  sellerName: string | null;
+};
+
+type OrderEventPayload = {
+  kind: 'product-order-event';
+  event:
+    | 'CREATED'
+    | 'MEETUP_CONFIRMED'
+    | 'CANCELED'
+    | 'AUTO_COMPLETED'
+    | 'BUYER_COMPLETED'
+    | 'REVIEW_CREATED';
+  title: string;
+  summary: string;
+  orderId: number;
+  productId: number;
+  orderCode: string;
+  actionLabel?: string | null;
+  actionTarget?: string | null;
+  badge?: string | null;
+  meta?: Array<{ label: string; value: string }>;
+};
+
 function buildOrderConfirmationNote(payload: CreateOrderDto, productTitle: string) {
   return [
     payload.note?.trim() || `想约“${productTitle}”当面交易`,
     payload.meetupTime?.trim() ? `交易时间：${payload.meetupTime.trim()}` : null,
-    payload.paymentIntent?.trim() ? `支付方式：${payload.paymentIntent.trim()}（示意，暂不真实支付）` : null
+    payload.paymentIntent?.trim() ? `支付方式：${payload.paymentIntent.trim()}` : null
   ].filter((item): item is string => Boolean(item)).join('\n');
+}
+
+function buildAutoConfirmAt(baseDate: Date) {
+  return new Date(baseDate.getTime() + AUTO_CONFIRM_RECEIPT_HOURS * 60 * 60 * 1000);
+}
+
+function formatOrderCode(orderId: number) {
+  return `SC${String(orderId).padStart(8, '0')}`;
+}
+
+function formatDateTimeLabel(date: Date | string | null | undefined) {
+  if (!date) {
+    return '待更新';
+  }
+
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) {
+    return '待更新';
+  }
+
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  const hours = String(value.getHours()).padStart(2, '0');
+  const minutes = String(value.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
@@ -38,13 +101,18 @@ export class OrdersService {
 
   async createOrder(payload: CreateOrderDto, currentUser: AuthenticatedUser) {
     const buyerUser = requireAuthenticatedUser(currentUser);
-    const [product, buyer] = await Promise.all([
+    const [product, buyer, productImages] = await Promise.all([
       this.prisma.product.findUnique({
         where: { id: payload.productId }
       }),
       this.prisma.user.findUnique({
         where: { id: buyerUser.id },
         select: { id: true, vendureCustomerId: true, displayName: true, email: true, accountStatus: true }
+      }),
+      this.prisma.productImage.findMany({
+        where: { productId: payload.productId },
+        orderBy: { sortOrder: 'asc' },
+        select: { imageUrl: true }
       })
     ]);
 
@@ -68,47 +136,34 @@ export class OrdersService {
       throw new BadRequestException('商品当前不可下单');
     }
 
-    const [vendureProduct, vendureCustomer] = await Promise.all([
-      this.vendureService.ensureProductVariant(product),
-      this.vendureService.ensureCustomer(buyer)
-    ]);
-
-    if (!product.vendureProductId || !product.vendureVariantId) {
-      await this.prisma.product.update({
-        where: { id: product.id },
-        data: {
-          vendureProductId: vendureProduct.id,
-          vendureVariantId: vendureProduct.variantId
-        }
-      });
-    }
-
-    if (!buyer.vendureCustomerId) {
-      await this.prisma.user.update({
-        where: { id: buyer.id },
-        data: {
-          vendureCustomerId: vendureCustomer.id
-        }
-      });
-    }
-
     const orderNote = buildOrderConfirmationNote(payload, product.title);
-    const vendureOrder = await this.vendureService.createPlacedOrder({
-      customerId: vendureCustomer.id,
-      productVariantId: vendureProduct.variantId,
-      note: orderNote || `SwapCampus 商品 ${product.id} 购买订单`
-    });
+    const vendureOrder = await this.tryCreateVendureOrder(product, buyer, orderNote);
+    const autoConfirmAt = buildAutoConfirmAt(new Date());
+    const orderSnapshot: ProductOrderSnapshot = {
+      productId: product.id,
+      title: product.title,
+      description: product.description,
+      price: Number(product.price),
+      category: product.category,
+      condition: product.condition,
+      imageUrl: productImages[0]?.imageUrl ?? null,
+      sellerId: product.sellerId,
+      sellerName: null
+    };
 
     const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
-          vendureOrderId: vendureOrder.id,
-          vendureOrderCode: vendureOrder.code,
+          vendureOrderId: vendureOrder?.id ?? null,
+          vendureOrderCode: vendureOrder?.code ?? null,
           productId: product.id,
           buyerId: buyerUser.id,
           sellerId: product.sellerId,
           meetupLocation: payload.meetupLocation?.trim() || null,
           note: orderNote || null,
+          paymentIntent: payload.paymentIntent?.trim() || null,
+          orderSnapshot,
+          autoConfirmAt,
           status: OrderStatus.PENDING
         }
       });
@@ -118,18 +173,54 @@ export class OrdersService {
         data: { status: ProductStatus.OFFLINE }
       });
 
-      const conversation = await tx.conversation.create({
-        data: {
-          orderId: order.id,
-          productId: product.id
-        }
+      const existingConversation = await tx.conversation.findFirst({
+        where: {
+          productId: product.id,
+          initiatorId: buyerUser.id
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true }
       });
+
+      const conversation = existingConversation
+        ? await tx.conversation.update({
+            where: { id: existingConversation.id },
+            data: {
+              orderId: order.id,
+              updatedAt: new Date()
+            },
+            select: { id: true }
+          })
+        : await tx.conversation.create({
+            data: {
+              orderId: order.id,
+              productId: product.id,
+              initiatorId: buyerUser.id
+            },
+            select: { id: true }
+          });
 
       await tx.message.create({
         data: {
           conversationId: conversation.id,
           senderId: buyerUser.id,
-          content: orderNote || `你好，我想买“${product.title}”，可以约线下面交吗？`
+          type: MessageType.ORDER_EVENT,
+          content: JSON.stringify(this.buildOrderEventPayload({
+            event: 'CREATED',
+            orderId: order.id,
+            productId: product.id,
+            orderCode: vendureOrder?.code ?? formatOrderCode(order.id),
+            title: '已提交订单',
+            summary: `订单已创建，等待卖家确认线下交付安排。${AUTO_CONFIRM_RECEIPT_HOURS} 小时后将自动确认收货。`,
+            badge: '已下单',
+            actionLabel: '查看订单',
+            actionTarget: `/orders/${order.id}`,
+            meta: [
+              { label: '下单时间', value: formatDateTimeLabel(order.createdAt) },
+              { label: '交付方式', value: payload.meetupLocation?.trim() || '线下面交待协商' },
+              { label: '支付方式', value: payload.paymentIntent?.trim() || '线下面交后付款' }
+            ]
+          }))
         }
       });
 
@@ -146,6 +237,7 @@ export class OrdersService {
     pageSize?: number;
   }) {
     const authUser = requireAuthenticatedUser(params?.currentUser);
+    await this.reconcileAutoConfirmedOrders(authUser.id);
     const page = params?.page ?? 1;
     const pageSize = Math.min(params?.pageSize ?? 6, 20);
     const skip = (page - 1) * pageSize;
@@ -190,7 +282,7 @@ export class OrdersService {
       userIds.length
         ? this.prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, displayName: true, creditScore: true, verificationStatus: true }
+            select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, creditScore: true, verificationStatus: true }
           })
         : [],
       orderIds.length
@@ -211,36 +303,163 @@ export class OrdersService {
       }
     });
 
-    return {
-      items: orders.map((order) => {
-        const product = productMap.get(order.productId);
-        const buyer = userMap.get(order.buyerId);
-        const seller = userMap.get(order.sellerId);
+    const unlockedUserIds = new Set<number>(
+      (await this.prisma.creditRedeemOrder.findMany({
+        where: {
+          userId: { in: users.map((user) => user.id) },
+          rewardCode: AVATAR_FRAME_REWARD_CODE,
+          status: 'FULFILLED'
+        },
+        select: { userId: true }
+      })).map((item) => item.userId)
+    );
 
-        return {
-          ...order,
-          externalOrderId: order.vendureOrderId,
-          externalOrderCode: order.vendureOrderCode,
-          productTitle: product?.title ?? `商品#${order.productId}`,
-          productPrice: product ? Number(product.price) : null,
-          productCategory: product?.category ?? null,
-          productCondition: product?.condition ?? null,
-          productStatus: product?.status ?? null,
-          productImageUrl: firstImageMap.get(order.productId) ?? null,
-          conversationId: conversationMap.get(order.id) ?? null,
-          buyerName: buyer?.displayName ?? `用户#${order.buyerId}`,
-          buyerCreditScore: buyer?.creditScore ?? null,
-          buyerVerified: buyer?.verificationStatus === VerificationStatus.APPROVED,
-          sellerName: seller?.displayName ?? `用户#${order.sellerId}`,
-          sellerCreditScore: seller?.creditScore ?? null,
-          sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED
-        };
-      }),
+    return {
+      items: orders.map((order) => this.mapOrderListItem({
+        order,
+        currentUserId: authUser.id,
+        product: productMap.get(order.productId),
+        conversationId: conversationMap.get(order.id) ?? null,
+        productImageUrl: firstImageMap.get(order.productId) ?? null,
+        buyer: userMap.get(order.buyerId),
+        seller: userMap.get(order.sellerId),
+        unlockedUserIds
+      })),
       pagination: {
         page,
         pageSize,
         total,
         totalPages: total ? Math.ceil(total / pageSize) : 1
+      }
+    };
+  }
+
+  async getOrderDetail(orderId: number, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    await this.reconcileAutoConfirmedOrders(authUser.id);
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            category: true,
+            condition: true,
+            status: true,
+            description: true
+          }
+        },
+        buyer: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            avatarFrame: true,
+            creditScore: true,
+            verificationStatus: true
+          }
+        },
+        seller: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            avatarFrame: true,
+            creditScore: true,
+            verificationStatus: true
+          }
+        },
+        reviews: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            reviewer: {
+              select: {
+                id: true,
+                displayName: true
+              }
+            }
+          }
+        },
+        conversations: {
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    this.assertParticipant(order, authUser.id);
+
+    const [images, unlockedUsers] = await Promise.all([
+      this.prisma.productImage.findMany({
+        where: { productId: order.productId },
+        orderBy: { sortOrder: 'asc' },
+        select: { imageUrl: true }
+      }),
+      this.prisma.creditRedeemOrder.findMany({
+        where: {
+          userId: { in: [order.buyerId, order.sellerId] },
+          rewardCode: AVATAR_FRAME_REWARD_CODE,
+          status: 'FULFILLED'
+        },
+        select: { userId: true }
+      })
+    ]);
+
+    const unlockedUserIds = new Set(unlockedUsers.map((item) => item.userId));
+    const snapshot = this.parseOrderSnapshot(order.orderSnapshot, {
+      productId: order.productId,
+      title: order.product.title,
+      description: order.product.description,
+      price: Number(order.product.price),
+      category: order.product.category,
+      condition: order.product.condition,
+      imageUrl: images[0]?.imageUrl ?? null,
+      sellerId: order.sellerId,
+      sellerName: order.seller.displayName
+    });
+    const detail = this.mapOrderListItem({
+      order,
+      currentUserId: authUser.id,
+      product: order.product,
+      conversationId: order.conversations[0]?.id ?? null,
+      productImageUrl: images[0]?.imageUrl ?? null,
+      buyer: order.buyer,
+      seller: order.seller,
+      unlockedUserIds
+    });
+
+    return {
+      ...detail,
+      orderCode: order.vendureOrderCode ?? formatOrderCode(order.id),
+      paymentIntent: order.paymentIntent ?? null,
+      orderSnapshot: snapshot,
+      autoConfirmCountdownSeconds: this.getAutoConfirmCountdownSeconds(order.autoConfirmAt, order.status),
+      timeline: [
+        { label: '下单时间', value: formatDateTimeLabel(order.createdAt) },
+        { label: '自动确认', value: formatDateTimeLabel(order.autoConfirmAt) },
+        { label: '完成时间', value: formatDateTimeLabel(order.completedAt) },
+        { label: '取消时间', value: formatDateTimeLabel(order.canceledAt) }
+      ],
+      reviews: order.reviews.map((review) => ({
+        id: review.id,
+        rating: review.rating,
+        content: review.content,
+        createdAt: review.createdAt,
+        reviewerId: review.reviewerId,
+        reviewerName: review.reviewer.displayName
+      })),
+      actionState: {
+        canComplete: order.buyerId === authUser.id && order.status !== OrderStatus.CANCELED && order.status !== OrderStatus.COMPLETED,
+        canReview: order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED,
+        canAppeal: order.status !== OrderStatus.CANCELED,
+        canOpenConversation: Boolean(order.conversations[0]?.id)
       }
     };
   }
@@ -273,11 +492,18 @@ export class OrdersService {
         }
       });
 
-      await this.appendOrderMessage(tx, orderId, authUser.id, [
-        '已确认线下面交安排。',
-        nextLocation ? `面交地点：${nextLocation}` : null,
-        nextNote ? `备注：${nextNote}` : null
-      ].filter((item): item is string => Boolean(item)).join('\n'));
+      await this.appendOrderEventMessage(tx, {
+        orderId,
+        senderId: authUser.id,
+        event: 'MEETUP_CONFIRMED',
+        title: '已确认交付安排',
+        summary: '线下交付方案已更新，订单进入待面交阶段。',
+        badge: '待面交',
+        meta: [
+          { label: '面交地点', value: nextLocation || '待协商' },
+          { label: '备注', value: nextNote || '无' }
+        ]
+      });
 
       return updated;
     });
@@ -303,13 +529,16 @@ export class OrdersService {
     }
 
     if (existingOrder.vendureOrderId) {
-      await this.vendureService.cancelOrder(existingOrder.vendureOrderId, payload.reason);
+      await this.tryCancelVendureOrder(existingOrder.vendureOrderId, payload.reason);
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.CANCELED }
+        data: {
+          status: OrderStatus.CANCELED,
+          canceledAt: new Date()
+        }
       });
 
       const activeOrder = await tx.order.findFirst({
@@ -337,12 +566,15 @@ export class OrdersService {
         });
       }
 
-      await this.appendOrderMessage(
-        tx,
+      await this.appendOrderEventMessage(tx, {
         orderId,
-        authUser.id,
-        `订单已取消。${payload.reason?.trim() ? `原因：${payload.reason.trim()}` : '双方可重新沟通后再次下单。'}`
-      );
+        senderId: authUser.id,
+        event: 'CANCELED',
+        title: '订单已取消',
+        summary: payload.reason?.trim() ? `取消原因：${payload.reason.trim()}` : '订单已取消，双方可重新沟通后再次下单。',
+        badge: '已取消',
+        meta: payload.reason?.trim() ? [{ label: '取消原因', value: payload.reason.trim() }] : []
+      });
 
       return updated;
     });
@@ -361,31 +593,19 @@ export class OrdersService {
       throw new NotFoundException('订单不存在');
     }
 
-    this.assertParticipant(existingOrder, authUser.id);
+    if (existingOrder.buyerId !== authUser.id) {
+      throw new ForbiddenException('只有买家可以确认收货');
+    }
 
-    if (existingOrder.status !== OrderStatus.IN_PROGRESS) {
-      throw new BadRequestException('只有已约定面交的订单才能确认完成');
+    if (existingOrder.status !== OrderStatus.PENDING && existingOrder.status !== OrderStatus.IN_PROGRESS) {
+      throw new BadRequestException('当前订单状态不能确认收货');
     }
 
     if (existingOrder.vendureOrderId) {
-      await this.vendureService.settleOrderPayment(existingOrder.vendureOrderId);
+      await this.trySettleVendureOrderPayment(existingOrder.vendureOrderId);
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id: orderId },
-        data: { status: OrderStatus.WAITING_REVIEW }
-      });
-
-      await tx.product.update({
-        where: { id: existingOrder.productId },
-        data: { status: ProductStatus.SOLD }
-      });
-
-      await this.appendOrderMessage(tx, orderId, authUser.id, '线下面交已完成，订单进入待评价。');
-
-      return updated;
-    });
+    const result = await this.completeOrderAndOpenReview(orderId, authUser.id, 'BUYER_COMPLETED');
 
     await this.searchService.syncProduct(result.productId);
     return result;
@@ -434,7 +654,18 @@ export class OrdersService {
         data: { status: OrderStatus.COMPLETED }
       });
 
-      await this.appendOrderMessage(tx, orderId, authUser.id, `已完成评价：${payload.rating} 星。`);
+      await this.appendOrderEventMessage(tx, {
+        orderId,
+        senderId: authUser.id,
+        event: 'REVIEW_CREATED',
+        title: '已提交评价',
+        summary: `已提交 ${payload.rating} 星评价，订单已完结。`,
+        badge: '已评价',
+        meta: [
+          { label: '评分', value: `${payload.rating} 星` },
+          { label: '评价内容', value: payload.content?.trim() || '线下面交顺利完成' }
+        ]
+      });
 
       return {
         order: updated,
@@ -449,11 +680,294 @@ export class OrdersService {
     }
   }
 
+  private parseOrderSnapshot(snapshot: Prisma.JsonValue | null | undefined, fallback: ProductOrderSnapshot): ProductOrderSnapshot {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return fallback;
+    }
+
+    const parsed = snapshot as Partial<ProductOrderSnapshot>;
+    return {
+      productId: typeof parsed.productId === 'number' ? parsed.productId : fallback.productId,
+      title: typeof parsed.title === 'string' ? parsed.title : fallback.title,
+      description: typeof parsed.description === 'string' ? parsed.description : fallback.description,
+      price: typeof parsed.price === 'number' ? parsed.price : fallback.price,
+      category: typeof parsed.category === 'string' ? parsed.category : fallback.category,
+      condition: typeof parsed.condition === 'string' ? parsed.condition : fallback.condition,
+      imageUrl: typeof parsed.imageUrl === 'string' || parsed.imageUrl === null ? parsed.imageUrl : fallback.imageUrl,
+      sellerId: typeof parsed.sellerId === 'number' ? parsed.sellerId : fallback.sellerId,
+      sellerName: typeof parsed.sellerName === 'string' || parsed.sellerName === null ? parsed.sellerName : fallback.sellerName
+    };
+  }
+
+  private getAutoConfirmCountdownSeconds(autoConfirmAt: Date | null, status: OrderStatus) {
+    if (!autoConfirmAt || status === OrderStatus.CANCELED || status === OrderStatus.COMPLETED || status === OrderStatus.WAITING_REVIEW) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor((autoConfirmAt.getTime() - Date.now()) / 1000));
+  }
+
+  private buildOrderEventPayload(params: {
+    event: OrderEventPayload['event'];
+    orderId: number;
+    productId: number;
+    orderCode: string;
+    title: string;
+    summary: string;
+    badge?: string | null;
+    actionLabel?: string | null;
+    actionTarget?: string | null;
+    meta?: Array<{ label: string; value: string }>;
+  }): OrderEventPayload {
+    return {
+      kind: 'product-order-event',
+      event: params.event,
+      title: params.title,
+      summary: params.summary,
+      orderId: params.orderId,
+      productId: params.productId,
+      orderCode: params.orderCode,
+      badge: params.badge ?? null,
+      actionLabel: params.actionLabel ?? null,
+      actionTarget: params.actionTarget ?? `/orders/${params.orderId}`,
+      meta: params.meta ?? []
+    };
+  }
+
+  private mapOrderListItem(params: {
+    order: {
+      id: number;
+      vendureOrderId: string | null;
+      vendureOrderCode: string | null;
+      productId: number;
+      buyerId: number;
+      sellerId: number;
+      status: OrderStatus;
+      meetupLocation: string | null;
+      note: string | null;
+      paymentIntent?: string | null;
+      autoConfirmAt?: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+      completedAt?: Date | null;
+      canceledAt?: Date | null;
+    };
+    currentUserId: number;
+    product?: {
+      id: number;
+      title: string;
+      price: Prisma.Decimal | number;
+      category: string;
+      condition: string;
+      status: ProductStatus;
+    } | null;
+    conversationId: number | null;
+    productImageUrl: string | null;
+    buyer?: {
+      id: number;
+      displayName: string;
+      avatarUrl: string | null;
+      avatarFrame: string | null;
+      creditScore: number;
+      verificationStatus: VerificationStatus;
+    } | null;
+    seller?: {
+      id: number;
+      displayName: string;
+      avatarUrl: string | null;
+      avatarFrame: string | null;
+      creditScore: number;
+      verificationStatus: VerificationStatus;
+    } | null;
+    unlockedUserIds: Set<number>;
+  }) {
+    const { order, product, conversationId, productImageUrl, buyer, seller, unlockedUserIds, currentUserId } = params;
+    const isBuyer = order.buyerId === currentUserId;
+    return {
+      ...order,
+      orderCode: order.vendureOrderCode ?? formatOrderCode(order.id),
+      externalOrderId: order.vendureOrderId,
+      externalOrderCode: order.vendureOrderCode,
+      productTitle: product?.title ?? `商品#${order.productId}`,
+      productPrice: product ? Number(product.price) : null,
+      productCategory: product?.category ?? null,
+      productCondition: product?.condition ?? null,
+      productStatus: product?.status ?? null,
+      productImageUrl,
+      conversationId,
+      buyerName: buyer?.displayName ?? `用户#${order.buyerId}`,
+      buyerAvatarUrl: buyer?.avatarUrl ?? null,
+      buyerAvatarFrame: unlockedUserIds.has(order.buyerId) ? (buyer?.avatarFrame ?? null) : null,
+      buyerCreditScore: buyer?.creditScore ?? null,
+      buyerVerified: buyer?.verificationStatus === VerificationStatus.APPROVED,
+      sellerName: seller?.displayName ?? `用户#${order.sellerId}`,
+      sellerAvatarUrl: seller?.avatarUrl ?? null,
+      sellerAvatarFrame: unlockedUserIds.has(order.sellerId) ? (seller?.avatarFrame ?? null) : null,
+      sellerCreditScore: seller?.creditScore ?? null,
+      sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED,
+      autoConfirmAt: order.autoConfirmAt ?? null,
+      autoConfirmCountdownSeconds: this.getAutoConfirmCountdownSeconds(order.autoConfirmAt ?? null, order.status),
+      canBuyerComplete: isBuyer && order.status !== OrderStatus.CANCELED && order.status !== OrderStatus.COMPLETED,
+      canReview: order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED
+    };
+  }
+
+  private async completeOrderAndOpenReview(orderId: number, senderId: number, event: 'AUTO_COMPLETED' | 'BUYER_COMPLETED') {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const currentOrder = await tx.order.findUnique({
+        where: { id: orderId }
+      });
+
+      if (!currentOrder) {
+        throw new NotFoundException('订单不存在');
+      }
+
+      const completedAt = new Date();
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.WAITING_REVIEW,
+          completedAt
+        }
+      });
+
+      await tx.product.update({
+        where: { id: currentOrder.productId },
+        data: { status: ProductStatus.SOLD }
+      });
+
+      await this.appendOrderEventMessage(tx, {
+        orderId,
+        senderId,
+        event,
+        title: event === 'AUTO_COMPLETED' ? '已自动确认收货' : '买家已确认收货',
+        summary: event === 'AUTO_COMPLETED'
+          ? '订单超过确认时限，系统已自动确认收货，当前可提交评价。'
+          : '买家已确认收货，订单进入待评价阶段。',
+        badge: '待评价',
+        meta: [{ label: '确认时间', value: formatDateTimeLabel(completedAt) }]
+      });
+
+      return updated;
+    });
+
+    return result;
+  }
+
+  private async reconcileAutoConfirmedOrders(userId: number) {
+    const expiredOrders = await this.prisma.order.findMany({
+      where: {
+        buyerId: userId,
+        status: { in: [OrderStatus.PENDING, OrderStatus.IN_PROGRESS] },
+        autoConfirmAt: {
+          lte: new Date()
+        }
+      },
+      select: {
+        id: true,
+        productId: true,
+        vendureOrderId: true,
+        buyerId: true
+      }
+    });
+
+    if (!expiredOrders.length) {
+      return;
+    }
+
+    for (const order of expiredOrders) {
+      if (order.vendureOrderId) {
+        await this.trySettleVendureOrderPayment(order.vendureOrderId);
+      }
+      const result = await this.completeOrderAndOpenReview(order.id, order.buyerId, 'AUTO_COMPLETED');
+      await this.searchService.syncProduct(result.productId);
+    }
+  }
+
+  private async tryCreateVendureOrder(
+    product: {
+      id: number;
+      vendureProductId?: string | null;
+      vendureVariantId?: string | null;
+      title: string;
+      description: string;
+      price: unknown;
+    },
+    buyer: {
+      id: number;
+      vendureCustomerId?: string | null;
+      displayName: string;
+      email: string;
+    },
+    orderNote: string
+  ) {
+    try {
+      const [vendureProduct, vendureCustomer] = await Promise.all([
+        this.vendureService.ensureProductVariant(product),
+        this.vendureService.ensureCustomer(buyer)
+      ]);
+
+      if (!product.vendureProductId || !product.vendureVariantId) {
+        await this.prisma.product.update({
+          where: { id: product.id },
+          data: {
+            vendureProductId: vendureProduct.id,
+            vendureVariantId: vendureProduct.variantId
+          }
+        });
+      }
+
+      if (!buyer.vendureCustomerId) {
+        await this.prisma.user.update({
+          where: { id: buyer.id },
+          data: {
+            vendureCustomerId: vendureCustomer.id
+          }
+        });
+      }
+
+      return await this.vendureService.createPlacedOrder({
+        customerId: vendureCustomer.id,
+        productVariantId: vendureProduct.variantId,
+        note: orderNote || `SwapCampus 商品 ${product.id} 购买订单`
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Vendure create order failed for product ${product.id}, buyer ${buyer.id}; fallback to local order only.`,
+        error instanceof Error ? error.stack : undefined
+      );
+      return null;
+    }
+  }
+
+  private async tryCancelVendureOrder(orderId: string, reason?: string) {
+    try {
+      await this.vendureService.cancelOrder(orderId, reason);
+    } catch (error) {
+      this.logger.warn(
+        `Vendure cancel order failed for ${orderId}; continue with local cancel.`,
+        error instanceof Error ? error.stack : undefined
+      );
+    }
+  }
+
+  private async trySettleVendureOrderPayment(orderId: string) {
+    try {
+      await this.vendureService.settleOrderPayment(orderId);
+    } catch (error) {
+      this.logger.warn(
+        `Vendure settle payment failed for ${orderId}; continue with local completion.`,
+        error instanceof Error ? error.stack : undefined
+      );
+    }
+  }
+
   private async appendOrderMessage(
     tx: Prisma.TransactionClient,
     orderId: number,
     senderId: number,
-    content: string
+    content: string,
+    type: MessageType = MessageType.TEXT
   ) {
     const conversation = await tx.conversation.findFirst({
       where: { orderId },
@@ -468,7 +982,8 @@ export class OrdersService {
       data: {
         conversationId: conversation.id,
         senderId,
-        content
+        content,
+        type
       }
     });
 
@@ -476,5 +991,52 @@ export class OrdersService {
       where: { id: conversation.id },
       data: { updatedAt: new Date() }
     });
+  }
+
+  private async appendOrderEventMessage(
+    tx: Prisma.TransactionClient,
+    params: {
+      orderId: number;
+      senderId: number;
+      event: OrderEventPayload['event'];
+      title: string;
+      summary: string;
+      badge?: string | null;
+      actionLabel?: string | null;
+      actionTarget?: string | null;
+      meta?: Array<{ label: string; value: string }>;
+    }
+  ) {
+    const order = await tx.order.findUnique({
+      where: { id: params.orderId },
+      select: {
+        id: true,
+        productId: true,
+        vendureOrderCode: true
+      }
+    });
+
+    if (!order) {
+      return;
+    }
+
+    await this.appendOrderMessage(
+      tx,
+      params.orderId,
+      params.senderId,
+      JSON.stringify(this.buildOrderEventPayload({
+        event: params.event,
+        orderId: order.id,
+        productId: order.productId,
+        orderCode: order.vendureOrderCode ?? formatOrderCode(order.id),
+        title: params.title,
+        summary: params.summary,
+        badge: params.badge,
+        actionLabel: params.actionLabel,
+        actionTarget: params.actionTarget,
+        meta: params.meta
+      })),
+      MessageType.ORDER_EVENT
+    );
   }
 }

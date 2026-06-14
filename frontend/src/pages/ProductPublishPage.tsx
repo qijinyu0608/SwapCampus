@@ -236,30 +236,26 @@ export function ProductPublishPage() {
   const isProductPublish = publishType === 'product';
   const servicePresetIntent = publishType === 'service-offer' ? 'OFFER' : 'REQUEST';
   const rulesModalTitle = isServicePublish ? '发布规则与服务约束确认' : '发布规则确认';
-  const rulesLinkLabel = isServicePublish ? '查看最新发布规则（含服务发布约束）' : '查看最新发布规则';
+  const rulesLinkLabel = isServicePublish ? '查看发布规则和服务发布约束' : '查看发布规则';
   const publishTypeOptions: Array<{
     key: PublishType;
     eyebrow: string;
     title: string;
-    description: string;
   }> = [
     {
       key: 'product',
       eyebrow: '闲置交易',
-      title: '发布商品',
-      description: '适合转让教材、数码、宿舍用品等可直接交易的实物。'
+      title: '发布商品'
     },
     {
       key: 'service-request',
       eyebrow: '校园服务',
-      title: '找人帮我',
-      description: '适合代取、代办、跑腿等需要同学接单协作的需求。'
+      title: '找人帮我'
     },
     {
       key: 'service-offer',
       eyebrow: '校园服务',
-      title: '我来提供',
-      description: '适合发布可预约的技能、陪练、代办或长期服务供给。'
+      title: '我来提供'
     }
   ];
 
@@ -305,7 +301,6 @@ export function ProductPublishPage() {
         <section className="publish-type-panel">
           <div className="publish-type-panel-head">
             <SectionHeader title="发布类型" className="is-prominent" />
-            <p>选择你要发布的内容，表单会按当前业务类型切换。</p>
           </div>
           <div className="publish-type-grid" role="tablist" aria-label="发布类型">
             {publishTypeOptions.map((option) => (
@@ -319,7 +314,6 @@ export function ProductPublishPage() {
               >
                 <span className="publish-type-eyebrow">{option.eyebrow}</span>
                 <strong>{option.title}</strong>
-                <span>{option.description}</span>
               </button>
             ))}
           </div>
@@ -336,7 +330,6 @@ export function ProductPublishPage() {
                 <PublishImageManager
                   title="商品图片"
                   modalTitle="上传商品图片"
-                  emptyHint="建议上传清晰的实拍图，首张会作为封面。"
                   items={uploadedImages}
                   uploading={uploadingImage}
                   onChange={setUploadedImages}
@@ -360,12 +353,9 @@ export function ProductPublishPage() {
                   </div>
                 </div>
 
-                <div className="publish-subsection">
-                  <SectionHeader title="补充信息" />
-                  <Form.Item name="tags" label="标签">
-                    <Input placeholder="例如：教材, 考试周, 可验货" />
-                  </Form.Item>
-                </div>
+                <Form.Item name="tags" label="标签">
+                  <Input placeholder="例如：教材, 考试周, 可验货" />
+                </Form.Item>
 
                 <ActionRow className="publish-submit-row">
                   <Button type="primary" htmlType="submit" loading={submittingProduct}>发布商品</Button>

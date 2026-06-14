@@ -215,8 +215,8 @@ export function LoginPage() {
                   <strong>基础信息</strong>
                 </div>
               </div>
-              <Form.Item label="展示名" name="displayName" rules={[{ required: true }]}>
-                <Input placeholder="例如：王同学" />
+              <Form.Item label="用户名" name="displayName" rules={[{ required: true, message: '请输入用户名' }]}>
+                <Input placeholder="请输入用户名，可重复" />
               </Form.Item>
               <Form.Item label="邮箱" name="email" rules={[{ required: true }]}>
                 <Input placeholder="例如：student@campus.edu.cn" />

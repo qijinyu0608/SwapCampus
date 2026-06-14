@@ -43,6 +43,15 @@ export class OrdersController {
     });
   }
 
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  getOrderDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.ordersService.getOrderDetail(id, user);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   createOrder(@Body() payload: CreateOrderDto, @CurrentUser() user: AuthenticatedUser) {

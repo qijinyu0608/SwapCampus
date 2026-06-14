@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountStatus, BehaviorEventType, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
@@ -575,6 +576,7 @@ export class ProductsService {
     const sellerCreditScore = seller?.creditScore ?? detailCard.sellerCreditScore ?? 60;
     const sellerVerificationStatus = seller?.verificationStatus ?? VerificationStatus.PENDING;
     const sellerAccountStatus = seller?.accountStatus ?? AccountStatus.ACTIVE;
+    const avatarFrameUnlocked = seller ? await hasAvatarFrameRewardUnlocked(this.prisma, seller.id) : false;
 
     return {
       ...detailCard,
@@ -585,7 +587,9 @@ export class ProductsService {
       seller: {
         id: seller?.id ?? product.sellerId,
         displayName: seller?.displayName ?? detailCard.sellerName,
+        studentId: seller?.studentId ?? null,
         avatarUrl: seller?.avatarUrl ?? null,
+        avatarFrame: avatarFrameUnlocked ? (seller?.avatarFrame ?? null) : null,
         creditScore: sellerCreditScore,
         creditLevel: getCreditLevel(sellerCreditScore),
         verificationStatus: sellerVerificationStatus,
@@ -621,6 +625,9 @@ export class ProductsService {
         publisher: {
           id: seller?.id ?? product.sellerId,
           displayName: seller?.displayName ?? detailCard.sellerName,
+          studentId: seller?.studentId ?? null,
+          avatarUrl: seller?.avatarUrl ?? null,
+          avatarFrame: avatarFrameUnlocked ? (seller?.avatarFrame ?? null) : null,
           creditScore: sellerCreditScore,
           verificationStatus: sellerVerificationStatus,
           accountStatus: sellerAccountStatus

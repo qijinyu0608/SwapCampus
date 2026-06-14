@@ -15,10 +15,7 @@ export type CreditMissionCode =
 
 export type CreditRewardCode =
   | 'BADGE_TRUSTED_WEEK'
-  | 'PROFILE_FRAME_BLUE'
-  | 'PRODUCT_REFRESH_ONCE'
-  | 'SERVICE_BOOST_ONCE'
-  | 'PRIORITY_REVIEW_TOKEN';
+  | 'PROFILE_FRAME_BLUE';
 
 export type MissionCycleType = 'once' | 'daily' | 'weekly' | 'monthly';
 
@@ -163,30 +160,9 @@ export const REWARD_DEFINITIONS: RewardDefinition[] = [
   {
     code: 'PROFILE_FRAME_BLUE',
     title: '头像边框',
-    description: '解锁资料页与公开主页蓝色头像边框。',
+    description: '激活资料页、公开主页与消息等场景的全部头像框。',
     pointsCost: 80,
     minCreditScore: 60
-  },
-  {
-    code: 'PRODUCT_REFRESH_ONCE',
-    title: '商品刷新券',
-    description: '保留为后续商品流刷新权益。',
-    pointsCost: 100,
-    minCreditScore: 75
-  },
-  {
-    code: 'SERVICE_BOOST_ONCE',
-    title: '校园服务高亮券',
-    description: '保留为后续校园服务高亮权益。',
-    pointsCost: 120,
-    minCreditScore: 75
-  },
-  {
-    code: 'PRIORITY_REVIEW_TOKEN',
-    title: '优先审核券',
-    description: '保留为后续优先审核权益。',
-    pointsCost: 200,
-    minCreditScore: 90
   }
 ];
 
@@ -200,4 +176,3 @@ export const CREDIT_LEVEL_LABELS = [
 export const COMPLETED_ORDER_STATUS = OrderStatus.COMPLETED;
 export const COMPLETED_CAMPUS_SERVICE_ORDER_STATUSES = ['COMPLETED'] satisfies CampusServiceOrderStatus[];
 export const APPROVED_VERIFICATION_STATUS = VerificationStatus.APPROVED;
-

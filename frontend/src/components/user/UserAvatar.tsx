@@ -49,7 +49,6 @@ export function UserAvatar({
   return (
     <span className={classes}>
       <span className="user-avatar-frame-shell" aria-hidden={frame === 'none' ? undefined : 'true'}>
-        {frame && frame !== 'none' ? <span className="user-avatar-frame" aria-hidden="true" /> : null}
         <span className="user-avatar-inner">
           {!showFallback ? (
             <img

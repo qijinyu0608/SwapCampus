@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { DetailShell } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import {
   createConversation,
@@ -357,6 +357,7 @@ export function ProductDetailPage() {
             alt={`${detail.seller.displayName}的头像`}
             fallbackLabel={detail.seller.displayName}
             className="detail-seller-avatar"
+            frame={(detail.seller.avatarFrame as AvatarFrameKey | null) ?? undefined}
           />
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">

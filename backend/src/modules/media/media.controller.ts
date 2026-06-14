@@ -7,7 +7,13 @@ import type { SessionRequest } from '../auth/supertokens.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
-import { MEDIA_IMAGE_MIME_TYPES, MEDIA_PURPOSES, MEDIA_UPLOAD_PROFILES } from './media.constants';
+import {
+  MEDIA_IMAGE_MIME_TYPES,
+  MEDIA_MESSAGE_MAX_UPLOAD_SIZE,
+  MEDIA_MESSAGE_MIME_TYPES,
+  MEDIA_PURPOSES,
+  MEDIA_UPLOAD_PROFILES
+} from './media.constants';
 import { MediaService } from './media.service';
 import { UploadImageDto } from './dto/upload-image.dto';
 
@@ -52,6 +58,33 @@ export class MediaController {
     });
 
     return asset;
+  }
+
+  @Post('messages')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file', {
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: MEDIA_MESSAGE_MAX_UPLOAD_SIZE
+    }
+  }))
+  async uploadMessageAttachment(
+    @UploadedFile(new ParseFilePipeBuilder()
+      .addFileTypeValidator({ fileType: new RegExp(MEDIA_MESSAGE_MIME_TYPES.join('|').replace(/\//g, '\\/')) })
+      .addMaxSizeValidator({ maxSize: MEDIA_MESSAGE_MAX_UPLOAD_SIZE })
+      .build({ fileIsRequired: true })) file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    if (!user?.id) {
+      throw new BadRequestException('请先登录');
+    }
+
+    return this.mediaService.uploadMessageAttachment({
+      fileBuffer: file.buffer,
+      mimeType: file.mimetype,
+      originalName: file.originalname,
+      ownerId: user.id
+    });
   }
 
   @Get('files')

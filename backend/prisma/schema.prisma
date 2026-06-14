@@ -122,7 +122,9 @@ enum CampusServiceOrderStatus {
 enum MessageType {
   TEXT
   IMAGE
+  VIDEO
   EMOJI
+  ORDER_EVENT
 }
 
 enum BehaviorEventType {
@@ -264,6 +266,11 @@ model Order {
   status         OrderStatus    @default(PENDING)
   meetupLocation String?
   note           String?
+  paymentIntent  String?
+  orderSnapshot  Json?
+  autoConfirmAt  DateTime?
+  completedAt    DateTime?
+  canceledAt     DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   product        Product        @relation(fields: [productId], references: [id])
@@ -276,6 +283,7 @@ model Order {
   @@index([buyerId, status, updatedAt])
   @@index([sellerId, status, updatedAt])
   @@index([status, createdAt])
+  @@index([autoConfirmAt, status])
 }
 
 model CampusServiceListing {

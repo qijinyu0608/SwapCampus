@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
 import { SectionHeader } from '../components/layout';
+import { UserAvatar } from '../components/user/UserAvatar';
 import {
   checkInCreditCenter,
   claimCreditMission,
@@ -107,7 +108,35 @@ function getMissionCycleLabel(cycleType: CreditMissionItem['cycleType']) {
 }
 
 function getRewardAvailabilityLabel(item: CreditRewardItem) {
+  if (item.redeemed) {
+    return '已激活';
+  }
+
   return item.canRedeem ? '可用' : '不可用';
+}
+
+function renderRewardPreview(item: CreditRewardItem) {
+  if (item.code === 'PROFILE_FRAME_BLUE') {
+    return (
+      <div className="credit-center-reward-preview is-avatar-frame" aria-hidden="true">
+        <UserAvatar src={undefined} alt="" fallbackLabel="林" frame="blue-glow" className="credit-center-reward-avatar" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="credit-center-reward-preview is-badge" aria-hidden="true">
+      <div className="credit-center-reward-badge">
+        <div className="credit-center-reward-badge-crest" />
+        <div className="credit-center-reward-badge-core">
+          <CheckCircleOutlined />
+        </div>
+        <div className="credit-center-reward-badge-spark" />
+        <span className="credit-center-reward-badge-ribbon left" />
+        <span className="credit-center-reward-badge-ribbon right" />
+      </div>
+    </div>
+  );
 }
 
 function CreditScoreGauge(props: {
@@ -278,7 +307,7 @@ export function CreditCenterPage() {
   return (
     <div className="page-grid profile-page credit-center-page">
       <section className="credit-center-topbar">
-        <Button onClick={() => navigate('/profile')}>返回个人中心</Button>
+        <Button type="text" className="credit-center-back-button" onClick={() => navigate('/profile')}>返回个人中心</Button>
       </section>
 
       <section className="credit-center-dashboard">
@@ -294,12 +323,10 @@ export function CreditCenterPage() {
         <div className="credit-center-stat-card">
           <span><StarOutlined /> 可用积分</span>
           <strong>{summary.availablePoints}</strong>
-          <em>{summary.totalEarnedPoints}</em>
         </div>
         <div className="credit-center-stat-card">
           <span><CalendarOutlined /> 连续签到</span>
           <strong>{summary.signInStreak}</strong>
-          <em>{summary.checkedInToday ? '已签到' : ''}</em>
         </div>
       </section>
 
@@ -399,25 +426,22 @@ export function CreditCenterPage() {
                   <div className="credit-center-reward-list">
                     {rewardItems.map((item) => (
                       <div key={item.code} className="credit-center-reward-item">
-                        <div className="credit-center-reward-copy">
-                          <div className="credit-center-reward-headline">
-                            <strong>{item.title}</strong>
-                            <span className={`credit-center-reward-chip${item.canRedeem ? ' is-available' : ''}`}>
-                              {getRewardAvailabilityLabel(item)}
-                            </span>
+                        <div className="credit-center-reward-body">
+                          <div className="credit-center-reward-copy">
+                            <div className="credit-center-reward-headline">
+                              <strong>{item.title}</strong>
+                            </div>
+                            <span>{item.description}</span>
+                            <em>{item.code === 'PROFILE_FRAME_BLUE' ? '激活后维持 15 天' : getRewardAvailabilityLabel(item)}</em>
                           </div>
-                          <span>{item.description}</span>
-                          <div className="credit-center-reward-meta">
-                            <em>{item.pointsCost}</em>
-                            <em>{item.minCreditScore}</em>
-                          </div>
+                          {renderRewardPreview(item)}
                         </div>
                         <Button
-                          disabled={!item.canRedeem}
+                          disabled={!item.canRedeem || item.redeemed}
                           loading={actingRewardCode === item.code}
                           onClick={() => void handleRedeemReward(item.code)}
                         >
-                          兑换
+                          {item.redeemed ? '已激活' : `${item.pointsCost} 积分兑换`}
                         </Button>
                       </div>
                     ))}
@@ -449,7 +473,6 @@ export function CreditCenterPage() {
                           <div key={item.id} className="credit-center-ledger-item">
                             <div className="credit-center-ledger-main">
                               <strong>{item.remark || item.sourceType}</strong>
-                              <span className={`credit-center-ledger-chip is-${item.sourceType.toLowerCase()}`}>{item.sourceType}</span>
                             </div>
                             <span className="credit-center-ledger-time">{formatLedgerTime(item.createdAt)}</span>
                             <div className={`credit-center-ledger-value ${item.pointsDelta >= 0 ? 'is-positive' : 'is-negative'}`}>

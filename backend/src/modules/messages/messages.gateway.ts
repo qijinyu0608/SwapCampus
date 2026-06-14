@@ -24,8 +24,12 @@ type NewMessageEvent = {
     id: number;
     senderId: number;
     senderName: string;
+    senderAvatarUrl?: string | null;
+    senderAvatarFrame?: string | null;
     content: string;
     type: string;
+    attachment?: Record<string, unknown> | null;
+    previewText?: string;
     createdAt: Date;
   };
 };

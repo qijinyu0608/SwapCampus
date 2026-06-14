@@ -1,15 +1,18 @@
 import {
   EnvironmentOutlined,
+  FileImageOutlined,
+  LoadingOutlined,
   SendOutlined,
   ShopOutlined,
-  SmileOutlined
+  SmileOutlined,
+  VideoCameraOutlined
 } from '@ant-design/icons';
 import { Empty, Input, message } from 'antd';
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { io, type Socket } from 'socket.io-client';
 import { CAMPUS_SERVICE_CATEGORY_LABEL } from '../constants/campusServiceCategories';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import Session from 'supertokens-auth-react/recipe/session';
 import {
@@ -19,7 +22,8 @@ import {
   fetchConversationMessages,
   fetchConversations,
   getApiErrorMessage,
-  sendConversationMessage
+  sendConversationMessage,
+  uploadMessageAttachment
 } from '../services/api';
 import { normalizeProductCategoryName } from '../constants/productCategories';
 import { hasTradingAccess, isGuestUser } from '../services/session';
@@ -115,6 +119,22 @@ function formatBubbleTime(input: string) {
 
 function isSameDay(left: string, right: string) {
   return new Date(left).toDateString() === new Date(right).toDateString();
+}
+
+function getPreviewText(entry: Pick<ConversationMessage, 'type' | 'content' | 'previewText'>) {
+  if (entry.previewText?.trim()) {
+    return entry.previewText;
+  }
+
+  if (entry.type === 'IMAGE') {
+    return '[图片]';
+  }
+
+  if (entry.type === 'VIDEO') {
+    return '[视频]';
+  }
+
+  return entry.content;
 }
 
 const EMOJI_CHOICES = [
@@ -227,6 +247,8 @@ export function MessagesPage() {
   const desiredDraft = useRef<DraftConversation | null>(parseDraftConversation(routeState?.draftConversation));
   const threadRef = useRef<HTMLDivElement | null>(null);
   const emojiRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeIdRef = useRef<number | null>(null);
   const conversationsRef = useRef<ConversationSummary[]>([]);
@@ -235,6 +257,7 @@ export function MessagesPage() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [readMap, setReadMap] = useState<Record<number, string>>({});
   const [activeChannel, setActiveChannel] = useState<MessageChannel>('trade');
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -301,7 +324,8 @@ export function MessagesPage() {
         const optimisticIndex = previous.findIndex((item) =>
           item.id < 0 &&
           item.senderId === nextMessage.senderId &&
-          item.content === nextMessage.content
+          item.content === nextMessage.content &&
+          item.type === nextMessage.type
         );
 
         if (optimisticIndex >= 0) {
@@ -314,10 +338,10 @@ export function MessagesPage() {
 
     setConversations((previous) => {
       const next = previous.map((session) =>
-        session.id === event.conversationId
+            session.id === event.conversationId
           ? {
               ...session,
-              preview: nextMessage.content,
+              preview: getPreviewText(nextMessage),
               updatedAt: nextMessage.createdAt,
               latestMessageAt: nextMessage.createdAt,
               latestMessageSenderId: nextMessage.senderId
@@ -466,6 +490,61 @@ export function MessagesPage() {
     } finally {
       setSending(false);
     }
+  }
+
+  async function sendAttachmentMessage(kind: 'IMAGE' | 'VIDEO', file: File) {
+    if (!hasTradingAccess(currentUser)) {
+      message.error(isGuestUser(currentUser) ? '游客不可发送消息' : '请先登录后再发送消息');
+      return;
+    }
+
+    if ((!activeId && !pendingDraft) || !currentUser) {
+      return;
+    }
+
+    setUploadingAttachment(true);
+    setEmojiOpen(false);
+
+    try {
+      const uploaded = await uploadMessageAttachment(file);
+      let targetConversationId = activeId;
+
+      if (!targetConversationId && pendingDraft) {
+        const created = await createConversation({ productId: pendingDraft.productId });
+        targetConversationId = created.id;
+        setPendingDraft(null);
+        await refreshConversations(created.id);
+      }
+
+      if (!targetConversationId) {
+        throw new Error('会话不存在');
+      }
+
+      await sendConversationMessage(targetConversationId, {
+        type: kind,
+        attachment: uploaded
+      });
+      await Promise.all([loadMessages(targetConversationId), refreshConversations(targetConversationId)]);
+    } catch (error) {
+      message.error(getApiErrorMessage(error, kind === 'IMAGE' ? '图片发送失败，请稍后重试。' : '视频发送失败，请稍后重试。'));
+    } finally {
+      setUploadingAttachment(false);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = '';
+      }
+      if (videoInputRef.current) {
+        videoInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleAttachmentFileChange(kind: 'IMAGE' | 'VIDEO', event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    void sendAttachmentMessage(kind, file);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -667,6 +746,7 @@ export function MessagesPage() {
   const isActiveCampusService = Boolean(activeConversation && isCampusServiceConversation(activeConversation));
   const activeServiceTask = activeConversation ? getCampusConversation(activeConversation) : null;
   const composerEnabled = Boolean(activeConversation || pendingDraft);
+  const toolsDisabled = !composerEnabled || sending || uploadingAttachment;
   const tradeConversations = useMemo(
     () => conversations.filter((item) => !isCampusServiceConversation(item)),
     [conversations]
@@ -745,6 +825,7 @@ export function MessagesPage() {
                       fallbackLabel={session.participant.displayName}
                       alt={session.participant.displayName}
                       className="trade-chat-avatar"
+                      frame={(session.participant.avatarFrame as AvatarFrameKey | null) ?? undefined}
                     />
                     <div className="trade-chat-session-copy">
                       <div className="trade-chat-session-top">
@@ -859,6 +940,7 @@ export function MessagesPage() {
                   {messages.length ? messages.map((entry, index) => {
                     const isSelf = entry.senderId === currentUser?.id;
                     const avatarSrc = isSelf ? currentUser?.avatarUrl : entry.senderAvatarUrl;
+                    const avatarFrame = isSelf ? currentUser?.avatarFrame : entry.senderAvatarFrame;
                     const avatarName = isSelf ? currentUser?.displayName ?? '我' : entry.senderName;
                     const showDivider = index === 0 || !isSameDay(messages[index - 1].createdAt, entry.createdAt);
 
@@ -877,11 +959,50 @@ export function MessagesPage() {
                               fallbackLabel={avatarName}
                               alt={avatarName}
                               className="trade-chat-avatar small"
+                              frame={(avatarFrame as AvatarFrameKey | null) ?? undefined}
                             />
                           ) : null}
                           <div className="trade-chat-bubble-wrap">
                             <div className={isSelf ? 'trade-chat-bubble self' : 'trade-chat-bubble other'}>
-                              {entry.content}
+                              {entry.type === 'ORDER_EVENT' && entry.orderEvent ? (
+                                <div className="trade-chat-order-event-card">
+                                  <div className="trade-chat-order-event-top">
+                                    <strong>{entry.orderEvent.title}</strong>
+                                    {entry.orderEvent.badge ? <span>{entry.orderEvent.badge}</span> : null}
+                                  </div>
+                                  <p>{entry.orderEvent.summary}</p>
+                                  <div className="trade-chat-order-event-meta">
+                                    <em>订单编号：{entry.orderEvent.orderCode}</em>
+                                    {(entry.orderEvent.meta ?? []).map((metaItem) => (
+                                      <em key={`${metaItem.label}:${metaItem.value}`}>{metaItem.label}：{metaItem.value}</em>
+                                    ))}
+                                  </div>
+                                  <div className="trade-chat-order-event-actions">
+                                    <button
+                                      type="button"
+                                      className="trade-chat-buy-button secondary"
+                                      onClick={() => navigate(entry.orderEvent?.actionTarget ?? `/orders/${entry.orderEvent?.orderId}`)}
+                                    >
+                                      {entry.orderEvent.actionLabel ?? '查看订单'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : entry.type === 'IMAGE' && entry.attachment ? (
+                                <img
+                                  src={entry.attachment.url}
+                                  alt={entry.attachment.originalName ?? '聊天图片'}
+                                  className="trade-chat-bubble-media trade-chat-bubble-image"
+                                />
+                              ) : entry.type === 'VIDEO' && entry.attachment ? (
+                                <video
+                                  src={entry.attachment.url}
+                                  className="trade-chat-bubble-media trade-chat-bubble-video"
+                                  controls
+                                  preload="metadata"
+                                />
+                              ) : (
+                                entry.content
+                              )}
                             </div>
                             <div className={isSelf ? 'trade-chat-bubble-meta self' : 'trade-chat-bubble-meta'}>
                               <span>{formatBubbleTime(entry.createdAt)}</span>
@@ -893,6 +1014,7 @@ export function MessagesPage() {
                               fallbackLabel={avatarName}
                               alt={avatarName}
                               className="trade-chat-avatar small"
+                              frame={(avatarFrame as AvatarFrameKey | null) ?? undefined}
                             />
                           ) : null}
                         </div>
@@ -961,17 +1083,51 @@ export function MessagesPage() {
             ) : null}
 
             {activeConversation || pendingDraft ? (
-              <div className="trade-chat-compose">
-                <div className="trade-chat-tools">
-                  <div className="trade-chat-emoji" ref={emojiRef}>
+                <div className="trade-chat-compose">
+                  <div className="trade-chat-tools">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(event) => handleAttachmentFileChange('IMAGE', event)}
+                    />
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime,video/*"
+                      hidden
+                      onChange={(event) => handleAttachmentFileChange('VIDEO', event)}
+                    />
                     <button
                       type="button"
-                      className={emojiOpen ? 'trade-chat-tool active' : 'trade-chat-tool'}
-                      onClick={() => setEmojiOpen((open) => !open)}
-                      disabled={!composerEnabled}
-                      title="表情"
-                      aria-label="表情"
-                      aria-haspopup="menu"
+                      className="trade-chat-tool"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={toolsDisabled}
+                      title="发送图片"
+                      aria-label="发送图片"
+                    >
+                      {uploadingAttachment ? <LoadingOutlined /> : <FileImageOutlined />}
+                    </button>
+                    <button
+                      type="button"
+                      className="trade-chat-tool"
+                      onClick={() => videoInputRef.current?.click()}
+                      disabled={toolsDisabled}
+                      title="发送视频"
+                      aria-label="发送视频"
+                    >
+                      {uploadingAttachment ? <LoadingOutlined /> : <VideoCameraOutlined />}
+                    </button>
+                    <div className="trade-chat-emoji" ref={emojiRef}>
+                      <button
+                        type="button"
+                        className={emojiOpen ? 'trade-chat-tool active' : 'trade-chat-tool'}
+                        onClick={() => setEmojiOpen((open) => !open)}
+                        disabled={toolsDisabled}
+                        title="表情"
+                        aria-label="表情"
+                        aria-haspopup="menu"
                       aria-expanded={emojiOpen}
                     >
                       <SmileOutlined />
@@ -1001,16 +1157,16 @@ export function MessagesPage() {
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={handleComposerKeyDown}
                     placeholder="输入消息…"
-                    disabled={!composerEnabled}
+                    disabled={!composerEnabled || uploadingAttachment}
                   />
                   <button
                     type="button"
                     className="trade-chat-send-button"
                     onClick={() => void handleSend()}
-                    disabled={!draft.trim() || sending}
+                    disabled={!draft.trim() || sending || uploadingAttachment}
                   >
                     <SendOutlined />
-                    发送
+                    {uploadingAttachment ? '上传中' : '发送'}
                   </button>
                 </div>
               </div>

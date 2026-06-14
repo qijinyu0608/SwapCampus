@@ -8,8 +8,7 @@ import {
   InputNumber,
   Modal,
   Select,
-  Switch,
-  Tag
+  Switch
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -149,17 +148,7 @@ function buildPublishStrategy(intent: CampusServiceIntent, pattern: CampusServic
   return {
     autoConfirm,
     maxTotalOrders,
-    maxConcurrentOrders: 1,
-    summary: [
-      intent === 'REQUEST' ? '当前是需求发布' : '当前是服务供给',
-      pattern === 'ONE_TIME' ? '默认按一次性单处理' : '默认按持续可约处理',
-      autoConfirm ? '默认自动确认' : '默认需要手动确认'
-    ],
-    capacityHint: pattern === 'ONE_TIME'
-      ? '一次性发布默认总名额为 1，同时进行中上限为 1。'
-      : intent === 'OFFER'
-        ? '持续供给通常不设总名额，建议按你能同时处理的单量设置并发上限。'
-        : '持续招募可按总人数和同时处理能力分别设置上限。'
+    maxConcurrentOrders: 1
   };
 }
 
@@ -485,30 +474,11 @@ export function CampusServicePublishWorkbench({
           <PublishImageManager
             title="服务图片"
             modalTitle={intent === 'OFFER' ? '上传服务展示图片' : '上传需求说明图片'}
-            emptyHint="至少上传 1 张图片，首张会作为服务卡片封面。"
             items={uploadedImages}
             uploading={uploadingImage}
             onChange={setUploadedImages}
             onUpload={handleServiceImageUpload}
           />
-
-          <div className="service-publish-strategy">
-            <div className="service-publish-strategy-head">
-              <strong>{intent === 'REQUEST' ? '找人帮我' : '我来提供'}</strong>
-              <div className="service-publish-strategy-tags">
-                <Tag bordered={false}>{pattern === 'ONE_TIME' ? '一次性' : '持续可约'}</Tag>
-                <Tag bordered={false} color={publishStrategy.autoConfirm ? 'green' : 'default'}>
-                  {publishStrategy.autoConfirm ? '自动确认' : '手动确认'}
-                </Tag>
-              </div>
-            </div>
-            <div className="service-publish-strategy-summary">
-              {publishStrategy.summary.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-            <p>{publishStrategy.capacityHint}</p>
-          </div>
           <div className="service-market-form-grid">
             {!presetIntent ? (
               <Form.Item name="intent" label="发布方向" initialValue="REQUEST" rules={[{ required: true }]}>
@@ -546,7 +516,6 @@ export function CampusServicePublishWorkbench({
               name="reward"
               label="金额 / 报价"
               rules={priceMode === 'FIXED' ? [{ required: true, message: '请输入固定金额' }] : []}
-              extra={priceMode === 'NEGOTIABLE' ? '面议模式下可先不填金额。' : priceMode === 'FREE' ? '免费模式会自动按 0 元发布。' : undefined}
             >
               <InputNumber
                 min={priceMode === 'FREE' ? 0 : 1}
@@ -571,7 +540,6 @@ export function CampusServicePublishWorkbench({
             <Form.Item
               name="maxTotalOrders"
               label="总名额上限"
-              extra={pattern === 'ONE_TIME' ? '一次性服务默认 1 单；改大后可用于多名额招募。' : '留空表示整个有效期内不限制总单量。'}
             >
               <InputNumber min={1} max={99} style={{ width: '100%' }} placeholder="不填则不限或按模式默认" />
             </Form.Item>
@@ -579,7 +547,6 @@ export function CampusServicePublishWorkbench({
               name="maxConcurrentOrders"
               label="同时进行中上限"
               initialValue={1}
-              extra={intent === 'OFFER' ? '表示你同一时间最多同时处理多少单。' : '表示你同一时间最多同时推进多少个需求单。'}
             >
               <InputNumber min={1} max={20} style={{ width: '100%' }} />
             </Form.Item>
@@ -588,7 +555,6 @@ export function CampusServicePublishWorkbench({
             name="validUntilAt"
             label="有效截止时间"
             rules={[{ required: true }]}
-            extra={`有效期最短 ${MIN_VALID_MINUTES} 分钟，最长 ${MAX_VALID_DAYS} 天。`}
           >
             <DatePicker
               showTime={{ format: 'HH:mm' }}
@@ -611,7 +577,6 @@ export function CampusServicePublishWorkbench({
             label="自动确认成交"
             valuePropName="checked"
             initialValue={resolveDefaultAutoConfirm(presetIntent ?? 'REQUEST', 'ONE_TIME')}
-            extra={publishStrategy.autoConfirm ? '当前组合默认适合自动确认，你也可以手动改回人工确认。' : '当前组合默认建议人工确认，避免陌生人瞬时锁单。'}
           >
             <Switch />
           </Form.Item>
