@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { ListingSummary } from '../../services/api';
+import { parseProductConditionValue, formatProductConditionValue } from '../../constants/productConditions';
 import { formatCurrencyAmount } from '../../utils/price';
 
 type ProductSummaryCardProps = {
@@ -21,22 +22,26 @@ type ProductSummaryCardProps = {
   onOpen?: () => void;
 };
 
+function formatConditionTagLabel(condition?: string) {
+  if (!condition) {
+    return '';
+  }
+
+  const parsed = parseProductConditionValue(condition);
+  if (parsed !== null) {
+    return formatProductConditionValue(parsed);
+  }
+
+  return condition;
+}
+
 function resolveConditionTone(condition?: string) {
   if (!condition) {
     return 'default';
   }
 
-  if (condition === '全新') {
-    return 'new';
-  }
-
-  const match = condition.match(/^(\d+(?:\.\d)?)成$/);
-  if (!match) {
-    return 'default';
-  }
-
-  const value = Number(match[1]);
-  if (!Number.isFinite(value)) {
+  const value = parseProductConditionValue(condition);
+  if (value === null) {
     return 'default';
   }
 
@@ -74,9 +79,10 @@ export function ProductSummaryCard({
   const classes = ['fish-item-card', className ?? ''].filter(Boolean).join(' ');
   const normalizedTags = (tagItems ?? []).filter(Boolean);
   const conditionTone = resolveConditionTone(item.condition);
+  const conditionLabel = formatConditionTagLabel(item.condition);
   const conditionTag = item.condition ? (
     <span className={`fish-item-tag is-condition is-condition-${conditionTone}`}>
-      <span className="fish-item-tag-content">{item.condition}</span>
+      <span className="fish-item-tag-content">{conditionLabel}</span>
     </span>
   ) : null;
   const coverClasses = ['fish-item-cover', item.imageUrl ? 'has-image' : '', coverClassName ?? ''].filter(Boolean).join(' ');

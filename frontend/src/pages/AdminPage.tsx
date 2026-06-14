@@ -1,5 +1,5 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Space, Tag, message } from 'antd';
+import { Alert, Button, Image, Modal, Space, Tabs, Tag, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PageContainer,
@@ -15,24 +15,33 @@ import { CAMPUS_SERVICE_CATEGORY_LABEL } from '../constants/campusServiceCategor
 import { useAuthState } from '../services/auth-state';
 import {
   AdminCampusServiceAction,
+  AdminCampusServicePreview,
   AdminCampusServiceItem,
   AdminOrderItem,
   AdminOverview,
+  AdminProductPreview,
   AuditLogItem,
   ModerationUserItem,
+  OrderAppealItem,
   ReportItem,
+  fetchAdminCampusServicePreview,
   fetchAdminCampusServices,
+  fetchAdminOrderAppeals,
   fetchAdminOrders,
   fetchAdminOverview,
+  fetchAdminProductPreview,
   fetchAuditLogs,
   fetchModerationUsers,
   fetchReports,
   getApiErrorMessage,
+  resolveAdminOrderAppeal,
   resolveReport,
   updateAdminCampusServiceStatus,
   updateAdminOrderStatus,
   updateAdminProductStatus,
   updateUserBanStatus
+  ,
+  updateUserVerificationStatus
 } from '../services/api';
 import { hasAdminAccess } from '../services/session';
 
@@ -40,6 +49,7 @@ const emptyOverview: AdminOverview = {
   onSaleProducts: 0,
   totalUsers: 0,
   reportCount: 0,
+  appealCount: 0,
   activeOrders: 0,
   activeCampusServices: 0,
   recentProducts: [],
@@ -70,14 +80,47 @@ const campusServiceStatusMap: Record<string, string> = {
   CANCELED: '已取消'
 };
 
+const verificationStatusMap: Record<string, string> = {
+  PENDING: '待审核',
+  APPROVED: '已实名',
+  REJECTED: '已驳回'
+};
+
+const accountStatusMap: Record<string, string> = {
+  ACTIVE: '正常',
+  BANNED: '已封禁'
+};
+
+const reportStatusMap: Record<string, string> = {
+  OPEN: '待处理',
+  RESOLVED: '已处理',
+  REJECTED: '已驳回',
+  OFFLINE_PRODUCT: '商品下架',
+  BAN_USER: '用户封禁',
+  UNBAN_USER: '解除封禁'
+};
+
+const appealStatusMap: Record<string, string> = {
+  OPEN: '待处理',
+  RESOLVED: '已处理',
+  REJECTED: '已驳回'
+};
+
 const userRiskMap: Record<ModerationUserItem['riskLevel'], { label: string; color: string }> = {
   LOW: { label: '低风险', color: 'green' },
   MEDIUM: { label: '观察', color: 'orange' },
   HIGH: { label: '高风险', color: 'red' }
 };
 
-type AdminTabKey = 'products' | 'orders' | 'services' | 'reports' | 'logs' | 'users';
+type AdminTabKey = 'registrations' | 'publishing' | 'reports' | 'userIntelligence' | 'appeals';
+type PublishTabKey = 'products' | 'services';
+type UserIntelligenceTabKey = 'users' | 'orders' | 'logs';
 type ProductTableRow = AdminOverview['recentProducts'][number];
+type RegistrationFilters = {
+  keyword?: string;
+  college?: string;
+  verificationStatus?: string;
+};
 type ProductFilters = {
   keyword?: string;
   status?: string;
@@ -95,6 +138,10 @@ type ReportFilters = {
   keyword?: string;
   status?: string;
   targetType?: string;
+};
+type AppealFilters = {
+  keyword?: string;
+  status?: string;
 };
 type LogFilters = {
   keyword?: string;
@@ -142,11 +189,14 @@ function formatDateTime(value?: string) {
 
 export function AdminPage() {
   const { currentUser } = useAuthState();
-  const [activeTab, setActiveTab] = useState<AdminTabKey>('products');
+  const [activeTab, setActiveTab] = useState<AdminTabKey>('registrations');
+  const [publishTab, setPublishTab] = useState<PublishTabKey>('products');
+  const [userIntelligenceTab, setUserIntelligenceTab] = useState<UserIntelligenceTabKey>('users');
   const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [orders, setOrders] = useState<AdminOrderItem[]>([]);
+  const [appeals, setAppeals] = useState<OrderAppealItem[]>([]);
   const [campusServices, setCampusServices] = useState<AdminCampusServiceItem[]>([]);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [collectionsLoading, setCollectionsLoading] = useState(false);
@@ -156,6 +206,11 @@ export function AdminPage() {
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(8);
   const [collegeStats, setCollegeStats] = useState<Array<{ college: string; count: number }>>([]);
+  const [registrationPreview, setRegistrationPreview] = useState<ModerationUserItem | null>(null);
+  const [productPreview, setProductPreview] = useState<AdminProductPreview | null>(null);
+  const [servicePreview, setServicePreview] = useState<AdminCampusServicePreview | null>(null);
+  const [productPreviewLoading, setProductPreviewLoading] = useState(false);
+  const [servicePreviewLoading, setServicePreviewLoading] = useState(false);
   const userActionRef = useRef<ActionType>();
   const resolutionNote = '已核查处理';
 
@@ -209,6 +264,7 @@ export function AdminPage() {
   );
 
   const openReports = reports.filter((item) => item.status === 'OPEN').length;
+  const openAppeals = appeals.filter((item) => item.status === 'OPEN').length;
   const bannedUsers = moderationUsers.filter((item) => item.isBanned).length;
   const verifiedUsers = moderationUsers.filter((item) => item.verificationStatus === 'APPROVED').length;
   const highRiskUsers = moderationUsers.filter((item) => item.riskLevel === 'HIGH').length;
@@ -230,20 +286,23 @@ export function AdminPage() {
   async function loadCollections() {
     setCollectionsLoading(true);
     try {
-      const [reportList, logList, orderList, campusServiceList] = await Promise.all([
+      const [reportList, logList, orderList, appealList, campusServiceList] = await Promise.all([
         fetchReports(),
         fetchAuditLogs(),
         fetchAdminOrders(),
+        fetchAdminOrderAppeals(),
         fetchAdminCampusServices()
       ]);
       setReports(reportList);
       setLogs(logList);
       setOrders(orderList);
+      setAppeals(appealList);
       setCampusServices(campusServiceList);
     } catch (error) {
       setReports([]);
       setLogs([]);
       setOrders([]);
+      setAppeals([]);
       setCampusServices([]);
       setLoadError(getApiErrorMessage(error, '后台数据加载失败，请检查服务状态。'));
     } finally {
@@ -289,7 +348,7 @@ export function AdminPage() {
 
   async function handleOrderStatus(
     orderId: number,
-    status: 'PENDING' | 'IN_PROGRESS' | 'WAITING_REVIEW' | 'COMPLETED' | 'CANCELED'
+    status: 'CANCELED'
   ) {
     if (!currentUser) {
       message.error('请先登录后再处理');
@@ -347,6 +406,27 @@ export function AdminPage() {
     }
   }
 
+  async function handleResolveAppeal(
+    appealId: number,
+    nextStatus: 'RESOLVED' | 'REJECTED' | 'CANCELED_ORDER' | 'BAN_RESPONDENT' | 'UNBAN_RESPONDENT'
+  ) {
+    if (!currentUser) {
+      message.error('请先登录后再处理');
+      return;
+    }
+
+    try {
+      await resolveAdminOrderAppeal(appealId, {
+        nextStatus,
+        resolutionNote
+      });
+      message.success('申诉已处理');
+      await refreshDashboard();
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '处理失败，请稍后重试'));
+    }
+  }
+
   async function handleUserBan(record: ModerationUserItem, banned: boolean) {
     if (!currentUser) {
       message.error('请先登录后再处理');
@@ -363,6 +443,48 @@ export function AdminPage() {
       await userActionRef.current?.reload();
     } catch (error) {
       message.error(getApiErrorMessage(error, '用户状态更新失败，请稍后重试'));
+    }
+  }
+
+  async function handleVerification(record: ModerationUserItem, status: 'APPROVED' | 'REJECTED') {
+    if (!currentUser) {
+      message.error('请先登录后再处理');
+      return;
+    }
+
+    try {
+      await updateUserVerificationStatus(record.id, {
+        status,
+        reason: resolutionNote
+      });
+      message.success(status === 'APPROVED' ? '审核已通过，信用分已设为 50' : '审核已驳回');
+      await refreshDashboard();
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '审核操作失败，请稍后重试'));
+    }
+  }
+
+  async function handleOpenProductPreview(productId: number) {
+    setProductPreviewLoading(true);
+    try {
+      const detail = await fetchAdminProductPreview(productId);
+      setProductPreview(detail);
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '商品资料加载失败，请稍后重试'));
+    } finally {
+      setProductPreviewLoading(false);
+    }
+  }
+
+  async function handleOpenServicePreview(listingId: number) {
+    setServicePreviewLoading(true);
+    try {
+      const detail = await fetchAdminCampusServicePreview(listingId);
+      setServicePreview(detail);
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '服务资料加载失败，请稍后重试'));
+    } finally {
+      setServicePreviewLoading(false);
     }
   }
 
@@ -404,7 +526,11 @@ export function AdminPage() {
         dataIndex: 'status',
         width: 120,
         search: false,
-        render: (_, record) => <Tag color={getTagColor(record.status)}>{productStatusMap[record.status] ?? record.status}</Tag>
+        render: (_, record) => (
+          <Tag bordered={false} color={getTagColor(record.status)}>
+            {productStatusMap[record.status] ?? '未知状态'}
+          </Tag>
+        )
       },
       {
         title: '卖家',
@@ -416,8 +542,11 @@ export function AdminPage() {
       {
         title: '操作',
         valueType: 'option',
-        width: 110,
+        width: 180,
         render: (_, record) => [
+          <Button key="preview" size="small" onClick={() => void handleOpenProductPreview(record.id)}>
+            查看资料
+          </Button>,
           <Button key="offline" size="small" onClick={() => void handleModeration(record.id, 'OFFLINE')}>
             下架
           </Button>
@@ -425,6 +554,140 @@ export function AdminPage() {
       }
     ],
     [productStatusValueEnum]
+  );
+
+  const registrationReviewColumns = useMemo<ProColumns<ModerationUserItem>[]>(
+    () => [
+      {
+        title: '关键字',
+        dataIndex: 'keyword',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: '搜索姓名、学号、邮箱'
+        }
+      },
+      {
+        title: '学院',
+        dataIndex: 'college',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: collegeValueEnum,
+        fieldProps: {
+          allowClear: true,
+          showSearch: true,
+          placeholder: '全部学院'
+        }
+      },
+      {
+        title: '审核状态',
+        dataIndex: 'verificationStatus',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: {
+          PENDING: { text: '待审核' },
+          REJECTED: { text: '已驳回' }
+        },
+        fieldProps: {
+          allowClear: true,
+          placeholder: '全部状态'
+        }
+      },
+      {
+        title: '用户',
+        dataIndex: 'displayName',
+        width: 180,
+        search: false,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <strong>{record.displayName}</strong>
+            <span className="meta-line">{record.studentId || '未填写学号'}</span>
+          </Space>
+        )
+      },
+      {
+        title: '联系',
+        width: 220,
+        search: false,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <span>{record.email}</span>
+            <span className="meta-line">用户 #{record.id}</span>
+          </Space>
+        )
+      },
+      {
+        title: '学院',
+        dataIndex: 'college',
+        width: 120,
+        search: false
+      },
+      {
+        title: '审核状态',
+        dataIndex: 'verificationStatus',
+        width: 120,
+        search: false,
+        render: (_, record) => (
+          <Tag bordered={false} color={record.verificationStatus === 'REJECTED' ? 'red' : 'orange'}>
+            {verificationStatusMap[record.verificationStatus] ?? '未知状态'}
+          </Tag>
+        )
+      },
+      {
+        title: '账号状态',
+        dataIndex: 'accountStatus',
+        width: 120,
+        search: false,
+        render: (_, record) => (
+          <Tag bordered={false} color={record.isBanned ? 'red' : 'green'}>
+            {record.isBanned ? accountStatusMap.BANNED : accountStatusMap.ACTIVE}
+          </Tag>
+        )
+      },
+      {
+        title: '风险',
+        dataIndex: 'riskLevel',
+        width: 110,
+        search: false,
+        render: (_, record) => {
+          const risk = userRiskMap[record.riskLevel] ?? userRiskMap.LOW;
+          return <Tag bordered={false} color={risk.color}>{risk.label}</Tag>;
+        }
+      },
+      {
+        title: '注册时间',
+        dataIndex: 'createdAt',
+        width: 160,
+        search: false,
+        render: (_, record) => formatDateTime(record.createdAt)
+      },
+      {
+        title: '建议动作',
+        dataIndex: 'suggestedAction',
+        width: 140,
+        search: false
+      },
+      {
+        title: '资料',
+        valueType: 'option',
+        width: 220,
+        render: (_, record) => [
+          <Button key="preview" size="small" onClick={() => setRegistrationPreview(record)}>
+            查看资料
+          </Button>,
+          record.verificationStatus === 'PENDING' ? (
+            <Button key="approve" size="small" type="primary" onClick={() => void handleVerification(record, 'APPROVED')}>
+              通过
+            </Button>
+          ) : null,
+          record.verificationStatus !== 'REJECTED' ? (
+            <Button key="reject" size="small" danger onClick={() => void handleVerification(record, 'REJECTED')}>
+              驳回
+            </Button>
+          ) : null
+        ]
+      }
+    ],
+    [collegeValueEnum]
   );
 
   const reportColumns = useMemo<ProColumns<ReportItem>[]>(
@@ -494,7 +757,11 @@ export function AdminPage() {
         dataIndex: 'status',
         width: 120,
         search: false,
-        render: (_, record) => <Tag color={record.status === 'OPEN' ? 'orange' : 'green'}>{record.status}</Tag>
+        render: (_, record) => (
+          <Tag bordered={false} color={record.status === 'OPEN' ? 'orange' : 'green'}>
+            {reportStatusMap[record.status] ?? '未知状态'}
+          </Tag>
+        )
       },
       {
         title: '时间',
@@ -534,6 +801,115 @@ export function AdminPage() {
       }
     ],
     [reportStatusValueEnum]
+  );
+
+  const appealColumns = useMemo<ProColumns<OrderAppealItem>[]>(
+    () => [
+      {
+        title: '关键字',
+        dataIndex: 'keyword',
+        hideInTable: true,
+        fieldProps: {
+          placeholder: '搜索订单号、申诉类型、原因、双方用户'
+        }
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: {
+          OPEN: { text: '待处理' },
+          RESOLVED: { text: '已处理' },
+          REJECTED: { text: '已驳回' }
+        },
+        fieldProps: {
+          allowClear: true,
+          placeholder: '全部状态'
+        }
+      },
+      {
+        title: '订单',
+        width: 120,
+        search: false,
+        render: (_, record) => `订单 #${record.orderId}`
+      },
+      {
+        title: '申诉方',
+        width: 160,
+        search: false,
+        render: (_, record) => `${record.appellantName} #${record.appellantId}`
+      },
+      {
+        title: '被申诉方',
+        width: 160,
+        search: false,
+        render: (_, record) => `${record.respondentName} #${record.respondentId}`
+      },
+      {
+        title: '类型',
+        dataIndex: 'issueType',
+        width: 140,
+        search: false
+      },
+      {
+        title: '诉求',
+        dataIndex: 'expectedAction',
+        width: 140,
+        search: false,
+        render: (_, record) => record.expectedAction || '未填写'
+      },
+      {
+        title: '原因',
+        dataIndex: 'reason',
+        ellipsis: true,
+        search: false
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        width: 120,
+        search: false,
+        render: (_, record) => (
+          <Tag bordered={false} color={record.status === 'OPEN' ? 'orange' : record.status === 'REJECTED' ? 'red' : 'green'}>
+            {appealStatusMap[record.status] ?? '未知状态'}
+          </Tag>
+        )
+      },
+      {
+        title: '时间',
+        dataIndex: 'createdAt',
+        valueType: 'dateTime',
+        width: 170,
+        search: false
+      },
+      {
+        title: '操作',
+        valueType: 'option',
+        width: 360,
+        render: (_, record) => {
+          if (record.status !== 'OPEN') {
+            return [<span key="done" className="meta-line">已完成</span>];
+          }
+
+          return [
+            <Button key="resolve" size="small" type="primary" onClick={() => void handleResolveAppeal(record.id, 'RESOLVED')}>
+              处理完成
+            </Button>,
+            <Button key="cancel-order" size="small" onClick={() => void handleResolveAppeal(record.id, 'CANCELED_ORDER')}>
+              取消订单
+            </Button>,
+            <Button key="ban-user" size="small" danger onClick={() => void handleResolveAppeal(record.id, 'BAN_RESPONDENT')}>
+              封禁对方
+            </Button>,
+            <Button key="reject" size="small" onClick={() => void handleResolveAppeal(record.id, 'REJECTED')}>
+              驳回
+            </Button>
+          ];
+        }
+      }
+    ],
+    []
   );
 
   const orderColumns = useMemo<ProColumns<AdminOrderItem>[]>(
@@ -586,7 +962,11 @@ export function AdminPage() {
         dataIndex: 'status',
         width: 120,
         search: false,
-        render: (_, record) => <Tag color={getTagColor(record.status)}>{orderStatusMap[record.status] ?? record.status}</Tag>
+        render: (_, record) => (
+          <Tag bordered={false} color={getTagColor(record.status)}>
+            {orderStatusMap[record.status] ?? '未知状态'}
+          </Tag>
+        )
       },
       {
         title: '更新',
@@ -605,19 +985,6 @@ export function AdminPage() {
           }
 
           return [
-            record.status === 'PENDING' ? (
-              <Button key="in-progress" size="small" onClick={() => void handleOrderStatus(record.id, 'IN_PROGRESS')}>
-                进行中
-              </Button>
-            ) : null,
-            record.status === 'IN_PROGRESS' ? (
-              <Button key="review" size="small" onClick={() => void handleOrderStatus(record.id, 'WAITING_REVIEW')}>
-                待评价
-              </Button>
-            ) : null,
-            <Button key="complete" size="small" type="primary" onClick={() => void handleOrderStatus(record.id, 'COMPLETED')}>
-              完成
-            </Button>,
             <Button key="cancel" size="small" danger onClick={() => void handleOrderStatus(record.id, 'CANCELED')}>
               取消
             </Button>
@@ -684,7 +1051,11 @@ export function AdminPage() {
         dataIndex: 'status',
         width: 120,
         search: false,
-        render: (_, record) => <Tag color={getTagColor(record.status)}>{campusServiceStatusMap[record.status] ?? record.status}</Tag>
+        render: (_, record) => (
+          <Tag bordered={false} color={getTagColor(record.status)}>
+            {campusServiceStatusMap[record.status] ?? '未知状态'}
+          </Tag>
+        )
       },
       {
         title: '赏金',
@@ -708,28 +1079,21 @@ export function AdminPage() {
       {
         title: '操作',
         valueType: 'option',
-        width: 260,
+        width: 340,
         render: (_, record) => {
           if (record.status === 'CANCELED' || record.status === 'ENDED' || record.status === 'DONE') {
-            return [<span key="done" className="meta-line">已归档</span>];
+            return [
+              <Button key="preview" size="small" onClick={() => void handleOpenServicePreview(record.id)}>
+                查看资料
+              </Button>,
+              <span key="done" className="meta-line">已归档</span>
+            ];
           }
 
           return [
-            record.status === 'MATCHED' ? (
-              <Button key="complete" size="small" type="primary" onClick={() => void handleCampusServiceStatus(record.id, 'FORCE_COMPLETE')}>
-                完成
-              </Button>
-            ) : null,
-            record.status === 'OPEN' ? (
-              <Button key="match" size="small" onClick={() => void handleCampusServiceStatus(record.id, 'FORCE_MATCH')}>
-                设为进行中
-              </Button>
-            ) : null,
-            record.status === 'BUSY' || record.status === 'PAUSED' ? (
-              <Button key="reopen" size="small" onClick={() => void handleCampusServiceStatus(record.id, 'REOPEN')}>
-                恢复开放
-              </Button>
-            ) : null,
+            <Button key="preview" size="small" onClick={() => void handleOpenServicePreview(record.id)}>
+              查看资料
+            </Button>,
             <Button key="cancel" size="small" danger onClick={() => void handleCampusServiceStatus(record.id, 'CANCEL')}>
               取消
             </Button>
@@ -863,7 +1227,7 @@ export function AdminPage() {
         search: false,
         render: (_, record) => {
           const risk = userRiskMap[record.riskLevel] ?? userRiskMap.LOW;
-          return <Tag color={risk.color}>{risk.label}</Tag>;
+          return <Tag bordered={false} color={risk.color}>{risk.label}</Tag>;
         }
       },
       {
@@ -872,8 +1236,8 @@ export function AdminPage() {
         width: 100,
         search: false,
         render: (_, record) => (
-          <Tag color={record.verificationStatus === 'APPROVED' ? 'blue' : 'default'}>
-            {record.verificationStatus === 'APPROVED' ? '已实名' : '待实名'}
+          <Tag bordered={false} color={record.verificationStatus === 'APPROVED' ? 'blue' : 'default'}>
+            {record.verificationStatus === 'APPROVED' ? verificationStatusMap.APPROVED : '待实名'}
           </Tag>
         )
       },
@@ -882,7 +1246,11 @@ export function AdminPage() {
         dataIndex: 'isBanned',
         width: 100,
         search: false,
-        render: (_, record) => <Tag color={record.isBanned ? 'red' : 'green'}>{record.isBanned ? '已封禁' : '正常'}</Tag>
+        render: (_, record) => (
+          <Tag bordered={false} color={record.isBanned ? 'red' : 'green'}>
+            {record.isBanned ? accountStatusMap.BANNED : accountStatusMap.ACTIVE}
+          </Tag>
+        )
       },
       {
         title: '信用分',
@@ -933,6 +1301,18 @@ export function AdminPage() {
     { label: '高风险', value: highRiskUsers },
     { label: '观察中', value: watchedUsers }
   ];
+
+  const pendingRegistrationCount = moderationUsers.filter((item) => item.verificationStatus === 'PENDING').length;
+  const pendingProductCount = overview.recentProducts.length;
+  const pendingServiceCount = campusServices.filter((item) => ['OPEN', 'BUSY', 'PAUSED', 'MATCHED'].includes(item.status)).length;
+
+  function closeProductPreview() {
+    setProductPreview(null);
+  }
+
+  function closeServicePreview() {
+    setServicePreview(null);
+  }
 
   const filteredProducts = useMemo(
     () => async (params: ProductFilters) => {
@@ -1009,6 +1389,58 @@ export function AdminPage() {
     [reports]
   );
 
+  const filteredAppeals = useMemo(
+    () => async (params: AppealFilters) => {
+      const data = appeals.filter((item) => {
+        if (params.status && item.status !== params.status) {
+          return false;
+        }
+
+        return containsValue(
+          [item.id, item.orderId, item.issueType, item.reason, item.appellantName, item.respondentName],
+          params.keyword
+        );
+      });
+
+      return { data, success: true, total: data.length };
+    },
+    [appeals]
+  );
+
+  const filteredRegistrations = useMemo(
+    () => async (params: RegistrationFilters) => {
+      const pageSize = 100;
+      let page = 1;
+      let totalPages = 1;
+      const items: ModerationUserItem[] = [];
+
+      do {
+        const response = await fetchModerationUsers({
+          page,
+          pageSize,
+          college: params.college,
+          keyword: params.keyword
+        });
+        items.push(...response.items);
+        totalPages = response.pagination.totalPages;
+        page += 1;
+      } while (page <= totalPages);
+
+      const data = items.filter((item) => {
+        if (item.verificationStatus === 'APPROVED') {
+          return false;
+        }
+        if (params.verificationStatus && item.verificationStatus !== params.verificationStatus) {
+          return false;
+        }
+        return true;
+      });
+
+      return { data, success: true, total: data.length };
+    },
+    []
+  );
+
   const filteredLogs = useMemo(
     () => async (params: LogFilters) => {
       const data = logs.filter((item) => {
@@ -1038,13 +1470,117 @@ export function AdminPage() {
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         {loadError ? <Alert type="error" showIcon message="数据加载失败" description={loadError} /> : null}
 
-        <div className="admin-overview-grid">
-          <StatisticCard className="admin-overview-card" statistic={{ title: '在售商品', value: overview.onSaleProducts }} />
-          <StatisticCard className="admin-overview-card" statistic={{ title: '未结举报', value: openReports }} />
-          <StatisticCard className="admin-overview-card" statistic={{ title: '活跃订单', value: overview.activeOrders }} />
-          <StatisticCard className="admin-overview-card" statistic={{ title: '服务任务', value: overview.activeCampusServices }} />
-          <StatisticCard className="admin-overview-card" statistic={{ title: '封禁账号', value: bannedUsers }} />
-          <StatisticCard className="admin-overview-card" statistic={{ title: '实名用户', value: verifiedUsers }} />
+        <div className="admin-dashboard-shell">
+          <div className="admin-dashboard-hero">
+            <div className="admin-dashboard-head">
+              <div className="admin-dashboard-head-copy">
+                <strong>运营总览</strong>
+              </div>
+              <div className="admin-dashboard-head-metric">
+                <span>待处理总量</span>
+                <strong>{pendingRegistrationCount + openReports + openAppeals + pendingProductCount + pendingServiceCount}</strong>
+              </div>
+            </div>
+
+            <div className="admin-dashboard-kpi-row">
+              <div className="admin-dashboard-kpi-card is-lead">
+                <span>在售商品</span>
+                <strong>{overview.onSaleProducts}</strong>
+              </div>
+              <div className="admin-dashboard-kpi-card">
+                <span>活跃订单</span>
+                <strong>{overview.activeOrders}</strong>
+              </div>
+              <div className="admin-dashboard-kpi-card">
+                <span>服务任务</span>
+                <strong>{overview.activeCampusServices}</strong>
+              </div>
+              <div className="admin-dashboard-kpi-card">
+                <span>实名用户</span>
+                <strong>{verifiedUsers}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-dashboard-side">
+            <div className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-head">
+                <strong>待处理事项</strong>
+              </div>
+              <div className="admin-dashboard-queue">
+                <div className="admin-dashboard-queue-item">
+                  <span>注册审核</span>
+                  <strong>{pendingRegistrationCount}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>未结举报</span>
+                  <strong>{openReports}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>订单申诉</span>
+                  <strong>{openAppeals}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>商品复核</span>
+                  <strong>{pendingProductCount}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-head">
+                <strong>风险状态</strong>
+              </div>
+              <div className="admin-dashboard-queue">
+                <div className="admin-dashboard-queue-item">
+                  <span>封禁账号</span>
+                  <strong>{bannedUsers}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>高风险用户</span>
+                  <strong>{highRiskUsers}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>观察中用户</span>
+                  <strong>{watchedUsers}</strong>
+                </div>
+                <div className="admin-dashboard-queue-item">
+                  <span>最近日志</span>
+                  <strong>{logs.length}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-dashboard-strip">
+            <div className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-head">
+                <strong>最近商品</strong>
+              </div>
+              <div className="admin-dashboard-list">
+                {overview.recentProducts.slice(0, 3).map((item) => (
+                  <div key={item.id} className="admin-dashboard-list-item">
+                    <span>{item.title}</span>
+                    <em>#{item.id}</em>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="admin-dashboard-panel">
+              <div className="admin-dashboard-panel-head">
+                <strong>最近举报</strong>
+              </div>
+              <div className="admin-dashboard-list">
+                {overview.recentReports.slice(0, 3).map((item) => (
+                  <div key={item.id} className="admin-dashboard-list-item">
+                    <span>{item.reason}</span>
+                    <em>#{item.id}</em>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         <ProCard
@@ -1056,10 +1592,10 @@ export function AdminPage() {
             onChange: (key) => setActiveTab(key as AdminTabKey),
             items: [
               {
-                key: 'products',
-                label: `商品审核 (${overview.recentProducts.length})`,
+                key: 'registrations',
+                label: '注册审核',
                 children: (
-                  <ProTable<ProductTableRow, ProductFilters>
+                  <ProTable<ModerationUserItem>
                     rowKey="id"
                     options={false}
                     toolbar={{
@@ -1070,60 +1606,72 @@ export function AdminPage() {
                       span: 8,
                       filterType: 'light'
                     }}
-                    request={filteredProducts}
+                    request={filteredRegistrations}
                     pagination={false}
-                    columns={recentProductColumns}
-                    scroll={{ x: 720 }}
+                    columns={registrationReviewColumns}
+                    scroll={{ x: 1180 }}
                   />
                 )
               },
               {
-                key: 'orders',
-                label: `订单治理 (${orders.length})`,
+                key: 'publishing',
+                label: '发布审核',
                 children: (
-                  <ProTable<AdminOrderItem, OrderFilters>
-                    rowKey="id"
-                    options={false}
-                    toolbar={{
-                      search: false
-                    }}
-                    search={{
-                      labelWidth: 72,
-                      span: 8,
-                      filterType: 'light'
-                    }}
-                    request={filteredOrders}
-                    pagination={false}
-                    columns={orderColumns}
-                    scroll={{ x: 1020 }}
-                  />
-                )
-              },
-              {
-                key: 'services',
-                label: `校园服务 (${campusServices.length})`,
-                children: (
-                  <ProTable<AdminCampusServiceItem, ServiceFilters>
-                    rowKey="id"
-                    options={false}
-                    toolbar={{
-                      search: false
-                    }}
-                    search={{
-                      labelWidth: 72,
-                      span: 8,
-                      filterType: 'light'
-                    }}
-                    request={filteredServices}
-                    pagination={false}
-                    columns={campusServiceColumns}
-                    scroll={{ x: 1080 }}
+                  <Tabs
+                    activeKey={publishTab}
+                    onChange={(key) => setPublishTab(key as PublishTabKey)}
+                    items={[
+                      {
+                        key: 'products',
+                        label: `商品 (${overview.recentProducts.length})`,
+                        children: (
+                          <ProTable<ProductTableRow, ProductFilters>
+                            rowKey="id"
+                            options={false}
+                            toolbar={{
+                              search: false
+                            }}
+                            search={{
+                              labelWidth: 72,
+                              span: 8,
+                              filterType: 'light'
+                            }}
+                            request={filteredProducts}
+                            pagination={false}
+                            columns={recentProductColumns}
+                            scroll={{ x: 720 }}
+                          />
+                        )
+                      },
+                      {
+                        key: 'services',
+                        label: `服务 (${campusServices.length})`,
+                        children: (
+                          <ProTable<AdminCampusServiceItem, ServiceFilters>
+                            rowKey="id"
+                            options={false}
+                            toolbar={{
+                              search: false
+                            }}
+                            search={{
+                              labelWidth: 72,
+                              span: 8,
+                              filterType: 'light'
+                            }}
+                            request={filteredServices}
+                            pagination={false}
+                            columns={campusServiceColumns}
+                            scroll={{ x: 1080 }}
+                          />
+                        )
+                      }
+                    ]}
                   />
                 )
               },
               {
                 key: 'reports',
-                label: `举报处理 (${reports.length})`,
+                label: '举报处理',
                 children: (
                   <ProTable<ReportItem, ReportFilters>
                     rowKey="id"
@@ -1144,10 +1692,153 @@ export function AdminPage() {
                 )
               },
               {
-                key: 'logs',
-                label: `最近操作 (${logs.length})`,
+                key: 'userIntelligence',
+                label: '用户管理',
                 children: (
-                  <ProTable<AuditLogItem, LogFilters>
+                  <Tabs
+                    activeKey={userIntelligenceTab}
+                    onChange={(key) => setUserIntelligenceTab(key as UserIntelligenceTabKey)}
+                    items={[
+                      {
+                        key: 'users',
+                        label: `用户 (${userTotal})`,
+                        children: (
+                          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                            <div className="admin-overview-grid compact">
+                              {userPageSummary.map((item) => (
+                                <StatisticCard
+                                  key={item.label}
+                                  className="admin-overview-card"
+                                  statistic={{ title: item.label, value: item.value }}
+                                />
+                              ))}
+                            </div>
+
+                            <ProDescriptions
+                              className="admin-college-card"
+                              column={4}
+                              dataSource={collegeStats.reduce<Record<string, number>>((acc, item) => {
+                                acc[item.college] = item.count;
+                                return acc;
+                              }, {
+                                全部学院: collegeStats.reduce((sum, item) => sum + item.count, 0)
+                              })}
+                              columns={[
+                                { title: '全部学院', dataIndex: '全部学院', valueType: 'text' },
+                                ...BJFU_COLLEGES.slice(0, 3).map((college) => ({
+                                  title: college,
+                                  dataIndex: college,
+                                  valueType: 'text' as const
+                                }))
+                              ]}
+                            />
+
+                            <ProTable<ModerationUserItem>
+                              actionRef={userActionRef}
+                              rowKey="id"
+                              options={false}
+                              toolbar={{
+                                search: false
+                              }}
+                              search={{
+                                labelWidth: 72,
+                                span: 8,
+                                filterType: 'light'
+                              }}
+                              pagination={{
+                                pageSize: userPageSize,
+                                current: userPage,
+                                showSizeChanger: true,
+                                pageSizeOptions: ['5', '8', '12', '20'],
+                                onChange: (page, pageSize) => {
+                                  setUserPage(page);
+                                  setUserPageSize(pageSize);
+                                }
+                              }}
+                              request={async (params) => {
+                                const page = typeof params.current === 'number' ? params.current : 1;
+                                const pageSize = typeof params.pageSize === 'number' ? params.pageSize : 8;
+                                const college = typeof params.college === 'string' && params.college.trim() ? params.college : undefined;
+                                const keyword = typeof params.keyword === 'string' && params.keyword.trim() ? params.keyword.trim() : undefined;
+
+                                const response = await fetchModerationUsers({
+                                  page,
+                                  pageSize,
+                                  college,
+                                  keyword
+                                });
+
+                                setModerationUsers(response.items);
+                                setUserTotal(response.pagination.total);
+                                setUserPage(response.pagination.page);
+                                setUserPageSize(response.pagination.pageSize);
+                                setCollegeStats(response.collegeStats);
+
+                                return {
+                                  data: response.items,
+                                  success: true,
+                                  total: response.pagination.total
+                                };
+                              }}
+                              columns={moderationColumns}
+                              scroll={{ x: 1680 }}
+                            />
+                          </Space>
+                        )
+                      },
+                      {
+                        key: 'orders',
+                        label: `订单 (${orders.length})`,
+                        children: (
+                          <ProTable<AdminOrderItem, OrderFilters>
+                            rowKey="id"
+                            options={false}
+                            toolbar={{
+                              search: false
+                            }}
+                            search={{
+                              labelWidth: 72,
+                              span: 8,
+                              filterType: 'light'
+                            }}
+                            request={filteredOrders}
+                            pagination={false}
+                            columns={orderColumns}
+                            scroll={{ x: 1020 }}
+                          />
+                        )
+                      },
+                      {
+                        key: 'logs',
+                        label: `日志 (${logs.length})`,
+                        children: (
+                          <ProTable<AuditLogItem, LogFilters>
+                            rowKey="id"
+                            options={false}
+                            toolbar={{
+                              search: false
+                            }}
+                            search={{
+                              labelWidth: 72,
+                              span: 8,
+                              filterType: 'light'
+                            }}
+                            request={filteredLogs}
+                            pagination={false}
+                            columns={logColumns}
+                            scroll={{ x: 820 }}
+                          />
+                        )
+                      }
+                    ]}
+                  />
+                )
+              },
+              {
+                key: 'appeals',
+                label: '申诉处理',
+                children: (
+                  <ProTable<OrderAppealItem, AppealFilters>
                     rowKey="id"
                     options={false}
                     toolbar={{
@@ -1158,99 +1849,11 @@ export function AdminPage() {
                       span: 8,
                       filterType: 'light'
                     }}
-                    request={filteredLogs}
+                    request={filteredAppeals}
                     pagination={false}
-                    columns={logColumns}
-                    scroll={{ x: 820 }}
+                    columns={appealColumns}
+                    scroll={{ x: 1320 }}
                   />
-                )
-              },
-              {
-                key: 'users',
-                label: `用户治理 (${userTotal})`,
-                children: (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                    <div className="admin-overview-grid compact">
-                      {userPageSummary.map((item, index) => (
-                        <StatisticCard
-                          key={item.label}
-                          className="admin-overview-card"
-                          statistic={{ title: item.label, value: item.value }}
-                        />
-                      ))}
-                    </div>
-
-                    <ProDescriptions
-                      className="admin-college-card"
-                      column={4}
-                      bordered
-                      dataSource={collegeStats.reduce<Record<string, number>>((acc, item) => {
-                        acc[item.college] = item.count;
-                        return acc;
-                      }, {
-                        全部学院: collegeStats.reduce((sum, item) => sum + item.count, 0)
-                      })}
-                      columns={[
-                        { title: '全部学院', dataIndex: '全部学院', valueType: 'text' },
-                        ...BJFU_COLLEGES.slice(0, 3).map((college) => ({
-                          title: college,
-                          dataIndex: college,
-                          valueType: 'text' as const
-                        }))
-                      ]}
-                    />
-
-                    <ProTable<ModerationUserItem>
-                      actionRef={userActionRef}
-                      rowKey="id"
-                      options={false}
-                      toolbar={{
-                        search: false
-                      }}
-                      search={{
-                        labelWidth: 72,
-                        span: 8,
-                        filterType: 'light'
-                      }}
-                      pagination={{
-                        pageSize: userPageSize,
-                        current: userPage,
-                        showSizeChanger: true,
-                        pageSizeOptions: ['5', '8', '12', '20'],
-                        onChange: (page, pageSize) => {
-                          setUserPage(page);
-                          setUserPageSize(pageSize);
-                        }
-                      }}
-                      request={async (params) => {
-                        const page = typeof params.current === 'number' ? params.current : 1;
-                        const pageSize = typeof params.pageSize === 'number' ? params.pageSize : 8;
-                        const college = typeof params.college === 'string' && params.college.trim() ? params.college : undefined;
-                        const keyword = typeof params.keyword === 'string' && params.keyword.trim() ? params.keyword.trim() : undefined;
-
-                        const response = await fetchModerationUsers({
-                          page,
-                          pageSize,
-                          college,
-                          keyword
-                        });
-
-                        setModerationUsers(response.items);
-                        setUserTotal(response.pagination.total);
-                        setUserPage(response.pagination.page);
-                        setUserPageSize(response.pagination.pageSize);
-                        setCollegeStats(response.collegeStats);
-
-                        return {
-                          data: response.items,
-                          success: true,
-                          total: response.pagination.total
-                        };
-                      }}
-                      columns={moderationColumns}
-                      scroll={{ x: 1680 }}
-                    />
-                  </Space>
                 )
               }
             ]
@@ -1258,6 +1861,152 @@ export function AdminPage() {
           loading={overviewLoading || collectionsLoading}
         />
       </Space>
+
+      <Modal
+        open={Boolean(registrationPreview)}
+        title="注册资料"
+        footer={null}
+        onCancel={() => setRegistrationPreview(null)}
+        width={560}
+      >
+        {registrationPreview ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div className="admin-registration-preview-grid">
+              <div className="admin-registration-preview-item">
+                <span>姓名</span>
+                <strong>{registrationPreview.realName || '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>昵称</span>
+                <strong>{registrationPreview.displayName || '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>学号</span>
+                <strong>{registrationPreview.studentId || '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>学院</span>
+                <strong>{registrationPreview.college || '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>毕业年份</span>
+                <strong>{registrationPreview.graduationYear ?? '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>手机号</span>
+                <strong>{registrationPreview.phone || '未填写'}</strong>
+              </div>
+              <div className="admin-registration-preview-item full">
+                <span>邮箱</span>
+                <strong>{registrationPreview.email || '未填写'}</strong>
+              </div>
+            </div>
+
+            {registrationPreview.studentCardPhotoUrl ? (
+              <div className="admin-registration-preview-image">
+                <Image
+                  src={registrationPreview.studentCardPhotoUrl}
+                  alt="学生证"
+                  width="100%"
+                  preview
+                />
+              </div>
+            ) : null}
+          </Space>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(productPreview)} title="商品资料" footer={null} onCancel={closeProductPreview} width={720}>
+        {productPreview ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {productPreview.images?.length ? (
+              <Image.PreviewGroup>
+                <div className="admin-preview-image-strip">
+                  {productPreview.images.slice(0, 3).map((image) => (
+                    <Image key={image} src={image} alt="商品图片" width={120} height={120} />
+                  ))}
+                </div>
+              </Image.PreviewGroup>
+            ) : null}
+            <div className="admin-registration-preview-grid">
+              <div className="admin-registration-preview-item full">
+                <span>标题</span>
+                <strong>{productPreview.title}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>分类</span>
+                <strong>{productPreview.category}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>状态</span>
+                <strong>{productPreview.detailBase.statusLabel}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>价格</span>
+                <strong>{productPreview.detailBase.amountLabel}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>卖家</span>
+                <strong>{productPreview.seller.displayName}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>信用分</span>
+                <strong>{productPreview.seller.creditScore}</strong>
+              </div>
+              <div className="admin-registration-preview-item full">
+                <span>描述</span>
+                <strong>{productPreview.description}</strong>
+              </div>
+            </div>
+          </Space>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(servicePreview)} title="服务资料" footer={null} onCancel={closeServicePreview} width={720}>
+        {servicePreview ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {servicePreview.images?.length ? (
+              <Image.PreviewGroup>
+                <div className="admin-preview-image-strip">
+                  {servicePreview.images.slice(0, 3).map((image) => (
+                    <Image key={image} src={image} alt="服务图片" width={120} height={120} />
+                  ))}
+                </div>
+              </Image.PreviewGroup>
+            ) : null}
+            <div className="admin-registration-preview-grid">
+              <div className="admin-registration-preview-item full">
+                <span>标题</span>
+                <strong>{servicePreview.title}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>分类</span>
+                <strong>{servicePreview.category}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>状态</span>
+                <strong>{servicePreview.statusLabel}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>需求/提供</span>
+                <strong>{servicePreview.intentLabel}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>发布者</span>
+                <strong>{servicePreview.publisher.displayName}</strong>
+              </div>
+              <div className="admin-registration-preview-item">
+                <span>赏金</span>
+                <strong>{servicePreview.rewardLabel}</strong>
+              </div>
+              <div className="admin-registration-preview-item full">
+                <span>描述</span>
+                <strong>{servicePreview.description}</strong>
+              </div>
+            </div>
+          </Space>
+        ) : null}
+      </Modal>
     </PageContainer>
   );
 }

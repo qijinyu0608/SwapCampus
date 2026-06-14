@@ -1,10 +1,12 @@
 import {
   CustomerServiceOutlined,
+  HomeOutlined,
   LoginOutlined,
   LogoutOutlined,
   MessageOutlined,
   PlusCircleOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined,
+  UserOutlined
 } from '@ant-design/icons';
 import { Tooltip } from 'antd';
 import { useRef, type MouseEvent } from 'react';
@@ -72,6 +74,13 @@ export function TopBar({ currentUser }: TopBarProps) {
     : userMode
       ? [
         {
+          key: 'home',
+          to: '/',
+          label: '首页',
+          icon: <HomeOutlined />,
+          activeMatch: (pathname) => pathname === '/'
+        },
+        {
           key: 'campus-services',
           to: '/campus-services',
           label: '校园服务',
@@ -79,7 +88,15 @@ export function TopBar({ currentUser }: TopBarProps) {
           activeMatch: (pathname) => pathname.startsWith('/campus-services')
         }
       ]
-      : [];
+      : [
+          {
+            key: 'home',
+            to: '/',
+            label: '首页',
+            icon: <HomeOutlined />,
+            activeMatch: (pathname) => pathname === '/'
+          }
+        ];
 
   const rightItems: NavIconItem[] = adminMode
     ? [
@@ -107,6 +124,13 @@ export function TopBar({ currentUser }: TopBarProps) {
           label: '消息',
           icon: <MessageOutlined />,
           activeMatch: (pathname) => pathname.startsWith('/messages')
+        },
+        {
+          key: 'profile',
+          to: '/profile',
+          label: '我的',
+          icon: <UserOutlined />,
+          activeMatch: (pathname) => pathname.startsWith('/profile') || pathname.startsWith('/favorites')
         }
       ]
       : [

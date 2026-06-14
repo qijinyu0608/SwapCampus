@@ -72,15 +72,15 @@ function getCancelContext(listing: CampusServiceListItem | null) {
     return {
       title: listing.actionLabels.cancel ?? '关闭发布',
       okText: listing.actionLabels.cancel ?? '确认关闭',
-      success: listing.actionLabels.cancel === '取消当前服务单' ? '已取消当前服务单' : '已结束发布'
+      success: listing.intent === 'REQUEST' ? '已取消当前接单' : '已取消当前预约'
     };
   }
 
   if (listing.actionState.canEnd) {
     return {
-      title: listing.actionLabels.end ?? '结束发布',
+      title: listing.actionLabels.end ?? '结束当前发布',
       okText: listing.actionLabels.end ?? '确认结束',
-      success: '已结束发布'
+      success: '已结束当前发布'
     };
   }
 
@@ -279,7 +279,7 @@ export function CampusServicesPage() {
     try {
       await completeCampusServiceOrder(listing.actionOrderId);
       await loadListings();
-      setMessage({ type: 'success', text: `“${listing.title}”已标记完成。` });
+      setMessage({ type: 'success', text: `“${listing.title}”已更新为最新进度。` });
     } catch (error) {
       setMessage({ type: 'error', text: getApiErrorMessage(error, '标记完成失败，请稍后重试。') });
     } finally {
@@ -312,7 +312,7 @@ export function CampusServicesPage() {
       setCancelReason('');
       setMessage({ type: 'success', text: `“${cancelTarget.title}”${getCancelContext(cancelTarget).success}。` });
     } catch (error) {
-      setMessage({ type: 'error', text: getApiErrorMessage(error, '取消任务失败，请稍后重试。') });
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '取消协作失败，请稍后重试。') });
     } finally {
       setActingListingId(null);
     }
@@ -324,7 +324,7 @@ export function CampusServicesPage() {
     try {
       await pauseCampusServiceListing(listing.id);
       await loadListings();
-      setMessage({ type: 'success', text: `“${listing.title}”已暂停接新单。` });
+      setMessage({ type: 'success', text: `“${listing.title}”已暂停开放新申请。` });
     } catch (error) {
       setMessage({ type: 'error', text: getApiErrorMessage(error, '暂停失败，请稍后重试。') });
     } finally {
@@ -356,9 +356,9 @@ export function CampusServicesPage() {
     try {
       await confirmCampusServiceOrder(listing.actionOrderId);
       await loadListings();
-      setMessage({ type: 'success', text: `已确认“${listing.title}”的服务单。` });
+      setMessage({ type: 'success', text: `已确认“${listing.title}”的${listing.intent === 'REQUEST' ? '接单申请' : '预约申请'}。` });
     } catch (error) {
-      setMessage({ type: 'error', text: getApiErrorMessage(error, '确认服务单失败，请稍后重试。') });
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '确认申请失败，请稍后重试。') });
     } finally {
       setActingListingId(null);
     }
@@ -374,9 +374,9 @@ export function CampusServicesPage() {
     try {
       await rejectCampusServiceOrder(listing.actionOrderId);
       await loadListings();
-      setMessage({ type: 'success', text: `已拒绝“${listing.title}”的服务申请。` });
+      setMessage({ type: 'success', text: `已拒绝“${listing.title}”的${listing.intent === 'REQUEST' ? '接单申请' : '预约申请'}。` });
     } catch (error) {
-      setMessage({ type: 'error', text: getApiErrorMessage(error, '拒绝服务单失败，请稍后重试。') });
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '拒绝申请失败，请稍后重试。') });
     } finally {
       setActingListingId(null);
     }
@@ -461,7 +461,7 @@ export function CampusServicesPage() {
                   setPage(1);
                 }}
               >
-                找人帮我
+                我要购买服务
               </button>
               <button
                 type="button"
@@ -471,7 +471,7 @@ export function CampusServicesPage() {
                   setPage(1);
                 }}
               >
-                我来提供
+                我要接单挣钱
               </button>
             </div>
           )}

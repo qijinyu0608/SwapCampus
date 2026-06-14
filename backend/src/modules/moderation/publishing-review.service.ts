@@ -20,7 +20,7 @@ export type CampusServicePublishingReviewInput = {
   intent?: string;
   pattern?: string;
   title: string;
-  category: CampusServiceCategory;
+  category?: CampusServiceCategory;
   description: string;
   amount?: number;
   priceMode?: string;
@@ -53,6 +53,7 @@ export type CampusServicePublishingReviewResult = {
   status: LlmReviewStatus;
   decision: ReviewDecision;
   shouldBlock: boolean;
+  selectedCategory: CampusServiceCategory;
   reason: string;
   issues: string[];
 };
@@ -66,6 +67,7 @@ type DeepSeekProductStructuredOutput = {
 
 type DeepSeekCampusServiceStructuredOutput = {
   decision?: ReviewDecision;
+  selectedCategory?: string;
   reason?: string;
   issues?: string[];
 };
@@ -99,6 +101,13 @@ function normalizeProductCategory(value: unknown): ProductCategoryName {
   return PRODUCT_CATEGORY_NAMES.includes(value as ProductCategoryName)
     ? (value as ProductCategoryName)
     : '其他';
+}
+
+function normalizeCampusServiceCategory(value: unknown): CampusServiceCategory {
+  const allowed = Object.values(CampusServiceCategory);
+  return allowed.includes(value as CampusServiceCategory)
+    ? (value as CampusServiceCategory)
+    : CampusServiceCategory.OTHER;
 }
 
 @Injectable()
@@ -243,6 +252,7 @@ export class PublishingReviewService {
 
   async reviewCampusService(input: CampusServicePublishingReviewInput): Promise<CampusServicePublishingReviewResult> {
     const configuredModel = this.getConfiguredModel();
+    const fallbackCategory = normalizeCampusServiceCategory(input.category);
 
     if (!this.isEnabled()) {
       return {
@@ -251,6 +261,7 @@ export class PublishingReviewService {
         status: 'disabled',
         decision: 'APPROVED',
         shouldBlock: false,
+        selectedCategory: fallbackCategory,
         reason: '未配置 DeepSeek API，已跳过 LLM 审查',
         issues: []
       };
@@ -264,9 +275,10 @@ export class PublishingReviewService {
             '你是校园服务发布前审查助手。',
             '你只输出 JSON，不要输出任何额外文本。',
             '判断该校园服务是否可以发布，decision 只能是 APPROVED、REJECTED、REVIEW。',
+            '必须从给定服务分类中选择一个最合适的 selectedCategory。',
             '如果内容涉及违法违规、代写代考、账号交易、药品烟酒、刀具、明显不适合校园服务平台的内容，应优先 REJECTED。',
             '如果服务描述存在较高风险、时效与能力表达失真、或内容明显不清晰，可以返回 REVIEW。',
-            '输出 JSON 字段固定为：decision, reason, issues。issues 必须是字符串数组。'
+            '输出 JSON 字段固定为：decision, selectedCategory, reason, issues。issues 必须是字符串数组。'
           ].join('\n')
         },
         {
@@ -280,12 +292,14 @@ export class PublishingReviewService {
 
       const parsed = JSON.parse(result.content) as DeepSeekCampusServiceStructuredOutput;
       const decision = normalizeDecision(parsed.decision);
+      const selectedCategory = normalizeCampusServiceCategory(parsed.selectedCategory ?? input.category);
       return {
         provider: 'deepseek',
         model: result.model,
         status: 'enabled',
         decision,
         shouldBlock: decision === 'REJECTED',
+        selectedCategory,
         reason: normalizeReason(parsed.reason, 'LLM 审查完成'),
         issues: normalizeIssues(parsed.issues)
       };
@@ -298,6 +312,7 @@ export class PublishingReviewService {
         status: 'failed',
         decision: 'REVIEW',
         shouldBlock: false,
+        selectedCategory: fallbackCategory,
         reason: 'LLM 审查调用失败，已回退为仅使用本地规则',
         issues: []
       };

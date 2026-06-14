@@ -1607,6 +1607,10 @@
   font-size: 22px;
 }
 
+.service-detail-summary-fallback.is-expired {
+  color: var(--danger);
+}
+
 .service-detail-capacity-signals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1714,6 +1718,11 @@
   background: var(--paper);
 }
 
+.service-detail-order-card.is-compact {
+  gap: 10px;
+  padding: 10px 12px;
+}
+
 .service-detail-order-top {
   display: flex;
   align-items: flex-start;
@@ -1728,18 +1737,13 @@
   min-width: 0;
 }
 
-.service-detail-order-user > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--paper) 74%, var(--primary-soft) 26%);
-  color: var(--primary-deep);
-  font-size: 13px;
-  font-weight: 800;
+.service-detail-order-user .profile-order-avatar {
+  --user-avatar-size: 34px;
   flex: none;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-user .profile-order-avatar {
+  --user-avatar-size: 30px;
 }
 
 .service-detail-order-user div {
@@ -1760,10 +1764,44 @@
   font-style: normal;
 }
 
+.service-detail-order-subline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.service-detail-order-subline .user-name-with-badge {
+  min-width: 0;
+}
+
+.service-detail-order-subline .user-name-with-badge > span,
+.service-detail-order-subline .user-name-with-badge > strong {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.service-detail-order-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 72%, transparent);
+  flex: none;
+}
+
 .service-detail-order-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .service-detail-order-meta div {
@@ -1772,6 +1810,11 @@
   padding: 10px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--paper) 76%, var(--primary-soft) 24%);
+}
+
+.service-detail-order-card.is-compact .service-detail-order-meta div {
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--paper) 88%, var(--neutral-50) 12%);
 }
 
 .service-detail-order-meta span {
@@ -1785,12 +1828,57 @@
   line-height: 1.45;
 }
 
+.service-detail-order-card.is-compact .service-detail-order-meta strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.service-detail-order-inline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.service-detail-order-inline-meta div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-inline-meta {
+  gap: 8px;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-inline-meta div {
+  font-size: 11px;
+}
+
+.service-detail-order-inline-meta em {
+  color: var(--muted);
+  font-style: normal;
+}
+
 .service-detail-order-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-actions {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.service-detail-order-card.is-compact .service-detail-order-actions .ant-btn {
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: 12px;
 }
 
 .service-detail-order-pagination {

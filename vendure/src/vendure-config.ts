@@ -17,6 +17,7 @@ import path from 'path';
 
 const IS_DEV = process.env.APP_ENV === 'dev';
 const serverPort = +process.env.PORT || 3000;
+const vendureDbPath = process.env.VENDURE_DB_PATH?.trim() || path.join(__dirname, '../vendure.sqlite');
 
 export const config: VendureConfig = {
     defaultLanguageCode: LanguageCode.zh_Hans,
@@ -48,7 +49,7 @@ export const config: VendureConfig = {
         synchronize: true,
         migrations: [path.join(__dirname, './migrations/*.+(js|ts)')],
         logging: false,
-        database: path.join(__dirname, '../vendure.sqlite'),
+        database: vendureDbPath,
     },
     paymentOptions: {
         paymentMethodHandlers: [dummyPaymentHandler],

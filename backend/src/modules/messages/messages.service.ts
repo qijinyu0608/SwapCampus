@@ -15,6 +15,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { MessagesGateway } from './messages.gateway';
 import { moderateText } from '../products/product-moderation';
+import { normalizeProductConditionValue } from '../products/product-conditions';
 import {
   collectConversationParticipantIds,
   messageConversationAccessInclude,
@@ -510,7 +511,7 @@ export class MessagesService {
             categoryLabel: this.mapCampusServiceCategoryLabel(campusServiceSnapshot.category),
             intent: campusListing?.intent ?? null,
             intentLabel: campusListing
-              ? (campusListing.ownerId === campusOrder?.requesterId ? '找人帮我' : '我来提供')
+              ? (campusListing.ownerId === campusOrder?.requesterId ? '我要购买服务' : '我要接单挣钱')
               : null,
             reward: Number(campusServiceSnapshot.reward),
             routeLabel: `${campusServiceSnapshot.locationFrom} -> ${campusServiceSnapshot.locationTo}`,
@@ -534,7 +535,7 @@ export class MessagesService {
               title: campusListing.title,
               category: campusListing.category,
               intent: campusListing.intent,
-              intentLabel: campusListing.ownerId === campusOrder?.requesterId ? '找人帮我' : '我来提供',
+              intentLabel: campusListing.ownerId === campusOrder?.requesterId ? '我要购买服务' : '我要接单挣钱',
               reward: Number(campusOrder?.finalAmount ?? campusListing.amount ?? 0),
               locationFrom: campusListing.routeFrom ?? campusListing.locationNote ?? '待协商',
               locationTo: campusListing.routeTo ?? campusListing.locationNote ?? '待协商',
@@ -567,7 +568,7 @@ export class MessagesService {
               title: product.title,
               price: Number(product.price),
               category: product.category,
-              condition: product.condition,
+              condition: normalizeProductConditionValue(product.condition),
               imageUrl: firstImageByProductId.get(product.id) ?? null,
               status: product.status,
               meetupLocation: conversation.order?.meetupLocation ?? null,

@@ -58,12 +58,12 @@ const campusServiceCategoryLabelMap: Record<CampusServiceCategory, string> = {
 };
 
 const campusServiceIntentLabelMap: Record<CampusServiceIntent, string> = {
-  REQUEST: '找人帮我',
-  OFFER: '我来提供'
+  REQUEST: '我要购买服务',
+  OFFER: '我要接单挣钱'
 };
 
 const campusServiceListingStatusLabelMap: Record<CampusServiceListingStatus, string> = {
-  OPEN: '可接单',
+  OPEN: '可预约',
   BUSY: '名额已满',
   PAUSED: '已暂停',
   ENDED: '已结束',
@@ -115,6 +115,42 @@ const campusServiceContactPreferenceLabelMap: Record<CampusServiceContactPrefere
   PHONE_AFTER_MATCH: '确认后电话',
   FLEXIBLE: '均可'
 };
+
+function resolveCampusServiceCounterpartAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '接单' : '预约';
+}
+
+function resolveCampusServicePrimaryAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '报名接单' : '立即预约';
+}
+
+function resolveCampusServiceConfirmAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '确认接单' : '确认预约';
+}
+
+function resolveCampusServicePauseAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '暂停招募接单' : '暂停接预约';
+}
+
+function resolveCampusServiceEndAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '结束求助发布' : '结束服务发布';
+}
+
+function resolveCampusServicePublisherCancelAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '取消当前接单' : '取消当前预约';
+}
+
+function resolveCampusServiceParticipantCancelAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '退出接单' : '取消预约';
+}
+
+function resolveCampusServiceSubmitCompleteAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '提交完工' : '提交服务完成';
+}
+
+function resolveCampusServiceConfirmCompleteAction(intent: CampusServiceIntent) {
+  return intent === CampusServiceIntent.REQUEST ? '确认完工' : '确认服务完成';
+}
 
 function normalizeCampusServiceCategoryFilters(
   value: SearchCampusServicesDto['categories'] | string | null | undefined
@@ -218,6 +254,17 @@ type ListingContext = {
   viewCountMap: Map<number, number>;
   favoritedListingIds: Set<number>;
   unlockedUserIds: Set<number>;
+};
+
+type CampusServiceOrderViewContext = {
+  authUserId: number;
+  order: OrderRecord;
+  listing: ListingRecord;
+  counterpartId: number;
+  counterpart?: ListingContext['userMap'] extends Map<number, infer T> ? T | null : never;
+  publisher?: ListingContext['userMap'] extends Map<number, infer T> ? T | null : never;
+  conversationId: number | null;
+  imageUrl: string;
 };
 
 function formatCurrency(amount: number | null | undefined) {
@@ -470,7 +517,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
     const counterpartId = listing.intent === CampusServiceIntent.REQUEST ? latestOrder.providerId : latestOrder.requesterId;
     const counterpartName = context.userMap.get(counterpartId)?.displayName ?? `用户#${counterpartId}`;
-    const counterpartLabel = listing.intent === CampusServiceIntent.REQUEST ? '接单' : '预约';
+    const counterpartLabel = resolveCampusServiceCounterpartAction(listing.intent);
 
     return {
       publisherLabel: `发布 ${ownerName}`,
@@ -631,28 +678,26 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       canEnd,
       canCancel,
       canOpenConversation,
-      acceptLabel: canAccept
-        ? (listing.intent === CampusServiceIntent.REQUEST ? '接单' : '预约')
-        : null,
-      confirmLabel: canConfirm
-        ? (listing.intent === CampusServiceIntent.REQUEST ? '确认接单' : '确认预约')
-        : null,
+      acceptLabel: canAccept ? resolveCampusServicePrimaryAction(listing.intent) : null,
+      confirmLabel: canConfirm ? resolveCampusServiceConfirmAction(listing.intent) : null,
       rejectLabel: canReject ? '拒绝申请' : null,
       completeLabel: canComplete
-        ? (actionOrder?.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM ? '确认完成' : '提交完成')
+        ? (
+            actionOrder?.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+              ? resolveCampusServiceConfirmCompleteAction(listing.intent)
+              : resolveCampusServiceSubmitCompleteAction(listing.intent)
+          )
         : null,
-      pauseLabel: canPause ? '暂停接新单' : null,
+      pauseLabel: canPause ? resolveCampusServicePauseAction(listing.intent) : null,
       reopenLabel: canReopen ? '重新开放' : null,
-      endLabel: canEnd ? '结束发布' : null,
+      endLabel: canEnd ? resolveCampusServiceEndAction(listing.intent) : null,
       cancelLabel: canCancel
         ? (
             isPublisher
-              ? '取消当前服务单'
+              ? resolveCampusServicePublisherCancelAction(listing.intent)
               : actionOrder?.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
                 ? '撤回申请'
-                : listing.intent === CampusServiceIntent.REQUEST
-                  ? '退出接单'
-                  : '取消预约'
+                : resolveCampusServiceParticipantCancelAction(listing.intent)
           )
         : null,
       conversationLabel: canOpenConversation ? '进入消息' : null
@@ -681,6 +726,134 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       totalOrderCount: orders.length,
       hasPendingOrder: pendingOrderCount > 0,
       hasActiveOrder: activeOrderCount > 0
+    };
+  }
+
+  private buildCampusServiceOrderView(params: CampusServiceOrderViewContext) {
+    const {
+      authUserId,
+      order,
+      listing,
+      counterpartId,
+      counterpart,
+      publisher,
+      conversationId,
+      imageUrl
+    } = params;
+    const isRequester = order.requesterId === authUserId;
+    const role = isRequester ? 'REQUESTER' : 'PROVIDER';
+    const roleLabel = isRequester
+      ? (listing.intent === CampusServiceIntent.OFFER ? '我预约的服务' : '我发布的求助')
+      : (listing.intent === CampusServiceIntent.REQUEST ? '我接的单' : '我接到的预约');
+    const amount = listing.priceMode === CampusServicePriceMode.FREE
+      ? 0
+      : safeNumber(order.finalAmount ?? listing.amount);
+    const rewardLabel = listing.priceMode === CampusServicePriceMode.NEGOTIABLE && order.finalAmount === null
+      ? '面议'
+      : formatCurrency(amount);
+    const routeFrom = this.resolveLocationFrom(listing);
+    const routeTo = this.resolveLocationTo(listing);
+    const routeLabel = this.resolveRouteLabel(listing);
+    const deadlineLabel = this.resolveDeadlineLabel(listing);
+    const isPublisher = listing.ownerId === authUserId;
+    const canComplete = (
+      order.status === CampusServiceOrderStatus.CONFIRMED
+      || (
+        order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+        && order.completionRequestedById !== authUserId
+      )
+    );
+    const canCancel = isPublisher
+      ? (
+          order.status === CampusServiceOrderStatus.CONFIRMED
+          || order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+        )
+      : cancellableCampusServiceOrderStatuses.includes(order.status);
+    const canConfirm = isPublisher && order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION;
+    const canReject = canConfirm;
+    const canOpenConversation = Boolean(conversationId);
+
+    return {
+      id: order.id,
+      listingId: listing.id,
+      title: listing.title,
+      description: listing.description,
+      price: amount,
+      imageUrl,
+      tags: [
+        campusServiceIntentLabelMap[listing.intent],
+        campusServiceCategoryLabelMap[listing.category],
+        campusServiceOrderStatusLabelMap[order.status]
+      ],
+      status: order.status,
+      statusLabel: campusServiceOrderStatusLabelMap[order.status],
+      orderStatus: order.status,
+      orderStatusLabel: campusServiceOrderStatusLabelMap[order.status],
+      listingStatus: listing.status,
+      listingStatusLabel: campusServiceListingStatusLabelMap[listing.status],
+      intent: listing.intent,
+      intentLabel: campusServiceIntentLabelMap[listing.intent],
+      category: listing.category,
+      categoryLabel: campusServiceCategoryLabelMap[listing.category],
+      reward: amount,
+      rewardLabel,
+      route: {
+        from: routeFrom,
+        to: routeTo,
+        label: routeLabel
+      },
+      deadlineLabel,
+      estimatedMinutes: listing.estimatedMinutes,
+      role,
+      roleLabel,
+      summaryTags: [
+        roleLabel,
+        campusServiceUrgencyLabelMap[listing.urgency],
+        `${listing.estimatedMinutes} 分钟`
+      ],
+      actionState: {
+        canComplete,
+        canCancel,
+        canOpenConversation,
+        canConfirm,
+        canReject
+      },
+      actionLabels: {
+        confirm: resolveCampusServiceConfirmAction(listing.intent),
+        reject: '拒绝申请',
+        complete: order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          ? resolveCampusServiceConfirmCompleteAction(listing.intent)
+          : resolveCampusServiceSubmitCompleteAction(listing.intent),
+        cancel: isPublisher
+          ? resolveCampusServicePublisherCancelAction(listing.intent)
+          : order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
+            ? '撤回申请'
+            : resolveCampusServiceParticipantCancelAction(listing.intent),
+        conversation: '看消息'
+      },
+      conversationId,
+      counterpart: {
+        id: counterpart?.id ?? counterpartId,
+        displayName: counterpart?.displayName ?? `用户#${counterpartId}`,
+        studentId: counterpart?.studentId ?? null,
+        avatarUrl: counterpart?.avatarUrl ?? null,
+        avatarFrame: counterpart?.avatarFrame ?? null,
+        creditScore: counterpart?.creditScore ?? 60,
+        verificationStatus: counterpart?.verificationStatus ?? VerificationStatus.PENDING,
+        accountStatus: counterpart?.accountStatus ?? AccountStatus.ACTIVE
+      },
+      publisher: {
+        id: publisher?.id ?? listing.ownerId,
+        displayName: publisher?.displayName ?? `用户#${listing.ownerId}`,
+        studentId: publisher?.studentId ?? null,
+        avatarUrl: publisher?.avatarUrl ?? null,
+        avatarFrame: publisher?.avatarFrame ?? null,
+        creditScore: publisher?.creditScore ?? 60,
+        verificationStatus: publisher?.verificationStatus ?? VerificationStatus.PENDING,
+        accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE
+      },
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt
     };
   }
 
@@ -1280,6 +1453,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
   async listCampusServices(filters: SearchCampusServicesDto = {}, currentUser?: AuthenticatedUser) {
     await this.syncExpiredListings();
+    const now = new Date();
 
     const requestedPage = Math.max(1, filters.page ?? 1);
     const pageSize = Math.max(1, Math.min(filters.pageSize ?? 24, 60));
@@ -1375,7 +1549,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
               }
             }
           }
-        : {})
+        : {}),
+      ...(filters.ownerId ? {} : { validUntilAt: { gt: now } })
     };
 
     if (filters.ownerId === undefined && currentUser?.id) {
@@ -1470,6 +1645,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
               id: true,
               displayName: true,
               studentId: true,
+              avatarUrl: true,
+              avatarFrame: true,
               creditScore: true,
               verificationStatus: true,
               accountStatus: true
@@ -1508,119 +1685,19 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
     const items = orders.map((order) => {
       const listing = order.listing as ListingRecord;
-      const isRequester = order.requesterId === authUser.id;
-      const role = isRequester ? 'REQUESTER' : 'PROVIDER';
-      const roleLabel = isRequester
-        ? (listing.intent === CampusServiceIntent.OFFER ? '我预约的服务' : '我的需求单')
-        : (listing.intent === CampusServiceIntent.REQUEST ? '我接的单' : '我提供的服务');
-      const counterpartId = isRequester ? order.providerId : order.requesterId;
+      const counterpartId = order.requesterId === authUser.id ? order.providerId : order.requesterId;
       const counterpart = userMap.get(counterpartId);
       const publisher = userMap.get(listing.ownerId);
-      const amount = listing.priceMode === CampusServicePriceMode.FREE
-        ? 0
-        : safeNumber(order.finalAmount ?? listing.amount);
-      const rewardLabel = listing.priceMode === CampusServicePriceMode.NEGOTIABLE && order.finalAmount === null
-        ? '面议'
-        : formatCurrency(amount);
-      const routeFrom = this.resolveLocationFrom(listing);
-      const routeTo = this.resolveLocationTo(listing);
-      const routeLabel = this.resolveRouteLabel(listing);
-      const deadlineLabel = this.resolveDeadlineLabel(listing);
-      const isPublisher = listing.ownerId === authUser.id;
-      const canComplete = (
-        order.status === CampusServiceOrderStatus.CONFIRMED
-        || (
-          order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
-          && order.completionRequestedById !== authUser.id
-        )
-      );
-      const canCancel = isPublisher
-        ? (
-            order.status === CampusServiceOrderStatus.CONFIRMED
-            || order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
-          )
-        : cancellableCampusServiceOrderStatuses.includes(order.status);
-      const canConfirm = isPublisher && order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION;
-      const canReject = canConfirm;
-      const canOpenConversation = Boolean(conversationMap.get(order.id));
-
-      return {
-        id: order.id,
-        listingId: listing.id,
-        title: listing.title,
-        description: listing.description,
-        price: amount,
-        imageUrl: imageMap.get(listing.id) ?? '',
-        tags: [
-          campusServiceIntentLabelMap[listing.intent],
-          campusServiceCategoryLabelMap[listing.category],
-          campusServiceOrderStatusLabelMap[order.status]
-        ],
-        status: order.status,
-        statusLabel: campusServiceOrderStatusLabelMap[order.status],
-        orderStatus: order.status,
-        orderStatusLabel: campusServiceOrderStatusLabelMap[order.status],
-        listingStatus: listing.status,
-        listingStatusLabel: campusServiceListingStatusLabelMap[listing.status],
-        intent: listing.intent,
-        intentLabel: campusServiceIntentLabelMap[listing.intent],
-        category: listing.category,
-        categoryLabel: campusServiceCategoryLabelMap[listing.category],
-        reward: amount,
-        rewardLabel,
-        route: {
-          from: routeFrom,
-          to: routeTo,
-          label: routeLabel
-        },
-        deadlineLabel,
-        estimatedMinutes: listing.estimatedMinutes,
-        role,
-        roleLabel,
-        summaryTags: [
-          roleLabel,
-          campusServiceUrgencyLabelMap[listing.urgency],
-          `${listing.estimatedMinutes} 分钟`
-        ],
-        actionState: {
-          canComplete,
-          canCancel,
-          canOpenConversation,
-          canConfirm,
-          canReject
-        },
-        actionLabels: {
-          confirm: listing.intent === CampusServiceIntent.REQUEST ? '确认接单' : '确认预约',
-          reject: '拒绝申请',
-          complete: order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM ? '确认完成' : '提交完成',
-          cancel: isPublisher
-            ? '取消当前服务单'
-            : order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
-              ? '撤回申请'
-              : listing.intent === CampusServiceIntent.REQUEST
-                ? '退出接单'
-                : '取消预约',
-          conversation: '看消息'
-        },
+      return this.buildCampusServiceOrderView({
+        authUserId: authUser.id,
+        order: order as OrderRecord,
+        listing,
+        counterpartId,
+        counterpart,
+        publisher,
         conversationId: conversationMap.get(order.id) ?? null,
-        counterpart: {
-          id: counterpart?.id ?? counterpartId,
-          displayName: counterpart?.displayName ?? `用户#${counterpartId}`,
-          creditScore: counterpart?.creditScore ?? 60,
-          verificationStatus: counterpart?.verificationStatus ?? VerificationStatus.PENDING,
-          accountStatus: counterpart?.accountStatus ?? AccountStatus.ACTIVE
-        },
-        publisher: {
-          id: publisher?.id ?? listing.ownerId,
-          displayName: publisher?.displayName ?? `用户#${listing.ownerId}`,
-          studentId: publisher?.studentId ?? null,
-          creditScore: publisher?.creditScore ?? 60,
-          verificationStatus: publisher?.verificationStatus ?? VerificationStatus.PENDING,
-          accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE
-        },
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt
-      };
+        imageUrl: imageMap.get(listing.id) ?? ''
+      });
     });
 
     return {
@@ -1630,6 +1707,116 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         pageSize,
         total,
         totalPages
+      }
+    };
+  }
+
+  async getCampusServiceOrderDetail(orderId: number, currentUser?: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const order = await this.prisma.campusServiceOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        listing: true
+      }
+    });
+
+    if (!order) {
+      throw new NotFoundException('服务单不存在');
+    }
+
+    if (![order.requesterId, order.providerId, order.listing.ownerId].includes(authUser.id)) {
+      throw new ForbiddenException('你无权查看该服务单');
+    }
+
+    const listing = order.listing as ListingRecord;
+    const counterpartId = order.requesterId === authUser.id ? order.providerId : order.requesterId;
+    const [users, conversation, images] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          id: {
+            in: [...new Set([listing.ownerId, order.requesterId, order.providerId])]
+          }
+        },
+        select: {
+          id: true,
+          displayName: true,
+          studentId: true,
+          avatarUrl: true,
+          avatarFrame: true,
+          creditScore: true,
+          verificationStatus: true,
+          accountStatus: true
+        }
+      }),
+      this.prisma.conversation.findFirst({
+        where: { campusServiceOrderId: order.id },
+        select: { id: true }
+      }),
+      this.findCampusServiceImages([listing.id])
+    ]);
+
+    const userMap = new Map(users.map((user) => [user.id, user]));
+    const imageUrl = images[0]?.imageUrl ?? '';
+    const baseView = this.buildCampusServiceOrderView({
+      authUserId: authUser.id,
+      order: order as OrderRecord,
+      listing,
+      counterpartId,
+      counterpart: userMap.get(counterpartId),
+      publisher: userMap.get(listing.ownerId),
+      conversationId: conversation?.id ?? null,
+      imageUrl
+    });
+
+    const timeline = [
+      { label: '提交申请', value: formatDateTimeLabel(order.createdAt) },
+      ...(order.confirmedAt ? [{ label: '确认协作', value: formatDateTimeLabel(order.confirmedAt) }] : []),
+      ...(order.completionRequestedAt ? [{ label: '提交完工', value: formatDateTimeLabel(order.completionRequestedAt) }] : []),
+      ...(order.completedAt ? [{ label: '协作完成', value: formatDateTimeLabel(order.completedAt) }] : []),
+      ...(order.canceledAt ? [{ label: '协作取消', value: formatDateTimeLabel(order.canceledAt) }] : []),
+      ...(order.expiredAt ? [{ label: '已过期', value: formatDateTimeLabel(order.expiredAt) }] : [])
+    ];
+
+    return {
+      ...baseView,
+      cancelReason: order.cancelReason,
+      note: order.applyMessage,
+      paymentIntent: listing.priceMode === CampusServicePriceMode.NEGOTIABLE ? '按协商结果结算' : '按发布金额结算',
+      serviceTime: `${formatDateTimeLabel(listing.validFromAt)} - ${formatDateTimeLabel(listing.validUntilAt)}`,
+      completedAt: order.completedAt,
+      canceledAt: order.canceledAt,
+      confirmedAt: order.confirmedAt,
+      completionRequestedAt: order.completionRequestedAt,
+      completionRequestedById: order.completionRequestedById,
+      timeline,
+      detailBase: {
+        listingId: listing.id,
+        intent: listing.intent,
+        intentLabel: campusServiceIntentLabelMap[listing.intent],
+        category: listing.category,
+        categoryLabel: campusServiceCategoryLabelMap[listing.category],
+        status: listing.status,
+        statusLabel: campusServiceListingStatusLabelMap[listing.status],
+        summaryTags: baseView.summaryTags,
+        publisher: baseView.publisher,
+        routeLabel: baseView.route.label,
+        deadlineLabel: baseView.deadlineLabel,
+        estimatedMinutes: baseView.estimatedMinutes,
+        rewardLabel: baseView.rewardLabel,
+        description: listing.description
+      },
+      listingSnapshot: {
+        title: listing.title,
+        description: listing.description,
+        categoryLabel: campusServiceCategoryLabelMap[listing.category],
+        intentLabel: campusServiceIntentLabelMap[listing.intent],
+        rewardLabel: baseView.rewardLabel,
+        routeLabel: baseView.route.label,
+        deadlineLabel: baseView.deadlineLabel,
+        estimatedMinutes: listing.estimatedMinutes,
+        imageUrl: imageUrl || null
       }
     };
   }
@@ -1736,16 +1923,22 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       imageUrls: normalizedImageUrls
     }) ?? null;
 
-    if (llmReview?.shouldBlock) {
+    if (!llmReview || llmReview.status !== 'enabled' || !llmReview.selectedCategory) {
+      throw new BadRequestException('发布失败，请稍后重试');
+    }
+
+    if (llmReview.shouldBlock) {
       throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
     }
+
+    const selectedCategory = llmReview.selectedCategory;
 
     const listing = await this.prisma.campusServiceListing.create({
       data: {
         ownerId: authUser.id,
         intent,
         pattern,
-        category: payload.category,
+        category: selectedCategory,
         title: payload.title.trim(),
         description: payload.description.trim(),
         priceMode,
@@ -1960,7 +2153,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (listing.status !== CampusServiceListingStatus.OPEN) {
-      throw new BadRequestException('当前服务暂不可接单或预约');
+      throw new BadRequestException(
+        listing.intent === CampusServiceIntent.REQUEST ? '当前求助暂不可报名接单' : '当前服务暂不可预约'
+      );
     }
 
     const existingOrder = await this.prisma.campusServiceOrder.findFirst({
@@ -1990,7 +2185,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     const orderMessage = buildCampusServiceOrderMessage(
       payload,
       listing.intent === CampusServiceIntent.REQUEST
-        ? `我来接“${listing.title}”，可以开始对接细节。`
+        ? `我想接“${listing.title}”这单，可以开始沟通细节。`
         : `我想预约“${listing.title}”，方便开始沟通安排。`
     );
 
@@ -2046,7 +2241,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (listing.status !== CampusServiceListingStatus.OPEN) {
-      throw new BadRequestException('当前服务不能暂停接新单');
+      throw new BadRequestException(
+        listing.intent === CampusServiceIntent.REQUEST ? '当前求助不能暂停招募接单' : '当前服务不能暂停接预约'
+      );
     }
 
     const activeOrder = await this.prisma.campusServiceOrder.findFirst({
@@ -2132,7 +2329,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (listing.ownerId !== authUser.id) {
-      throw new ForbiddenException('只有发布者可以结束发布');
+      throw new ForbiddenException(
+        listing.intent === CampusServiceIntent.REQUEST ? '只有发布者可以结束求助发布' : '只有发布者可以结束服务发布'
+      );
     }
 
     if (listing.status === CampusServiceListingStatus.ENDED || listing.status === CampusServiceListingStatus.CANCELED) {
@@ -2158,7 +2357,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (activeConfirmedOrder) {
-      throw new BadRequestException('当前仍有进行中的服务单，请先完成或取消后再结束发布');
+      throw new BadRequestException('当前仍有进行中的协作，请先完成或取消后再结束当前发布');
     }
 
     const reasonText = payload.reason?.trim() || null;
@@ -2285,7 +2484,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         data: {
           conversationId: conversation.id,
           senderId: user.id,
-          content: `${user.displayName} 已确认当前服务单，进入履约阶段。`
+          content: `${
+            user.displayName
+          } 已${resolveCampusServiceConfirmAction(order.listing.intent)}，当前协作进入进行中。`
         }
       });
       await this.prisma.conversation.update({
@@ -2356,8 +2557,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           conversationId: conversation.id,
           senderId: user.id,
           content: reasonText
-            ? `服务单已拒绝：${reasonText}`
-            : `${user.displayName} 拒绝了当前服务申请。`
+            ? `申请已拒绝：${reasonText}`
+            : `${user.displayName} 拒绝了这次${resolveCampusServicePrimaryAction(order.listing.intent)}申请。`
         }
       });
       await this.prisma.conversation.update({
@@ -2441,8 +2642,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           conversationId: conversation.id,
           senderId: user.id,
           content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
-            ? `${user.displayName} 已确认服务完成。`
-            : `${user.displayName} 已提交服务完成，请对方确认。`
+            ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(order.listing.intent)}。`
+            : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(order.listing.intent)}，请对方确认。`
         }
       });
       await this.prisma.conversation.update({
@@ -2514,8 +2715,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           conversationId: conversation.id,
           senderId: user.id,
           content: reasonText
-            ? `服务已取消：${reasonText}`
-            : `${user.displayName} 取消了当前服务协作。`
+            ? `当前协作已取消：${reasonText}`
+            : `${user.displayName} 取消了当前协作。`
         }
       });
       await this.prisma.conversation.update({
@@ -2599,8 +2800,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           conversationId: conversation.id,
           senderId: user.id,
           content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
-            ? `${user.displayName} 已确认服务完成。`
-            : `${user.displayName} 已提交服务完成，请对方确认。`
+            ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(listing.intent)}。`
+            : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(listing.intent)}，请对方确认。`
         }
       });
       await this.prisma.conversation.update({
@@ -2681,8 +2882,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           conversationId: conversation.id,
           senderId: user.id,
           content: reasonText
-            ? `服务已取消：${reasonText}`
-            : `${user.displayName} 取消了当前服务协作。`
+            ? `当前协作已取消：${reasonText}`
+            : `${user.displayName} 取消了当前协作。`
         }
       });
       await this.prisma.conversation.update({

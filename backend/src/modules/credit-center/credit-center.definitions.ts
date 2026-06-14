@@ -1,8 +1,6 @@
 import { OrderStatus, VerificationStatus, type CampusServiceOrderStatus } from '@prisma/client';
 
 export type CreditMissionCode =
-  | 'NEWBIE_PROFILE'
-  | 'NEWBIE_VERIFY'
   | 'NEWBIE_FIRST_PRODUCT'
   | 'NEWBIE_FIRST_SERVICE'
   | 'DAILY_SIGNIN'
@@ -48,24 +46,6 @@ export const WEEKLY_CREDIT_GAIN_CAP = 10;
 export const MONTHLY_CREDIT_GAIN_CAP = 25;
 
 export const MISSION_DEFINITIONS: MissionDefinition[] = [
-  {
-    code: 'NEWBIE_PROFILE',
-    title: '完善个人资料',
-    description: '首次完成学号、姓名、学院、手机号等资料完善。',
-    cycleType: 'once',
-    rewardPoints: 20,
-    creditScoreDelta: 0,
-    target: 1
-  },
-  {
-    code: 'NEWBIE_VERIFY',
-    title: '完成实名认证',
-    description: '首次完成实名认证并通过审核。',
-    cycleType: 'once',
-    rewardPoints: 30,
-    creditScoreDelta: 5,
-    target: 1
-  },
   {
     code: 'NEWBIE_FIRST_PRODUCT',
     title: '首次发布商品',

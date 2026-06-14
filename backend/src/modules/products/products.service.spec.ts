@@ -22,7 +22,7 @@ describe('ProductsService', () => {
     reviewProduct: jest.fn().mockResolvedValue({
       provider: 'deepseek',
       model: 'deepseek-v4-flash',
-      status: 'disabled',
+      status: 'enabled',
       decision: 'APPROVED',
       shouldBlock: false,
       selectedCategory: '教材资料',
@@ -84,7 +84,7 @@ describe('ProductsService', () => {
       description: '期末复习用书，少量笔记',
       price: 20,
       category: '教材资料',
-      condition: '9.0成',
+      condition: '九成',
       tags: ['教材', '期末'],
       imageUrls: ['https://img.example.com/course.jpg']
     }, authUser);
@@ -118,10 +118,45 @@ describe('ProductsService', () => {
       description: '可以帮忙赶作业',
       price: 20,
       category: '教材资料',
-      condition: '9.0成',
+      condition: '九成',
       tags: ['作业辅导'],
       imageUrls: ['https://img.example.com/course.jpg']
     }, authUser)).rejects.toThrow('商品标题包含疑似违规内容“代写”，请修改后再发布');
+
+    expect(productCreate).not.toHaveBeenCalled();
+  });
+
+  it('should fail product publishing when llm returns no usable result', async () => {
+    const productCreate = jest.fn();
+    const service = new ProductsService({
+      product: {
+        create: productCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
+      }
+    } as any, searchService, vendureService, {
+      reviewProduct: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'failed',
+        decision: 'REVIEW',
+        shouldBlock: false,
+        selectedCategory: null,
+        reason: 'failed',
+        issues: []
+      })
+    } as any);
+
+    await expect(service.createProduct({
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 20,
+      category: '教材资料',
+      condition: '九成',
+      tags: ['教材', '期末'],
+      imageUrls: ['https://img.example.com/course.jpg']
+    }, authUser)).rejects.toThrow('发布失败，请稍后重试');
 
     expect(productCreate).not.toHaveBeenCalled();
   });
@@ -151,7 +186,7 @@ describe('ProductsService', () => {
       description: '容量 10000mAh，接口正常',
       price: 35,
       category: '宿舍生活',
-      condition: '9.0成',
+      condition: '九成',
       tags: ['充电宝', '白名单'],
       imageUrls: ['https://img.example.com/powerbank.jpg']
     }, authUser);
@@ -189,7 +224,7 @@ describe('ProductsService', () => {
       description: '配件齐全，可当面验货',
       price: 180,
       category: '数码电子',
-      condition: '8.0成',
+      condition: '八成',
       tags: ['显示器', '可验货'],
       imageUrls: [
         ' https://img.example.com/a.png ',
@@ -226,7 +261,7 @@ describe('ProductsService', () => {
       description: '没有图片',
       price: 10,
       category: '教材资料',
-      condition: '9.0成',
+      condition: '九成',
       tags: []
     }, authUser)).rejects.toThrow('请至少上传 1 张商品图片');
     expect(productCreate).not.toHaveBeenCalled();
@@ -242,7 +277,7 @@ describe('ProductsService', () => {
             title: '测试教材',
             category: '教材资料',
             price: 18,
-            condition: '9.0成',
+            condition: '九成',
             tags: [],
             status: 'ON_SALE',
             description: 'desc'
@@ -304,7 +339,7 @@ describe('ProductsService', () => {
             title: '测试教材',
             category: '教材资料',
             price: 18,
-            condition: '9.0成',
+            condition: '九成',
             tags: [],
             status: 'ON_SALE',
             description: 'desc'
@@ -352,7 +387,7 @@ describe('ProductsService', () => {
             title: '二手电扇',
             category: '宿舍生活',
             price: 28,
-            condition: '9.0成',
+            condition: '九成',
             tags: [],
             status: 'ON_SALE',
             description: 'desc',
@@ -398,7 +433,7 @@ describe('ProductsService', () => {
       title: '高数教材',
       category: '教材资料',
       price: 36,
-      condition: '9.0成',
+      condition: '九成',
       tags: ['教材', '期末'],
       status: 'ON_SALE',
       description: '有少量笔记',
@@ -527,7 +562,7 @@ describe('ProductsService', () => {
           title: '高数教材',
           category: '教材资料',
           price: 36,
-          condition: '9.0成',
+          condition: '九成',
           tags: ['教材', '期末'],
           status: 'ON_SALE',
           description: '有少量笔记',

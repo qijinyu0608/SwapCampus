@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { DetailShell } from '../components/layout';
-import { SectionCard } from '../components/ui';
+import { DetailContentBody, DetailInfoPanel, DetailMediaGallery, SectionCard } from '../components/ui';
 import { fetchOrderDetail, getApiErrorMessage, type OrderDetail } from '../services/api';
 import { resolveProductGallery } from '../utils/productCover';
 
@@ -54,7 +54,6 @@ export function OrderSnapshotPage() {
     }, detail.orderSnapshot.productId, 6);
   }, [detail]);
 
-  const currentImage = detailImages[activeImage] ?? detailImages[0] ?? detail?.orderSnapshot.imageUrl ?? '';
   const snapshotMeta = useMemo(() => {
     if (!detail) {
       return [];
@@ -88,47 +87,32 @@ export function OrderSnapshotPage() {
 
       <DetailShell
         mainMedia={(
-          <div className="detail-main-layout-product">
-            <div className="detail-thumb-column">
-              {detailImages.map((image, index) => (
-                <button
-                  key={`${detail.orderSnapshot.productId}-${index}`}
-                  type="button"
-                  className={index === activeImage ? 'detail-thumb active' : 'detail-thumb'}
-                  onClick={() => setActiveImage(index)}
-                >
-                  <img src={image} alt={`${detail.orderSnapshot.title}-${index + 1}`} />
-                </button>
-              ))}
-            </div>
-
-            <div className="detail-main-photo-shell">
-              <img
-                className="detail-main-photo"
-                src={currentImage}
-                alt={detail.orderSnapshot.title}
-              />
-            </div>
-          </div>
+          <DetailMediaGallery
+            images={detailImages}
+            activeIndex={activeImage}
+            onSelect={setActiveImage}
+            title={detail.orderSnapshot.title}
+            galleryKey={detail.orderSnapshot.productId}
+          />
         )}
         sidePanel={(
-          <div className="detail-info-panel order-snapshot-info-panel">
-            <div className="detail-info-top">
+          <DetailInfoPanel
+            className="order-snapshot-info-panel"
+            top={(
               <div className="detail-price-block">
                 <div className="listing-detail-amount">
                   <strong>¥{detail.orderSnapshot.price.toFixed(2)}</strong>
                 </div>
               </div>
-            </div>
-
-            <div className="detail-info-body">
-              <h1 className="detail-main-title">{detail.orderSnapshot.title}</h1>
-              <MetaList items={snapshotMeta} className="detail-seller-strip-meta order-snapshot-meta" />
-              <div className="detail-description-block">
-                <p>{detail.orderSnapshot.description || '暂无描述'}</p>
-              </div>
-            </div>
-          </div>
+            )}
+            body={(
+              <DetailContentBody
+                title={detail.orderSnapshot.title}
+                meta={<MetaList items={snapshotMeta} className="detail-seller-strip-meta order-snapshot-meta" />}
+                description={detail.orderSnapshot.description || '暂无描述'}
+              />
+            )}
+          />
         )}
       />
     </div>

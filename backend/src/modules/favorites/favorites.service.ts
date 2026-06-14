@@ -3,6 +3,7 @@ import { Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { normalizeProductConditionValue } from '../products/product-conditions';
 
 type FavoriteProductCard = {
   id: number;
@@ -86,7 +87,7 @@ export class FavoritesService {
         title: product.title,
         category: product.category,
         price: Number(product.price),
-        condition: product.condition,
+        condition: normalizeProductConditionValue(product.condition),
         tags: normalizeTags(product.tags),
         status: product.status,
         description: product.description,

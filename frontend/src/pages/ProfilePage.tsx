@@ -1,7 +1,6 @@
 import {
   AppstoreOutlined,
   SafetyCertificateOutlined,
-  EnvironmentOutlined,
   EditOutlined,
   EyeOutlined,
   HeartOutlined,
@@ -12,13 +11,13 @@ import {
   ShoppingOutlined,
   StarOutlined
 } from '@ant-design/icons';
-import { Button, Empty, Form, Input, InputNumber, Modal, Rate, Select, Skeleton, Tag, message } from 'antd';
+import { Button, Empty, Form, Input, InputNumber, Modal, Select, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AVATAR_FRAMES, type AvatarFrameKey } from '../components/user/UserAvatar';
+import { AVATAR_FRAMES, type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { EmptyState } from '../components/feedback';
 import { ImageCropUploadModal } from '../components/image-upload';
-import { CampusServicePublisherOrderWorkbench } from '../components/listing';
+import { CampusServiceOrderCard, CampusServicePublisherOrderWorkbench, ProductOrderCard } from '../components/listing';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { AVATAR_OPTIONS } from '../constants/avatarOptions';
@@ -55,15 +54,30 @@ import {
 } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 import { hasTradingAccess, isGuestUser } from '../services/session';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { ConfirmReasonModal, CreditBadge, ProfileOrderScopePanel } from '../components/ui';
+import { UserReviewCard } from '../components/user/UserReviewCard';
 import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { getListingStatusPresentation } from '../utils/listingStatus';
+import {
+  executeCampusServiceOrderAction,
+  getCampusServiceOrderRejectOrCancelText
+} from '../utils/campusServiceOrderActions';
 import { getProductImage, resolvePrimaryProductImage } from '../utils/productCover';
 import { getUserPresentation } from '../utils/userPresentation';
 import type { PublisherOrderGroupKey } from '../components/listing/CampusServicePublisherOrderWorkbench';
 
-type ProfileSection = 'items' | 'orders-buying' | 'orders-selling' | 'favorites' | 'history' | 'following' | 'reviews' | 'profile';
-type PublishedScope = 'products' | 'campus-services-request' | 'campus-services-offer' | 'campus-services-provider' | 'campus-services-booking';
+type ProfileSection =
+  | 'items'
+  | 'campus-services-provider'
+  | 'campus-services-booking'
+  | 'orders-buying'
+  | 'orders-selling'
+  | 'favorites'
+  | 'history'
+  | 'following'
+  | 'reviews'
+  | 'profile';
+type PublishedScope = 'products' | 'campus-services-request' | 'campus-services-offer';
 type OrderProgressScope = 'active' | 'ended';
 
 type HistoryGroup = {
@@ -91,47 +105,18 @@ function isPresetAvatarUrl(url?: string | null) {
   return Boolean(url?.trim()) && PRESET_AVATAR_URLS.has(url!.trim());
 }
 
-const orderStatusMap: Record<string, string> = {
-  PENDING: '待约定',
-  IN_PROGRESS: '待面交',
-  WAITING_REVIEW: '待评价',
-  COMPLETED: '已完成',
-  CANCELED: '已取消'
-};
-
 const activeOrderStatuses = new Set(['PENDING', 'IN_PROGRESS', 'WAITING_REVIEW']);
-
-function getOrderStatusColor(status: string) {
-  if (status === 'COMPLETED') {
-    return 'green';
-  }
-  if (status === 'WAITING_REVIEW') {
-    return 'gold';
-  }
-  if (status === 'CANCELED') {
-    return 'default';
-  }
-  return 'orange';
-}
 
 function matchesOrderProgressScope(status: string, scope: OrderProgressScope) {
   return scope === 'active' ? activeOrderStatuses.has(status) : !activeOrderStatuses.has(status);
 }
 
-function getCampusServiceOrderStatusColor(status: CampusServiceOrderListItem['orderStatus']) {
-  if (status === 'COMPLETED') {
-    return 'green';
-  }
-  if (status === 'WAITING_COMPLETE_CONFIRM') {
-    return 'gold';
-  }
-  if (status === 'REJECTED' || status === 'CANCELED' || status === 'EXPIRED') {
-    return 'default';
-  }
-  if (status === 'CONFIRMED') {
-    return 'blue';
-  }
-  return 'orange';
+function matchesCampusServiceOrderProgressScope(
+  item: CampusServiceOrderListItem,
+  scope: OrderProgressScope
+) {
+  const isEnded = getCampusServiceOrderGroupKey(item) === 'ended';
+  return scope === 'active' ? !isEnded : isEnded;
 }
 
 function isCampusServiceOrderListItem(
@@ -190,20 +175,12 @@ type CampusServiceStatusGroup<T extends CampusServiceListItem | CampusServiceOrd
   items: T[];
 };
 
-type CampusServiceListingGroupSummary = {
-  pendingOrderCount: number;
-  waitingCompleteOrderCount: number;
-  activeOrderCount: number;
-  endedOrderCount: number;
-  totalOrderCount: number;
-};
-
 function getCampusServiceListingGroupKey(item: CampusServiceListItem): CampusServiceGroupKey {
   if (item.actionState.canConfirm || item.actionState.canReject) {
     return 'pending';
   }
 
-  if (item.actionLabels.complete === '确认完成') {
+  if (item.actionLabels.complete === '确认完工' || item.actionLabels.complete === '确认服务完成') {
     return 'waiting-complete';
   }
 
@@ -241,7 +218,7 @@ function createCampusServiceGroups<T extends CampusServiceListItem | CampusServi
   const baseGroups: Array<CampusServiceStatusGroup<T>> = [
     { key: 'pending', title: '待确认', description: '等待发布者确认或等待你确认下一步。', items: [] },
     { key: 'active', title: '进行中', description: '已进入履约阶段，当前还在推进。', items: [] },
-    { key: 'waiting-complete', title: '待完成确认', description: '一方已提交完成，等待另一方确认。', items: [] },
+    { key: 'waiting-complete', title: '待完成确认', description: '一方已提交完工，等待另一方确认。', items: [] },
     { key: 'ended', title: '已结束', description: '已完成、已取消、已拒绝或已过期。', items: [] }
   ];
   const groupMap = new Map(baseGroups.map((group) => [group.key, group]));
@@ -251,22 +228,6 @@ function createCampusServiceGroups<T extends CampusServiceListItem | CampusServi
   });
 
   return baseGroups.filter((group) => group.items.length > 0);
-}
-
-function summarizeCampusServiceListingGroup(items: CampusServiceListItem[]): CampusServiceListingGroupSummary {
-  return items.reduce<CampusServiceListingGroupSummary>((summary, item) => ({
-    pendingOrderCount: summary.pendingOrderCount + item.pendingOrderCount,
-    waitingCompleteOrderCount: summary.waitingCompleteOrderCount + item.waitingCompleteOrderCount,
-    activeOrderCount: summary.activeOrderCount + item.activeOrderCount,
-    endedOrderCount: summary.endedOrderCount + item.endedOrderCount,
-    totalOrderCount: summary.totalOrderCount + item.totalOrderCount
-  }), {
-    pendingOrderCount: 0,
-    waitingCompleteOrderCount: 0,
-    activeOrderCount: 0,
-    endedOrderCount: 0,
-    totalOrderCount: 0
-  });
 }
 
 function renderPublishedProductCard(
@@ -343,6 +304,8 @@ export function ProfilePage() {
   const [publishedScope, setPublishedScope] = useState<PublishedScope>('products');
   const [buyingOrderScope, setBuyingOrderScope] = useState<OrderProgressScope>('active');
   const [sellingOrderScope, setSellingOrderScope] = useState<OrderProgressScope>('active');
+  const [providerOrderScope, setProviderOrderScope] = useState<OrderProgressScope>('active');
+  const [bookingOrderScope, setBookingOrderScope] = useState<OrderProgressScope>('active');
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingCampusServices, setLoadingCampusServices] = useState(true);
   const [loadingParticipatedCampusServices, setLoadingParticipatedCampusServices] = useState(true);
@@ -645,13 +608,23 @@ export function ProfilePage() {
     [publishedOfferCampusServices]
   );
 
-  const groupedProviderCampusServices = useMemo(
-    () => createCampusServiceGroups(providerCampusServices, getCampusServiceOrderGroupKey),
+  const providerActiveCampusServices = useMemo(
+    () => providerCampusServices.filter((item) => matchesCampusServiceOrderProgressScope(item, 'active')),
     [providerCampusServices]
   );
 
-  const groupedBookingCampusServices = useMemo(
-    () => createCampusServiceGroups(bookingCampusServices, getCampusServiceOrderGroupKey),
+  const providerEndedCampusServices = useMemo(
+    () => providerCampusServices.filter((item) => matchesCampusServiceOrderProgressScope(item, 'ended')),
+    [providerCampusServices]
+  );
+
+  const bookingActiveCampusServices = useMemo(
+    () => bookingCampusServices.filter((item) => matchesCampusServiceOrderProgressScope(item, 'active')),
+    [bookingCampusServices]
+  );
+
+  const bookingEndedCampusServices = useMemo(
+    () => bookingCampusServices.filter((item) => matchesCampusServiceOrderProgressScope(item, 'ended')),
     [bookingCampusServices]
   );
 
@@ -692,6 +665,8 @@ export function ProfilePage() {
       label: '我发布的',
       count: publishedProducts.length + publishedRequestCampusServices.length + publishedOfferCampusServices.length
     },
+    { key: 'campus-services-provider', icon: <InboxOutlined />, label: '我接的单', count: providerCampusServices.length },
+    { key: 'campus-services-booking', icon: <ProfileOutlined />, label: '我预约的服务', count: bookingCampusServices.length },
     { key: 'orders-buying', icon: <ShoppingOutlined />, label: '我买到的', count: buyingOrders.length },
     { key: 'orders-selling', icon: <ShopOutlined />, label: '我卖出的', count: sellingOrders.length },
     { key: 'favorites', icon: <StarOutlined />, label: '我的收藏', count: favoriteItems.length },
@@ -708,11 +683,7 @@ export function ProfilePage() {
     ? '我发布的'
     : publishedScope === 'campus-services-request'
       ? '我发布的需求'
-      : publishedScope === 'campus-services-offer'
-        ? '我发布的服务'
-        : publishedScope === 'campus-services-provider'
-          ? '我接的单'
-          : '我预约的服务';
+      : '我发布的服务';
 
   function renderPublishedScope() {
     const showingProducts = publishedScope === 'products';
@@ -741,20 +712,6 @@ export function ProfilePage() {
           >
             我发布的服务
           </button>
-          <button
-            type="button"
-            className={publishedScope === 'campus-services-provider' ? 'active' : undefined}
-            onClick={() => setPublishedScope('campus-services-provider')}
-          >
-            我接的单
-          </button>
-          <button
-            type="button"
-            className={publishedScope === 'campus-services-booking' ? 'active' : undefined}
-            onClick={() => setPublishedScope('campus-services-booking')}
-          >
-            我预约的服务
-          </button>
         </div>
         {showingProducts
           ? renderProductGrid(
@@ -774,19 +731,7 @@ export function ProfilePage() {
                 loadingCampusServices,
                 '暂无发布的服务'
               )
-              : publishedScope === 'campus-services-provider'
-                ? renderParticipatedCampusServiceOrders(
-                  groupedProviderCampusServices,
-                  loadingParticipatedCampusServices,
-                  '暂无接单记录',
-                  undefined
-                )
-                : renderParticipatedCampusServiceOrders(
-                  groupedBookingCampusServices,
-                  loadingParticipatedCampusServices,
-                  '暂无预约记录',
-                  undefined
-                )}
+              : null}
       </div>
     );
   }
@@ -809,89 +754,17 @@ export function ProfilePage() {
       <div className="profile-campus-service-groups">
         {groups.map((group) => (
           <section key={group.key} className="profile-campus-service-group">
-            {(() => {
-              const summary = summarizeCampusServiceListingGroup(group.items);
-
-              return (
-                <div className="profile-campus-service-group-head">
-                  <div>
-                    <strong>{group.title}</strong>
-                    <span>{group.description}</span>
-                    <div className="profile-campus-service-group-signals" aria-label={`${group.title}订单概况`}>
-                      {summary.pendingOrderCount > 0 ? (
-                        <span className="service-inline-status is-active">{`待确认 ${summary.pendingOrderCount}`}</span>
-                      ) : null}
-                      {summary.waitingCompleteOrderCount > 0 ? (
-                        <span className="service-inline-status is-success">{`待完成 ${summary.waitingCompleteOrderCount}`}</span>
-                      ) : null}
-                      {summary.activeOrderCount > 0 ? (
-                        <span className="service-inline-status is-default">{`进行中 ${summary.activeOrderCount}`}</span>
-                      ) : null}
-                      {summary.endedOrderCount > 0 ? (
-                        <span className="service-inline-status is-muted">{`已结束 ${summary.endedOrderCount}`}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <em>{`${group.items.length} 条 / ${summary.totalOrderCount} 单`}</em>
-                </div>
-              );
-            })()}
+            <div className="profile-campus-service-group-head">
+              <div>
+                <strong>{group.title}</strong>
+              </div>
+            </div>
             <ProductGrid
               items={group.items}
               renderItem={(item) => (
                 <div key={item.id} className="profile-published-service-card">
                   {renderCampusServiceMarketCard(item, navigate)}
                   <div className="profile-published-service-actions">
-                    {item.pendingOrderCount > 0 ? (
-                      <button
-                        type="button"
-                        className="service-inline-status is-active is-clickable"
-                        onClick={() => {
-                          setPublisherOrderWorkbenchListing(item);
-                          setPublisherOrderWorkbenchGroup('PENDING');
-                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                        }}
-                      >
-                        {`待确认 ${item.pendingOrderCount}`}
-                      </button>
-                    ) : null}
-                    {item.waitingCompleteOrderCount > 0 ? (
-                      <button
-                        type="button"
-                        className="service-inline-status is-success is-clickable"
-                        onClick={() => {
-                          setPublisherOrderWorkbenchListing(item);
-                          setPublisherOrderWorkbenchGroup('WAITING_COMPLETE');
-                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                        }}
-                      >
-                        {`待完成 ${item.waitingCompleteOrderCount}`}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="service-inline-status is-default is-clickable"
-                      onClick={() => {
-                        setPublisherOrderWorkbenchListing(item);
-                        setPublisherOrderWorkbenchGroup('ACTIVE');
-                        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                      }}
-                    >
-                      {`进行中 ${item.activeOrderCount}`}
-                    </button>
-                    {item.endedOrderCount > 0 ? (
-                      <button
-                        type="button"
-                        className="service-inline-status is-muted is-clickable"
-                        onClick={() => {
-                          setPublisherOrderWorkbenchListing(item);
-                          setPublisherOrderWorkbenchGroup('ENDED');
-                          setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-                        }}
-                      >
-                        {`已结束 ${item.endedOrderCount}`}
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       className="fish-item-link active"
@@ -902,7 +775,7 @@ export function ProfilePage() {
                       }}
                     >
                       <InboxOutlined />
-                      <span>订单管理</span>
+                      <span>申请与预约管理</span>
                     </button>
                   </div>
                 </div>
@@ -915,116 +788,48 @@ export function ProfilePage() {
   }
 
   function renderParticipatedCampusServiceOrders(
-    groups: Array<CampusServiceStatusGroup<CampusServiceOrderListItem>>,
+    items: CampusServiceOrderListItem[],
     loading: boolean,
-    emptyTitle: string,
-    emptyDescription?: string
+    title: string,
+    emptyDescription: string,
+    scope: OrderProgressScope,
+    onScopeChange: (scope: OrderProgressScope) => void,
+    scopeCounts: Record<OrderProgressScope, number>
   ) {
-    if (loading) {
-      return <Skeleton active paragraph={{ rows: 8 }} />;
-    }
+    let content: ReactNode;
 
-    if (!groups.length) {
-      return <EmptyState className="is-shell" title={emptyTitle} description={emptyDescription} />;
+    if (loading) {
+      content = <Skeleton active paragraph={{ rows: 8 }} />;
+    } else if (items.length) {
+      content = (
+        <div className="compact-list profile-orders-list">
+          {items.map((item) => (
+            <CampusServiceOrderCard
+              key={item.id}
+              order={item}
+              actingOrderId={actingCampusOrderId}
+              onOpenConversation={(current) => navigate(`/messages?conversationId=${current.conversationId}`)}
+              onCancel={(current) => void handleCampusServiceOrderCancel(current)}
+              onComplete={(current) => void handleCampusServiceOrderComplete(current)}
+              onViewDetail={(current) => navigate(`/campus-service-orders/${current.id}`)}
+              layout="compact"
+            />
+          ))}
+        </div>
+      );
+    } else {
+      content = <EmptyState className="is-shell" title={`暂无${title}`} description={emptyDescription} />;
     }
 
     return (
-      <div className="profile-campus-service-groups">
-        {groups.map((group) => (
-          <section key={group.key} className="profile-campus-service-group">
-            <div className="profile-campus-service-group-head">
-              <div>
-                <strong>{group.title}</strong>
-                <span>{group.description}</span>
-              </div>
-              <em>{group.items.length} 单</em>
-            </div>
-            <div className="compact-list profile-orders-list">
-              {group.items.map((item) => {
-                const counterpartPresentation = getUserPresentation(item.counterpart);
-
-                return (
-                  <article key={item.id} className="profile-order-card profile-campus-order-card">
-                    <div className="profile-order-top">
-                      <div className="profile-order-user">
-                        <UserAvatar
-                          src={item.counterpart.avatarUrl}
-                          alt={`${counterpartPresentation.displayName}的头像`}
-                          fallbackLabel={counterpartPresentation.initial}
-                          frame={(counterpartPresentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
-                        />
-                        <div className="profile-order-user-copy">
-                          <strong>{item.title}</strong>
-                          <em>{item.roleLabel} · 对方 {counterpartPresentation.displayName}</em>
-                        </div>
-                      </div>
-                      <Tag color={getCampusServiceOrderStatusColor(item.orderStatus)}>{item.orderStatusLabel}</Tag>
-                    </div>
-
-                    <div className="profile-campus-order-summary">
-                      <div>
-                        <span>方向</span>
-                        <strong>{item.intentLabel}</strong>
-                      </div>
-                      <div>
-                        <span>分类</span>
-                        <strong>{item.categoryLabel}</strong>
-                      </div>
-                      <div>
-                        <span>金额</span>
-                        <strong>{item.rewardLabel}</strong>
-                      </div>
-                      <div>
-                        <span>截止</span>
-                        <strong>{item.deadlineLabel}</strong>
-                      </div>
-                    </div>
-
-                    <div className="profile-campus-order-meta">
-                      <div>
-                        <EnvironmentOutlined />
-                        <span>{item.route.label}</span>
-                      </div>
-                      <div>
-                        <span>预计 {item.estimatedMinutes} 分钟</span>
-                        <em>{counterpartPresentation.creditBadge.label}</em>
-                      </div>
-                    </div>
-
-                    <div className="profile-order-actions">
-                      {item.actionState.canOpenConversation && item.conversationId ? (
-                        <Button icon={<MessageOutlined />} onClick={() => navigate(`/messages?conversationId=${item.conversationId}`)}>
-                          {item.actionLabels.conversation ?? '看消息'}
-                        </Button>
-                      ) : null}
-                      {item.actionState.canCancel ? (
-                        <Button
-                          danger
-                          loading={actingCampusOrderId === item.id}
-                          onClick={() => void handleCampusServiceOrderCancel(item)}
-                        >
-                          {item.actionLabels.cancel ?? '取消'}
-                        </Button>
-                      ) : null}
-                      {item.actionState.canComplete ? (
-                        <Button
-                          loading={actingCampusOrderId === item.id}
-                          onClick={() => void handleCampusServiceOrderComplete(item)}
-                        >
-                          {item.actionLabels.complete ?? '提交完成'}
-                        </Button>
-                      ) : null}
-                      <Button type="primary" onClick={() => navigate(`/campus-services/${item.listingId}`)}>
-                        查看详情
-                      </Button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+      <ProfileOrderScopePanel
+        title={title}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        scopeCounts={scopeCounts}
+      >
+        {content}
+      </ProfileOrderScopePanel>
     );
   }
 
@@ -1053,78 +858,84 @@ export function ProfilePage() {
 
   async function handleCampusServiceOrderComplete(item: CampusServiceOrderListItem) {
     setActingCampusOrderId(item.id);
-    try {
-      await completeCampusServiceOrder(item.id);
-      await reloadCampusServicePanels();
-      message.success(`“${item.title}”已更新为最新进度`);
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '更新服务单失败'));
-    } finally {
-      setActingCampusOrderId(null);
-    }
+    await executeCampusServiceOrderAction({
+      run: () => completeCampusServiceOrder(item.id),
+      onSuccess: () => reloadCampusServicePanels(),
+      onFinally: () => setActingCampusOrderId(null),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: `“${item.title}”已更新为最新进度`,
+      fallbackErrorMessage: '更新协作进度失败'
+    });
   }
 
   async function handleCampusServiceOrderCancel(item: CampusServiceOrderListItem) {
     setActingCampusOrderId(item.id);
-    try {
-      await cancelCampusServiceOrder(item.id);
-      await reloadCampusServicePanels();
-      message.success(`“${item.title}”已取消`);
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '取消服务单失败'));
-    } finally {
-      setActingCampusOrderId(null);
-    }
+    await executeCampusServiceOrderAction({
+      run: () => cancelCampusServiceOrder(item.id),
+      onSuccess: () => reloadCampusServicePanels(),
+      onFinally: () => setActingCampusOrderId(null),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: `“${item.title}”已取消`,
+      fallbackErrorMessage: '取消协作失败'
+    });
   }
 
   async function handlePublisherCampusServiceOrderConfirm(item: CampusServiceOrderListItem) {
     setActingCampusOrderId(item.id);
-    try {
-      await confirmCampusServiceOrder(item.id);
-      await reloadCampusServicePanels();
-      setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-      message.success(`“${item.title}”已确认`);
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '确认服务单失败'));
-    } finally {
-      setActingCampusOrderId(null);
-    }
+    await executeCampusServiceOrderAction({
+      run: () => confirmCampusServiceOrder(item.id),
+      onSuccess: async () => {
+        await reloadCampusServicePanels();
+        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+      },
+      onFinally: () => setActingCampusOrderId(null),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: `“${item.title}”已确认`,
+      fallbackErrorMessage: '确认申请失败'
+    });
   }
 
   async function handlePublisherCampusServiceOrderReject(item: CampusServiceOrderListItem) {
     setActingCampusOrderId(item.id);
-    try {
-      await rejectCampusServiceOrder(item.id, {
+    await executeCampusServiceOrderAction({
+      run: () => rejectCampusServiceOrder(item.id, {
         reason: publisherOrderDialogReason.trim() || undefined
-      });
-      setPublisherOrderDialogTarget(null);
-      setPublisherOrderDialogReason('');
-      await reloadCampusServicePanels();
-      setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-      message.success(`“${item.title}”已拒绝`);
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '拒绝服务单失败'));
-    } finally {
-      setActingCampusOrderId(null);
-    }
+      }),
+      onSuccess: async () => {
+        setPublisherOrderDialogTarget(null);
+        setPublisherOrderDialogReason('');
+        await reloadCampusServicePanels();
+        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+      },
+      onFinally: () => setActingCampusOrderId(null),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: `“${item.title}”已拒绝`,
+      fallbackErrorMessage: '拒绝申请失败'
+    });
   }
 
   async function handlePublisherCampusServiceOrderCancel(item: CampusServiceOrderListItem) {
     setActingCampusOrderId(item.id);
-    try {
-      await cancelCampusServiceOrder(item.id, {
+    await executeCampusServiceOrderAction({
+      run: () => cancelCampusServiceOrder(item.id, {
         reason: publisherOrderDialogReason.trim() || undefined
-      });
-      setPublisherOrderDialogTarget(null);
-      setPublisherOrderDialogReason('');
-      await reloadCampusServicePanels();
-      setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
-      message.success(`“${item.title}”已取消`);
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '取消服务单失败'));
-    } finally {
-      setActingCampusOrderId(null);
-    }
+      }),
+      onSuccess: async () => {
+        setPublisherOrderDialogTarget(null);
+        setPublisherOrderDialogReason('');
+        await reloadCampusServicePanels();
+        setPublisherOrderWorkbenchReloadVersion((value) => value + 1);
+      },
+      onFinally: () => setActingCampusOrderId(null),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: `“${item.title}”已取消`,
+      fallbackErrorMessage: '取消协作失败'
+    });
   }
 
   useEffect(() => {
@@ -1220,20 +1031,17 @@ export function ProfilePage() {
                     <ProductSummaryCard
                       key={`service-${item.id}`}
                       item={{
-                        ...item,
+                        id: item.id,
+                        title: item.title,
+                        description: item.description,
+                        price: item.price,
+                        imageUrl: item.imageUrl,
                         tags: item.summaryTags,
+                        status: item.status
                       }}
                       imageSrc={item.imageUrl || '/images/products/demo-square.png'}
-                      className="profile-fish-card service-task-card profile-history-service-card"
-                      coverMeta={(
-                        <div className="service-card-cover-stack">
-                          <span className="service-card-cover-type">{item.intentLabel}</span>
-                          <span className="service-card-cover-type">{item.statusLabel}</span>
-                        </div>
-                      )}
-                      bodyMeta={item.sellerName}
+                      className="profile-fish-card service-task-card"
                       priceValue={item.rewardLabel}
-                      priceMeta="校园服务"
                       onOpen={() => navigate(`/campus-services/${item.id}`)}
                     />
                   );
@@ -1550,87 +1358,16 @@ export function ProfilePage() {
     } else if (items.length) {
       content = (
         <div className="compact-list profile-orders-list">
-          {items.map((item, index) => {
-            const isBuyerView = item.buyerId === currentUser?.id;
-            const counterpartName = isBuyerView ? item.sellerName : item.buyerName;
-            const counterpartAvatarUrl = isBuyerView ? item.sellerAvatarUrl : item.buyerAvatarUrl;
-            const counterpartAvatarFrame = isBuyerView ? item.sellerAvatarFrame : item.buyerAvatarFrame;
-            const counterpartCreditScore = isBuyerView ? item.sellerCreditScore : item.buyerCreditScore;
-            const counterpartPresentation = getUserPresentation({
-              creditScore: counterpartCreditScore ?? undefined
-            });
-            return (
-              <article key={item.id} className="profile-order-card profile-order-card-list">
-                <div className="checkout-shop-card">
-                  <div className="checkout-shop-info" aria-label="订单对象信息">
-                    <div className="checkout-shop-copy is-inline profile-order-shop-copy">
-                      <UserAvatar
-                        src={counterpartAvatarUrl}
-                        alt={`${counterpartName}的头像`}
-                        fallbackLabel={counterpartName.slice(0, 1)}
-                        className="profile-order-avatar"
-                        frame={(counterpartAvatarFrame as AvatarFrameKey | null) ?? undefined}
-                      />
-                      <div className="profile-order-user-copy">
-                        <strong>{counterpartName}</strong>
-                        <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
-                      </div>
-                    </div>
-                    <div className="checkout-shop-actions profile-order-shop-actions">
-                      {item.conversationId ? (
-                        <Button
-                          className="checkout-chat-button is-icon-only"
-                          onClick={() => navigate(`/messages?conversationId=${item.conversationId}`)}
-                          aria-label="查看聊天"
-                          icon={<MessageOutlined />}
-                        />
-                      ) : null}
-                      <div className={`ui-credit-badge is-${counterpartPresentation.creditBadge.tone}`}>
-                        <span className="ui-credit-badge-label">{counterpartPresentation.creditBadge.label}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="checkout-order-item profile-order-list-item">
-                    <div className="checkout-item-main">
-                      <img
-                        src={item.productImageUrl || getProductImage({
-                          id: item.productId,
-                          title: item.productTitle,
-                          description: '',
-                          price: item.productPrice ?? 0,
-                          category: item.productCategory ?? '其他',
-                          condition: item.productCondition ?? '线下面交',
-                          sellerName: item.sellerName,
-                          status: item.productStatus ?? 'ON_SALE',
-                          tags: []
-                        } as ProductSummary, index)}
-                        alt={item.productTitle}
-                      />
-                      <div className="checkout-item-copy profile-order-item-copy">
-                        <h3>{item.productTitle}</h3>
-                        <span className="profile-order-product-category">{item.productCategory ?? '校园闲置'}</span>
-                      </div>
-                    </div>
-
-                    <div className="checkout-item-attrs profile-order-item-attrs">
-                      <span>成色：{item.productCondition ?? '线下面交'}</span>
-                      <span>{item.meetupLocation || '待双方约定线下面交时间地点'}</span>
-                      <span>订单编号：{item.orderCode}</span>
-                    </div>
-
-                    <div className="checkout-item-price profile-order-item-price">
-                      <strong>{item.productPrice === null ? '价格待确认' : `¥${item.productPrice.toFixed(2)}`}</strong>
-                    </div>
-
-                    <div className="profile-order-actions profile-order-list-actions">
-                      <Button type="link" onClick={() => navigate(`/orders/${item.id}`)}>查看详情</Button>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+          {items.map((item, index) => (
+            <ProductOrderCard
+              key={item.id}
+              order={item}
+              currentUserId={currentUser?.id}
+              imageVariant={index}
+              onOpenConversation={(current) => navigate(`/messages?conversationId=${current.conversationId}`)}
+              onViewDetail={(current) => navigate(`/orders/${current.id}`)}
+            />
+          ))}
         </div>
       );
     } else {
@@ -1639,25 +1376,15 @@ export function ProfilePage() {
 
     return renderSectionPanel(
       title,
-      <div className="profile-order-panel">
-        <div className="profile-order-scope" role="tablist" aria-label={`${title}订单进度筛选`}>
-          <button
-            type="button"
-            className={scope === 'active' ? 'active' : undefined}
-            onClick={() => onScopeChange('active')}
-          >
-            进行中 ({scopeCounts.active})
-          </button>
-          <button
-            type="button"
-            className={scope === 'ended' ? 'active' : undefined}
-            onClick={() => onScopeChange('ended')}
-          >
-            已结束 ({scopeCounts.ended})
-          </button>
-        </div>
+      <ProfileOrderScopePanel
+        title={title}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        scopeCounts={scopeCounts}
+        ariaLabel={`${title}订单进度筛选`}
+      >
         {content}
-      </div>,
+      </ProfileOrderScopePanel>,
       items.length || loading ? 'profile-order-board' : 'profile-order-board is-empty'
     );
   }
@@ -1732,18 +1459,14 @@ export function ProfilePage() {
       '收到的评价',
       <div className="order-detail-review-list profile-user-review-list">
         {items.map((review) => (
-          <article key={review.id} className="order-detail-review-card">
-            <div className="order-detail-review-top">
-              <UserNameWithBadge
-                as="strong"
-                name={review.reviewerName}
-                trustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
-              />
-              <span>{new Date(review.createdAt).toLocaleString()}</span>
-            </div>
-            <Rate disabled value={review.rating} className="profile-review-rate" />
-            <p>{review.content}</p>
-          </article>
+          <UserReviewCard
+            key={review.id}
+            reviewerName={review.reviewerName}
+            createdAt={review.createdAt}
+            rating={review.rating}
+            content={review.content}
+            reviewerTrustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
+          />
         ))}
       </div>
     );
@@ -1753,18 +1476,12 @@ export function ProfilePage() {
     if (activeSection === 'items') {
       const servicePanelLoaded = publishedScope === 'products'
         ? loadingProducts
-        : publishedScope === 'campus-services-request' || publishedScope === 'campus-services-offer'
-          ? loadingCampusServices
-          : loadingParticipatedCampusServices;
+        : loadingCampusServices;
       const servicePanelHasItems = publishedScope === 'products'
         ? publishedProducts.length
         : publishedScope === 'campus-services-request'
           ? publishedRequestCampusServices.length
-          : publishedScope === 'campus-services-offer'
-            ? publishedOfferCampusServices.length
-            : publishedScope === 'campus-services-provider'
-              ? providerCampusServices.length
-              : bookingCampusServices.length;
+          : publishedOfferCampusServices.length;
 
       return renderSectionPanel(
         campusServiceSectionTitle,
@@ -1772,6 +1489,44 @@ export function ProfilePage() {
         (servicePanelHasItems || servicePanelLoaded)
           ? undefined
           : 'is-empty'
+      );
+    }
+
+    if (activeSection === 'campus-services-provider') {
+      return renderSectionPanel(
+        '我接的单',
+        renderParticipatedCampusServiceOrders(
+          providerOrderScope === 'active' ? providerActiveCampusServices : providerEndedCampusServices,
+          loadingParticipatedCampusServices,
+          '我接的单',
+          providerOrderScope === 'active' ? '当前没有进行中的接单记录。' : '还没有已结束的接单记录。',
+          providerOrderScope,
+          setProviderOrderScope,
+          {
+            active: providerActiveCampusServices.length,
+            ended: providerEndedCampusServices.length
+          }
+        ),
+        providerCampusServices.length || loadingParticipatedCampusServices ? 'profile-order-board' : 'profile-order-board is-empty'
+      );
+    }
+
+    if (activeSection === 'campus-services-booking') {
+      return renderSectionPanel(
+        '我预约的服务',
+        renderParticipatedCampusServiceOrders(
+          bookingOrderScope === 'active' ? bookingActiveCampusServices : bookingEndedCampusServices,
+          loadingParticipatedCampusServices,
+          '我预约的服务',
+          bookingOrderScope === 'active' ? '当前没有进行中的预约记录。' : '还没有已结束的预约记录。',
+          bookingOrderScope,
+          setBookingOrderScope,
+          {
+            active: bookingActiveCampusServices.length,
+            ended: bookingEndedCampusServices.length
+          }
+        ),
+        bookingCampusServices.length || loadingParticipatedCampusServices ? 'profile-order-board' : 'profile-order-board is-empty'
       );
     }
 
@@ -1896,9 +1651,10 @@ export function ProfilePage() {
                     trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
                   />
                   <div className="profile-hero-badges">
-                    <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
-                      <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
-                    </div>
+                    <CreditBadge
+                      tone={userPresentation.creditBadge.tone}
+                      label={userPresentation.creditBadge.label}
+                    />
                     <button
                       type="button"
                       className="profile-credit-entry"
@@ -1930,7 +1686,7 @@ export function ProfilePage() {
 
       <Modal
         open={Boolean(publisherOrderWorkbenchListing)}
-        title={publisherOrderWorkbenchListing ? `订单管理 · ${publisherOrderWorkbenchListing.title}` : '订单管理'}
+        title={publisherOrderWorkbenchListing ? `申请与预约管理 · ${publisherOrderWorkbenchListing.title}` : '申请与预约管理'}
         footer={null}
         width={960}
         onCancel={() => {
@@ -1961,14 +1717,17 @@ export function ProfilePage() {
         ) : null}
       </Modal>
 
-      <Modal
+      <ConfirmReasonModal
         open={Boolean(publisherOrderDialogTarget)}
-        title={publisherOrderDialogTarget?.actionState.canReject ? (publisherOrderDialogTarget.actionLabels.reject ?? '拒绝申请') : (publisherOrderDialogTarget?.actionLabels.cancel ?? '取消服务单')}
+        title={publisherOrderDialogTarget ? getCampusServiceOrderRejectOrCancelText(publisherOrderDialogTarget).title : '处理当前协作'}
         onCancel={() => {
           setPublisherOrderDialogTarget(null);
           setPublisherOrderDialogReason('');
         }}
-        onOk={() => {
+        confirmText={publisherOrderDialogTarget ? getCampusServiceOrderRejectOrCancelText(publisherOrderDialogTarget).confirmText : '确认'}
+        danger
+        loading={publisherOrderDialogTarget ? actingCampusOrderId === publisherOrderDialogTarget.id : false}
+        onConfirm={() => {
           if (!publisherOrderDialogTarget) {
             return;
           }
@@ -1978,15 +1737,9 @@ export function ProfilePage() {
               : handlePublisherCampusServiceOrderCancel(publisherOrderDialogTarget)
           );
         }}
-        okText={publisherOrderDialogTarget?.actionState.canReject ? (publisherOrderDialogTarget.actionLabels.reject ?? '确认拒绝') : (publisherOrderDialogTarget?.actionLabels.cancel ?? '确认取消')}
-        okButtonProps={{ danger: true, loading: publisherOrderDialogTarget ? actingCampusOrderId === publisherOrderDialogTarget.id : false }}
-      >
-        <Input.TextArea
-          rows={4}
-          value={publisherOrderDialogReason}
-          onChange={(event) => setPublisherOrderDialogReason(event.target.value)}
-        />
-      </Modal>
+        reason={publisherOrderDialogReason}
+        onReasonChange={setPublisherOrderDialogReason}
+      />
     </div>
   );
 }

@@ -11,9 +11,11 @@ function resolveBrowserApiBaseUrl() {
   return `${protocol}//${hostname}:3001/api`;
 }
 
-const API_BASE_URL = resolveBrowserApiBaseUrl()
-  ?? import.meta.env.VITE_API_BASE_URL
-  ?? 'http://localhost:3001/api';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+
+const API_BASE_URL = configuredApiBaseUrl
+  || resolveBrowserApiBaseUrl()
+  || 'http://localhost:3001/api';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL
@@ -154,6 +156,8 @@ export type ProductDetail = ProductSummary & {
 export type ProductDetailView = ProductDetail & {
   detailBase: ListingDetailBase;
 };
+
+export type AdminProductPreview = ProductDetailView;
 
 export type FavoriteItem = ProductSummary & {
   favoritedAt: string;
@@ -391,6 +395,25 @@ export type OrderReviewItem = {
   reviewerName: string;
 };
 
+export type OrderAppealItem = {
+  id: number;
+  orderId: number;
+  orderStatus: string | null;
+  productId: number | null;
+  appellantId: number;
+  appellantName: string;
+  respondentId: number;
+  respondentName: string;
+  issueType: string;
+  reason: string;
+  expectedAction?: string | null;
+  status: string;
+  resolutionNote?: string | null;
+  handledBy?: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type OrderDetail = OrderItem & {
   completedAt?: string | null;
   canceledAt?: string | null;
@@ -410,6 +433,7 @@ export type OrderDetail = OrderItem & {
     value: string;
   }>;
   reviews: OrderReviewItem[];
+  appeals: OrderAppealItem[];
   actionState: {
     canComplete: boolean;
     canReview: boolean;
@@ -568,7 +592,7 @@ export type CampusServiceCategory =
   | 'HELP';
 export type CampusServiceStatus = 'OPEN' | 'BUSY' | 'PAUSED' | 'ENDED' | 'CANCELED';
 export type AdminCampusServiceStatus = 'OPEN' | 'BUSY' | 'PAUSED' | 'ENDED' | 'CANCELED' | 'MATCHED' | 'DONE';
-export type AdminCampusServiceAction = 'REOPEN' | 'FORCE_MATCH' | 'FORCE_COMPLETE' | 'CANCEL';
+export type AdminCampusServiceAction = 'CANCEL';
 export type CampusServiceIntent = 'REQUEST' | 'OFFER';
 export type CampusServicePattern = 'ONE_TIME' | 'REUSABLE';
 export type CampusServicePriceMode = 'FIXED' | 'NEGOTIABLE' | 'FREE';
@@ -731,6 +755,8 @@ export type CampusServiceDetailView = CampusServiceDetail & {
   autoConfirm: boolean;
 };
 
+export type AdminCampusServicePreview = CampusServiceDetailView;
+
 export type PaginatedCampusServicesResponse = {
   items: CampusServiceListItem[];
   pagination: {
@@ -745,7 +771,7 @@ export type CampusServiceCreatePayload = {
   intent?: CampusServiceIntent;
   pattern?: CampusServicePattern;
   title: string;
-  category: CampusServiceCategory;
+  category?: CampusServiceCategory;
   description: string;
   reward?: number;
   amount?: number;
@@ -828,10 +854,39 @@ export type CampusServiceOrderListItem = {
   updatedAt: string;
 };
 
+export type CampusServiceOrderDetail = CampusServiceOrderListItem & {
+  cancelReason: string | null;
+  note: string | null;
+  paymentIntent: string | null;
+  serviceTime: string | null;
+  completedAt: string | null;
+  canceledAt: string | null;
+  confirmedAt: string | null;
+  completionRequestedAt: string | null;
+  completionRequestedById: number | null;
+  timeline: Array<{
+    label: string;
+    value: string;
+  }>;
+  detailBase: ListingDetailBase;
+  listingSnapshot: {
+    title: string;
+    description: string;
+    categoryLabel: string;
+    intentLabel: string;
+    rewardLabel: string;
+    routeLabel: string;
+    deadlineLabel: string;
+    estimatedMinutes: number;
+    imageUrl: string | null;
+  };
+};
+
 export type AdminOverview = {
   onSaleProducts: number;
   totalUsers: number;
   reportCount: number;
+  appealCount: number;
   activeOrders: number;
   activeCampusServices: number;
   recentProducts: Array<{
@@ -1032,7 +1087,11 @@ export type ModerationUserItem = {
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
   isBanned: boolean;
+  realName: string;
   college: string;
+  graduationYear?: number | null;
+  phone: string;
+  studentCardPhotoUrl?: string | null;
   reportCount: number;
   openReportCount: number;
   activeProductCount: number;
@@ -1288,6 +1347,18 @@ export async function createOrderReview(
   return response.data;
 }
 
+export async function createOrderAppeal(
+  id: number,
+  payload: {
+    issueType: string;
+    reason: string;
+    expectedAction?: string;
+  }
+) {
+  const response = await apiClient.post(`/orders/${id}/appeals`, payload);
+  return response.data;
+}
+
 export async function fetchConversations() {
   const response = await apiClient.get<ConversationSummary[]>('/messages/conversations');
   return response.data;
@@ -1330,19 +1401,40 @@ export async function updateAdminProductStatus(
   return response.data;
 }
 
+export async function fetchAdminProductPreview(id: number) {
+  const response = await apiClient.get<AdminProductPreview>(`/admin/products/${id}/preview`);
+  return response.data;
+}
+
 export async function fetchAdminOrders() {
   const response = await apiClient.get<AdminOrderItem[]>('/admin/orders');
+  return response.data;
+}
+
+export async function fetchAdminOrderAppeals() {
+  const response = await apiClient.get<OrderAppealItem[]>('/admin/order-appeals');
   return response.data;
 }
 
 export async function updateAdminOrderStatus(
   id: number,
   payload: {
-    status: 'PENDING' | 'IN_PROGRESS' | 'WAITING_REVIEW' | 'COMPLETED' | 'CANCELED';
+    status: 'CANCELED';
     reason?: string;
   }
 ) {
   const response = await apiClient.patch(`/admin/orders/${id}/status`, payload);
+  return response.data;
+}
+
+export async function resolveAdminOrderAppeal(
+  id: number,
+  payload: {
+    nextStatus: 'RESOLVED' | 'REJECTED' | 'CANCELED_ORDER' | 'BAN_RESPONDENT' | 'UNBAN_RESPONDENT';
+    resolutionNote?: string;
+  }
+) {
+  const response = await apiClient.patch(`/admin/order-appeals/${id}/resolve`, payload);
   return response.data;
 }
 
@@ -1359,6 +1451,11 @@ export async function updateAdminCampusServiceStatus(
   }
 ) {
   const response = await apiClient.patch(`/admin/campus-services/${id}/status`, payload);
+  return response.data;
+}
+
+export async function fetchAdminCampusServicePreview(id: number) {
+  const response = await apiClient.get<AdminCampusServicePreview>(`/admin/campus-services/${id}/preview`);
   return response.data;
 }
 
@@ -1492,6 +1589,17 @@ export async function updateUserBanStatus(
   return response.data;
 }
 
+export async function updateUserVerificationStatus(
+  id: number,
+  payload: {
+    status: 'APPROVED' | 'REJECTED';
+    reason?: string;
+  }
+) {
+  const response = await apiClient.patch(`/users/${id}/verification-status`, payload);
+  return response.data;
+}
+
 export async function createReport(payload: {
   productId?: number;
   campusServiceListingId?: number;
@@ -1610,6 +1718,11 @@ export async function cancelCampusServiceListing(listingId: number, payload?: { 
 
 export async function confirmCampusServiceOrder(orderId: number) {
   const response = await apiClient.post<CampusServiceDetailView>(`/campus-service-orders/${orderId}/confirm`, {});
+  return response.data;
+}
+
+export async function fetchCampusServiceOrderDetail(id: number) {
+  const response = await apiClient.get<CampusServiceOrderDetail>(`/campus-service-orders/${id}`);
   return response.data;
 }
 

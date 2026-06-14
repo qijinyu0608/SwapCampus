@@ -17,3 +17,5 @@ backend/generated
 mysql-data
 minio-data
 meilisearch-data
+supertokens-pg-data
+vendure-data

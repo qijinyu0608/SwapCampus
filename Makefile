@@ -1,4 +1,4 @@
-.PHONY: install init up start auth-clean-legacy restart-backend restart-auth status health down logs backend-test frontend-build prisma-generate screenshots
+.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-auth status health down logs backend-test frontend-build prisma-generate screenshots
 
 install:
 	cd backend && npm install
@@ -7,10 +7,13 @@ install:
 init:
 	docker compose --profile init up -d --build db-init
 
+init-reset:
+	docker compose --profile init run --rm db-init sh -c "npm run db:push -- --force-reset && npm run db:init"
+
 up: init start
 
 start: auth-clean-legacy
-	docker compose up -d --build mysql minio meilisearch supertokens backend frontend
+	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend frontend
 
 auth-clean-legacy:
 	-docker rm -f swapcampus-supertokens-local

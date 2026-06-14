@@ -1,27 +1,37 @@
 import { StarFilled, StarOutlined } from '@ant-design/icons';
-import { Button, Form, Input, Modal, Radio, Select, Skeleton, message } from 'antd';
+import { Button, Form, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { MetaList } from '../components/data-display';
 import { DetailShell } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
-import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
-import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
+import {
+  DetailContentBody,
+  DetailActionFooter,
+  DetailInfoPanel,
+  DetailMediaGallery,
+  DetailInfoTopSummary,
+  DetailSellerStrip,
+  ReportFormModal,
+  type ReportFormValues
+} from '../components/ui';
+import { type AvatarFrameKey } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import {
   createConversation,
   createReport,
   fetchProductDetail,
   fetchUserTrustSummary,
-  followUser,
   getApiErrorMessage,
   recordProductContact,
-  unfollowUser,
   type ProductDetailView
 } from '../services/api';
 import { isFavorite, subscribeFavorites, toggleFavorite } from '../services/favorites';
 import { hasTradingAccess, isGuestUser } from '../services/session';
+import { executeToggleFollow } from '../utils/followActions';
+import { loadFollowStateForTarget } from '../utils/followState';
 import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/productCover';
+import { openReportForm, submitReportForm } from '../utils/reportForm';
+import { ensureTradingAccessOrNotify } from '../utils/tradingAccess';
 import { getUserPresentation } from '../utils/userPresentation';
 import { formatCurrencyAmount } from '../utils/price';
 
@@ -33,15 +43,6 @@ const reportTypeOptions = [
   '盗图或冒用他人信息',
   '其他问题'
 ];
-
-type ReportIdentityMode = 'REAL_NAME' | 'ANONYMOUS';
-
-type ReportFormValues = {
-  type: string;
-  detail: string;
-  identityMode: ReportIdentityMode;
-  contactConsent: 'YES' | 'NO';
-};
 
 export function ProductDetailPage() {
   const { id } = useParams();
@@ -87,19 +88,16 @@ export function ProductDetailPage() {
     let cancelled = false;
 
     async function loadFollowState() {
-      setSellerFollowing(false);
-      if (!detail || !currentUser || isGuestUser(currentUser) || currentUser.id === detail.seller.id) {
-        return;
-      }
-
-      try {
-        const summary = await fetchUserTrustSummary(detail.seller.id);
-        if (!cancelled) {
-          setSellerFollowing(summary.isFollowing);
+      await loadFollowStateForTarget({
+        currentUser,
+        targetUserId: detail?.seller.id,
+        reset: () => setSellerFollowing(false),
+        apply: (isFollowing) => {
+          if (!cancelled) {
+            setSellerFollowing(isFollowing);
+          }
         }
-      } catch {
-        // 拉取失败时保持未关注的默认展示
-      }
+      });
     }
 
     void loadFollowState();
@@ -133,24 +131,12 @@ export function ProductDetailPage() {
   }
 
   function ensureTradingAccess(actionLabel: string) {
-    if (!currentUser) {
-      message.error(`请先登录后再${actionLabel}`);
-      void navigate('/login');
-      return false;
-    }
-
-    if (isGuestUser(currentUser)) {
-      message.error(`浏览账号不可${actionLabel}`);
-      void navigate('/login');
-      return false;
-    }
-
-    if (!hasTradingAccess(currentUser)) {
-      message.error(`当前账号不可${actionLabel}`);
-      return false;
-    }
-
-    return true;
+    return ensureTradingAccessOrNotify({
+      currentUser,
+      actionLabel,
+      navigate,
+      notifyError: (text) => message.error(text)
+    });
   }
 
   async function handleToggleFollow() {
@@ -162,18 +148,18 @@ export function ProductDetailPage() {
       return;
     }
 
-    setFollowPending(true);
-    try {
-      const result = sellerFollowing
-        ? await unfollowUser(detail.seller.id)
-        : await followUser(detail.seller.id);
-      setSellerFollowing(result.isFollowing);
-      message.success(result.isFollowing ? '已关注卖家' : '已取消关注');
-    } catch (error) {
-      showActionError(error, '关注操作失败');
-    } finally {
-      setFollowPending(false);
-    }
+    await executeToggleFollow({
+      targetUserId: detail.seller.id,
+      isFollowing: sellerFollowing,
+      setPending: setFollowPending,
+      onSuccess: (result) => setSellerFollowing(result.isFollowing),
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text),
+      successMessage: {
+        follow: '已关注卖家',
+        unfollow: '已取消关注'
+      }
+    });
   }
 
   async function handleContactSeller() {
@@ -231,28 +217,12 @@ export function ProductDetailPage() {
       return;
     }
 
-    reportForm.setFieldsValue({
-      type: reportTypeOptions[0],
-      detail: '',
-      identityMode: currentUser?.verificationStatus === 'APPROVED' ? 'REAL_NAME' : 'ANONYMOUS',
-      contactConsent: 'YES'
+    openReportForm({
+      form: reportForm,
+      currentUser,
+      defaultType: reportTypeOptions[0],
+      open: () => setReportModalOpen(true)
     });
-    setReportModalOpen(true);
-  }
-
-  function buildReportReason(values: ReportFormValues) {
-    const activeUser = currentUser;
-    const identityLabel = values.identityMode === 'REAL_NAME'
-      ? `实名举报（${activeUser?.displayName ?? '未知用户'} / ${activeUser?.studentId || '无学号'}）`
-      : '匿名展示（平台保留账号记录用于核查）';
-    const contactLabel = values.contactConsent === 'YES' ? '愿意配合管理员补充材料' : '仅提交当前举报信息';
-
-    return [
-      `举报类型：${values.type}`,
-      `举报方式：${identityLabel}`,
-      `是否配合核查：${contactLabel}`,
-      `举报说明：${values.detail.trim()}`
-    ].join('\n');
   }
 
   async function handleReportSubmit() {
@@ -265,21 +235,21 @@ export function ProductDetailPage() {
       return;
     }
 
-    const values = await reportForm.validateFields().catch(() => null);
-    if (!values) {
-      return;
-    }
-
     setSubmitting('report');
     try {
-      await createReport({
-        productId: detail.id,
-        targetUserId: detail.seller.id,
-        reason: buildReportReason(values)
+      await submitReportForm({
+        form: reportForm,
+        currentUser: activeUser,
+        submit: (reason) => createReport({
+          productId: detail.id,
+          targetUserId: detail.seller.id,
+          reason
+        }),
+        onSuccess: () => {
+          setReportModalOpen(false);
+          message.success('举报已提交');
+        }
       });
-      reportForm.resetFields();
-      setReportModalOpen(false);
-      message.success('举报已提交');
     } catch (error) {
       showActionError(error, '举报提交失败');
     } finally {
@@ -332,7 +302,6 @@ export function ProductDetailPage() {
     detail.id,
     6
   );
-  const currentImage = detailImages[activeImage] ?? detailImages[0];
   const sellerPresentation = getUserPresentation(detail.seller);
   const detailDescription = descriptionExpanded || detail.detailBase.description.length <= 88
     ? detail.detailBase.description
@@ -363,36 +332,16 @@ export function ProductDetailPage() {
 
   return (
     <div className="detail-page">
-      <section className="detail-seller-strip">
-        <Link
-          to={`/users/${detail.seller.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="detail-seller-strip-main detail-seller-link"
-          aria-label={`打开${detail.seller.displayName}的主页`}
-        >
-          <UserAvatar
-            src={detail.seller.avatarUrl}
-            alt={`${detail.seller.displayName}的头像`}
-            fallbackLabel={detail.seller.displayName}
-            className="detail-seller-avatar"
-            frame={(detail.seller.avatarFrame as AvatarFrameKey | null) ?? undefined}
-          />
-          <div className="detail-seller-strip-copy">
-            <div className="detail-seller-strip-title">
-              <UserNameWithBadge
-                as="strong"
-                name={detail.seller.displayName}
-                trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
-              />
-              <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
-                <span className="ui-credit-badge-label">{sellerIdentity}</span>
-              </div>
-            </div>
-            <MetaList items={sellerStats} className="detail-seller-strip-meta" />
-          </div>
-        </Link>
-        {currentUser?.id !== detail.seller.id && (
+      <DetailSellerStrip
+        userId={detail.seller.id}
+        name={detail.seller.displayName}
+        avatarUrl={detail.seller.avatarUrl}
+        avatarFrame={(detail.seller.avatarFrame as AvatarFrameKey | null) ?? undefined}
+        trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
+        creditTone={sellerPresentation.creditBadge.tone}
+        creditLabel={sellerIdentity}
+        stats={sellerStats}
+        followButton={currentUser?.id !== detail.seller.id ? (
           <button
             type="button"
             className={`detail-seller-follow${sellerFollowing ? ' is-following' : ''}`}
@@ -401,70 +350,50 @@ export function ProductDetailPage() {
           >
             {sellerFollowing ? '已关注' : '关注'}
           </button>
-        )}
-      </section>
+        ) : undefined}
+      />
 
       <DetailShell
         mainMedia={(
-          <div className="detail-main-layout-product">
-            <div className="detail-thumb-column">
-              {detailImages.map((image, index) => (
-                <button
-                  key={`${detail.id}-${index}`}
-                  type="button"
-                  className={index === activeImage ? 'detail-thumb active' : 'detail-thumb'}
-                  onClick={() => setActiveImage(index)}
-                >
-                  <img src={image} alt={`${detail.title}-${index + 1}`} />
-                </button>
-              ))}
-            </div>
-
-            <div className="detail-main-photo-shell">
-              <img
-                className="detail-main-photo"
-                src={currentImage}
-                alt={detail.title}
-              />
-            </div>
-          </div>
+          <DetailMediaGallery
+            images={detailImages}
+            activeIndex={activeImage}
+            onSelect={setActiveImage}
+            title={detail.title}
+            galleryKey={detail.id}
+          />
         )}
         sidePanel={(
-          <div className="detail-info-panel">
-            <div className="detail-info-top">
-              <div className="detail-topline">
-                <div className="detail-heat-line">
-                  <span>{detail.stats.wantCount} 人想要</span>
-                  <span>{detail.stats.favoriteCount} 收藏</span>
-                  <span>{detail.stats.viewCount} 浏览</span>
-                </div>
-
-                <button
-                  type="button"
-                  aria-label={favorited ? '取消收藏' : '收藏商品'}
-                  className={[
-                    'detail-favorite-star',
-                    favorited ? 'active' : '',
-                    favoriteAnimating ? 'is-popping' : ''
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => void handleToggleFavorite()}
-                >
-                  {favorited ? <StarFilled /> : <StarOutlined />}
-                </button>
-              </div>
-
-	              <div className="detail-price-block">
-	                <div className="listing-detail-amount">
-	                  <strong>{formatCurrencyAmount(detail.detailBase.price)}</strong>
-	                </div>
-	              </div>
-            </div>
-
-            <div className="detail-info-body">
-              <h1 className="detail-main-title">{detail.detailBase.title}</h1>
-              <div className="detail-description-block">
-                <p>{detailDescription}</p>
-                {detail.detailBase.description.length > 88 ? (
+          <DetailInfoPanel
+            top={(
+              <DetailInfoTopSummary
+                stats={[
+                  `${detail.stats.wantCount} 人想要`,
+                  `${detail.stats.favoriteCount} 收藏`,
+                  `${detail.stats.viewCount} 浏览`
+                ]}
+                favoriteButton={(
+                  <button
+                    type="button"
+                    aria-label={favorited ? '取消收藏' : '收藏商品'}
+                    className={[
+                      'detail-favorite-star',
+                      favorited ? 'active' : '',
+                      favoriteAnimating ? 'is-popping' : ''
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => void handleToggleFavorite()}
+                  >
+                    {favorited ? <StarFilled /> : <StarOutlined />}
+                  </button>
+                )}
+                amount={<strong>{formatCurrencyAmount(detail.detailBase.price)}</strong>}
+              />
+            )}
+            body={(
+              <DetailContentBody
+                title={detail.detailBase.title}
+                description={detailDescription}
+                expandButton={detail.detailBase.description.length > 88 ? (
                   <button
                     type="button"
                     className="detail-expand-button"
@@ -472,13 +401,12 @@ export function ProductDetailPage() {
                   >
                     {descriptionExpanded ? '收起' : '展开'}
                   </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="detail-info-foot">
-              <div className="detail-main-actions">
-                {hasActiveOrder ? (
+                ) : undefined}
+              />
+            )}
+            footer={(
+              <DetailActionFooter
+                actions={hasActiveOrder ? (
                   <Button
                     type="primary"
                     size="large"
@@ -497,71 +425,27 @@ export function ProductDetailPage() {
                     </Button>
                   </>
                 )}
-              </div>
-              {tradeStatusLabel ? <div className="detail-trade-status">{tradeStatusLabel}</div> : null}
-
-              <div className="detail-bottom-line">
-                <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
-                  {submitting === 'report' ? '提交中...' : '举报'}
-                </button>
-              </div>
-            </div>
-          </div>
+                status={tradeStatusLabel ? <div className="detail-trade-status">{tradeStatusLabel}</div> : undefined}
+                quietAction={(
+                  <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
+                    {submitting === 'report' ? '提交中...' : '举报'}
+                  </button>
+                )}
+              />
+            )}
+          />
         )}
       />
 
-      <Modal
-        title="提交举报"
+      <ReportFormModal
         open={reportModalOpen}
         onCancel={() => setReportModalOpen(false)}
-        onOk={() => void handleReportSubmit()}
-        okText="提交举报"
-        cancelText="取消"
-        confirmLoading={submitting === 'report'}
-        width={560}
-      >
-        <Form
-          form={reportForm}
-          layout="vertical"
-          className="detail-report-form"
-          initialValues={{
-            type: reportTypeOptions[0],
-            identityMode: currentUser?.verificationStatus === 'APPROVED' ? 'REAL_NAME' : 'ANONYMOUS',
-            contactConsent: 'YES'
-          }}
-        >
-          <Form.Item name="type" label="举报类型" rules={[{ required: true, message: '请选择举报类型' }]}>
-            <Select options={reportTypeOptions.map((item) => ({ label: item, value: item }))} />
-          </Form.Item>
-          <Form.Item name="identityMode" label="举报方式" rules={[{ required: true }]}>
-            <Radio.Group className="detail-report-radio">
-              <Radio value="REAL_NAME">实名举报</Radio>
-              <Radio value="ANONYMOUS">匿名展示</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item name="contactConsent" label="后续核查" rules={[{ required: true }]}>
-            <Radio.Group className="detail-report-radio">
-              <Radio value="YES">愿意配合管理员补充材料</Radio>
-              <Radio value="NO">仅提交当前信息</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <Form.Item
-            name="detail"
-            label="举报说明"
-            rules={[
-              { required: true, message: '请填写举报说明' },
-              { min: 8, message: '说明至少 8 个字' }
-            ]}
-          >
-            <Input.TextArea
-              rows={5}
-              maxLength={300}
-              showCount
-              placeholder="请描述问题、聊天经过、交易时间或可核查线索"
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onSubmit={() => void handleReportSubmit()}
+        loading={submitting === 'report'}
+        typeOptions={reportTypeOptions}
+        realNameAvailable={currentUser?.verificationStatus === 'APPROVED'}
+        form={reportForm}
+      />
 
       <section className="detail-related">
         <div className="fish-feed-header">

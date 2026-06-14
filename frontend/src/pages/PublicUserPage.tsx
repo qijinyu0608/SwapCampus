@@ -1,4 +1,4 @@
-import { Rate, Skeleton, Tabs, message } from 'antd';
+import { Skeleton, Tabs, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
@@ -6,23 +6,24 @@ import { EmptyState } from '../components/feedback';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
+import { UserReviewCard } from '../components/user/UserReviewCard';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
-import { SectionCard } from '../components/ui';
+import { CreditBadge, SectionCard } from '../components/ui';
 import { useAuthState } from '../services/auth-state';
 import {
   fetchProducts,
   fetchUserReceivedReviews,
-  followUser,
   fetchUserTrustSummary,
   getApiErrorMessage,
   ProductSummary,
-  unfollowUser,
   UserReceivedReviewItem,
   UserTrustSummary
 } from '../services/api';
 import { hasTradingAccess, isGuestUser } from '../services/session';
+import { executeToggleFollow } from '../utils/followActions';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
+import { ensureTradingAccessOrNotify } from '../utils/tradingAccess';
 import {
   getUserPresentation
 } from '../utils/userPresentation';
@@ -75,24 +76,12 @@ export function PublicUserPage() {
   );
 
   function ensureTradingAccess(actionLabel: string) {
-    if (!currentUser) {
-      message.error(`请先登录后再${actionLabel}`);
-      void navigate('/login');
-      return false;
-    }
-
-    if (isGuestUser(currentUser)) {
-      message.error(`浏览账号不可${actionLabel}`);
-      void navigate('/login');
-      return false;
-    }
-
-    if (!hasTradingAccess(currentUser)) {
-      message.error(`当前账号不可${actionLabel}`);
-      return false;
-    }
-
-    return true;
+    return ensureTradingAccessOrNotify({
+      currentUser,
+      actionLabel,
+      navigate,
+      notifyError: (text) => message.error(text)
+    });
   }
 
   async function handleToggleFollow() {
@@ -104,22 +93,20 @@ export function PublicUserPage() {
       return;
     }
 
-    setFollowPending(true);
-    try {
-      const result = user.isFollowing
-        ? await unfollowUser(user.id)
-        : await followUser(user.id);
-      setUser((current) => current ? {
-        ...current,
-        isFollowing: result.isFollowing,
-        followerCount: result.followerCount
-      } : current);
-      message.success(result.isFollowing ? '已关注' : '已取消关注');
-    } catch (err) {
-      message.error(getApiErrorMessage(err, '关注操作失败'));
-    } finally {
-      setFollowPending(false);
-    }
+    await executeToggleFollow({
+      targetUserId: user.id,
+      isFollowing: user.isFollowing,
+      setPending: setFollowPending,
+      onSuccess: (result) => {
+        setUser((current) => current ? {
+          ...current,
+          isFollowing: result.isFollowing,
+          followerCount: result.followerCount
+        } : current);
+      },
+      notifySuccess: (text) => message.success(text),
+      notifyError: (text) => message.error(text)
+    });
   }
 
   if (loading) {
@@ -153,18 +140,14 @@ export function PublicUserPage() {
     return (
       <div className="order-detail-review-list profile-user-review-list">
         {reviews.map((review) => (
-          <article key={review.id} className="order-detail-review-card">
-            <div className="order-detail-review-top">
-              <UserNameWithBadge
-                as="strong"
-                name={review.reviewerName}
-                trustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
-              />
-              <span>{new Date(review.createdAt).toLocaleString()}</span>
-            </div>
-            <Rate disabled value={review.rating} />
-            <p>{review.content}</p>
-          </article>
+          <UserReviewCard
+            key={review.id}
+            reviewerName={review.reviewerName}
+            createdAt={review.createdAt}
+            rating={review.rating}
+            content={review.content}
+            reviewerTrustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
+          />
         ))}
       </div>
     );
@@ -191,9 +174,10 @@ export function PublicUserPage() {
                 trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
               />
               <div className="profile-hero-badges">
-                <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
-                  <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
-                </div>
+                <CreditBadge
+                  tone={userPresentation.creditBadge.tone}
+                  label={userPresentation.creditBadge.label}
+                />
               </div>
             </div>
             <MetaList items={profileStats} className="profile-hero-stats" />

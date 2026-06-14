@@ -3,7 +3,7 @@ import { Alert, Button, Form, Input, Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionRow } from '../components/layout';
-import { SectionCard } from '../components/ui';
+import { OrderPreviewCard, SectionCard } from '../components/ui';
 import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import {
   acceptCampusServiceListing,
@@ -97,7 +97,7 @@ export function OrderCheckoutPage() {
           }
           setProduct(detail);
           form.setFieldsValue({
-            note: `想约“${detail.title}”当面交易`
+            note: ''
           });
         }
       } catch (loadError) {
@@ -175,22 +175,26 @@ export function OrderCheckoutPage() {
   );
   const orderTypeLabel = mode === 'service' ? '服务订单' : '商品订单';
   const orderFlowSteps = mode === 'service'
-    ? ['提交订单', service?.autoConfirm ? '进入待服务' : '等待确认', '服务完成']
+    ? [
+        service?.intent === 'REQUEST' ? '提交接单申请' : '提交预约申请',
+        service?.autoConfirm ? '进入进行中' : '等待发布者确认',
+        service?.intent === 'REQUEST' ? '服务完工' : '服务完成'
+      ]
     : ['提交订单', '待面交确认', '完成订单'];
 
   function ensureAccess() {
     if (!currentUser) {
-      message.error('请先登录后再下单');
+      message.error(mode === 'service' ? '请先登录后再提交申请' : '请先登录后再下单');
       void navigate('/login');
       return false;
     }
     if (isGuestUser(currentUser)) {
-      message.error('浏览账号不可下单');
+      message.error(mode === 'service' ? '浏览账号不可提交申请' : '浏览账号不可下单');
       void navigate('/login');
       return false;
     }
     if (!hasTradingAccess(currentUser)) {
-      message.error('当前账号不可下单');
+      message.error(mode === 'service' ? '当前账号不可提交申请' : '当前账号不可下单');
       return false;
     }
     return true;
@@ -210,7 +214,11 @@ export function OrderCheckoutPage() {
         await acceptCampusServiceListing(service.id, {
           initialMessage: values.note?.trim() || undefined
         });
-        message.success(service.autoConfirm ? '下单成功，已进入待服务' : '下单成功，等待发布者确认');
+        message.success(
+          service.intent === 'REQUEST'
+            ? (service.autoConfirm ? '报名成功，已进入进行中' : '报名成功，等待发布者确认')
+            : (service.autoConfirm ? '预约成功，已进入进行中' : '预约成功，等待发布者确认')
+        );
         void navigate('/profile', { state: { section: 'items', publishedScope: 'campus-services-booking' } });
         return;
       }
@@ -225,7 +233,7 @@ export function OrderCheckoutPage() {
       message.success('下单成功，订单已进入待面交');
       void navigate('/profile', { state: { section: 'orders', orderScope: 'buying' } });
     } catch (submitError) {
-      message.error(getApiErrorMessage(submitError, '下单失败，请稍后重试。'));
+      message.error(getApiErrorMessage(submitError, mode === 'service' ? '提交申请失败，请稍后重试。' : '下单失败，请稍后重试。'));
     } finally {
       setSubmitting(false);
     }
@@ -291,7 +299,7 @@ export function OrderCheckoutPage() {
             </div>
 
             <div className="checkout-order-card">
-              <div className="checkout-order-card-title">确认订单信息</div>
+              <div className="checkout-order-card-title">{mode === 'service' ? '确认申请信息' : '确认订单信息'}</div>
 
               <div className="checkout-order-meta-strip">
                 {summary.sideItems.map((item) => (
@@ -302,64 +310,55 @@ export function OrderCheckoutPage() {
                 ))}
               </div>
 
-              <div className="checkout-order-header" aria-hidden="true">
-                <div>{summary.mainColumnLabel}</div>
-                <div>{summary.columnLabel}</div>
-                <div>价格</div>
-              </div>
-
-              <div className="checkout-shop-card">
-                {sellerPresentation ? (
-                  <div className="checkout-shop-info" aria-label="订单对象信息">
-                    <div className="checkout-shop-copy is-inline">
-                      <UserNameWithBadge
-                        as="strong"
-                        name={sellerPresentation.displayName}
-                        trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
-                      />
-                    </div>
-                    <div className="checkout-shop-actions">
-                      <Button
-                        className="checkout-chat-button is-icon-only"
-                        onClick={() => void handleOpenChat()}
-                        loading={chatSubmitting}
-                        aria-label="聊一聊"
-                        icon={<MessageOutlined />}
-                      />
-                      <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
-                        <span className="ui-credit-badge-label">{sellerPresentation.creditBadge.label}</span>
-                      </div>
-                    </div>
+              <OrderPreviewCard
+                headerProps={sellerPresentation ? {
+                  copyContent: (
+                    <UserNameWithBadge
+                      as="strong"
+                      name={sellerPresentation.displayName}
+                      trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
+                    />
+                  ),
+                  conversationButton: (
+                    <Button
+                      className="checkout-chat-button is-icon-only"
+                      onClick={() => void handleOpenChat()}
+                      loading={chatSubmitting}
+                      aria-label="聊一聊"
+                      icon={<MessageOutlined />}
+                    />
+                  ),
+                  creditTone: sellerPresentation.creditBadge.tone,
+                  creditLabel: sellerPresentation.creditBadge.label
+                } : undefined}
+                beforeSummary={(
+                  <div className="checkout-order-header" aria-hidden="true">
+                    <div>{summary.mainColumnLabel}</div>
+                    <div>{summary.columnLabel}</div>
+                    <div>价格</div>
                   </div>
-                ) : null}
-
-                <div className="checkout-order-item">
-                  <div className="checkout-item-main">
-                    <img src={summary.image} alt={summary.title} />
-                    <div className="checkout-item-copy">
-                      <h1>{summary.title}</h1>
-                    </div>
-                  </div>
-
-                  <div className="checkout-item-attrs">
-                    {summary.attrItems.map((item) => (
-                      <span key={item.key}>{item.label}：{item.value}</span>
-                    ))}
-                  </div>
-
-                  <div className="checkout-item-price">
-                    <strong>{summary.amount}</strong>
-                  </div>
-                </div>
-              </div>
+                )}
+                summaryProps={{
+                  imageSrc: summary.image,
+                  imageAlt: summary.title,
+                  title: summary.title,
+                  titleAs: 'h1',
+                  attrs: summary.attrItems.map((item) => (
+                    <span key={item.key}>{item.label}：{item.value}</span>
+                  )),
+                  amount: <strong>{summary.amount}</strong>
+                }}
+              />
             </div>
 
             <div className="checkout-form-pane">
               <Form form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)}>
                 <div className="checkout-order-ext">
                   <div className="checkout-order-ext-left">
-                    <div className="checkout-order-ext-title">订单备注</div>
-                    <div className="checkout-order-ext-desc">付款后对方可见，建议提前沟通一致。</div>
+                    <div className="checkout-order-ext-title">{mode === 'service' ? '申请备注' : '订单备注'}</div>
+                    {mode === 'service' ? (
+                      <div className="checkout-order-ext-desc">提交后对方可见，建议提前说明时间、地点和要求。</div>
+                    ) : null}
                     <Form.Item
                       label={null}
                       name="note"
@@ -382,7 +381,7 @@ export function OrderCheckoutPage() {
                 >
                   <Button onClick={() => navigate(-1)}>取消</Button>
                   <Button type="primary" htmlType="submit" loading={submitting}>
-                    确认下单
+                    {mode === 'service' ? (service?.intent === 'REQUEST' ? '确认报名接单' : '确认提交预约') : '确认下单'}
                   </Button>
                 </ActionRow>
               </Form>
@@ -395,5 +394,5 @@ export function OrderCheckoutPage() {
 }
 
 function orderTypeLabelForMode(mode: CheckoutMode) {
-  return mode === 'service' ? '服务订单' : '商品订单';
+  return mode === 'service' ? '服务申请' : '商品订单';
 }

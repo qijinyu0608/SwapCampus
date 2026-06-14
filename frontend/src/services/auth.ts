@@ -24,9 +24,9 @@ function resolveBrowserWebsiteDomain() {
 }
 
 export const authConfig = {
-  apiDomain: resolveBrowserApiDomain() ?? requireEnv(import.meta.env.VITE_API_DOMAIN, 'http://localhost:3001'),
+  apiDomain: requireEnv(import.meta.env.VITE_API_DOMAIN, '') || resolveBrowserApiDomain() || 'http://localhost:3001',
   apiBasePath: '/api/auth',
-  websiteDomain: resolveBrowserWebsiteDomain() ?? requireEnv(import.meta.env.VITE_WEBSITE_DOMAIN, 'http://localhost:5179'),
+  websiteDomain: requireEnv(import.meta.env.VITE_WEBSITE_DOMAIN, '') || resolveBrowserWebsiteDomain() || 'http://localhost:5178',
   websiteBasePath: '/login'
 };
 

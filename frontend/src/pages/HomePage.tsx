@@ -21,6 +21,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
+import { CreditBadge } from '../components/ui';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import {
   PRODUCT_CATEGORY_HOME_GROUPS,
@@ -494,9 +495,10 @@ export function HomePage() {
                               name={currentUser.displayName}
                               trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
                             />
-                            <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
-                              <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
-                            </div>
+                            <CreditBadge
+                              tone={userPresentation.creditBadge.tone}
+                              label={userPresentation.creditBadge.label}
+                            />
                           </div>
                         </div>
                       </div>

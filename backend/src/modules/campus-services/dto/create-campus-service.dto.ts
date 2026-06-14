@@ -23,7 +23,8 @@ export class CreateCampusServiceDto {
   title!: string;
 
   @IsEnum(CampusServiceCategory)
-  category!: CampusServiceCategory;
+  @IsOptional()
+  category?: CampusServiceCategory;
 
   @IsString()
   @IsNotEmpty()

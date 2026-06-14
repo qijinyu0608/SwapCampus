@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { AdminPage } from '../pages/AdminPage';
 import { AvatarFramePreviewPage } from '../pages/AvatarFramePreviewPage';
 import { CampusServiceDetailPage } from '../pages/CampusServiceDetailPage';
+import { CampusServiceOrderDetailPage } from '../pages/CampusServiceOrderDetailPage';
 import { CampusServicePublishPage } from '../pages/CampusServicePublishPage';
 import { CampusServicesPage } from '../pages/CampusServicesPage';
 import { CreditBadgePreviewPage } from '../pages/CreditBadgePreviewPage';
@@ -34,6 +35,7 @@ export const appRoutes: AppRouteDefinition[] = [
   { path: '/search', element: <RequireUser><SearchPage /></RequireUser> },
   { path: '/campus-services', element: <RequireUser><CampusServicesPage /></RequireUser>, navigationLabel: '校园服务' },
   { path: '/campus-services/:id', element: <RequireUser><CampusServiceDetailPage /></RequireUser> },
+  { path: '/campus-service-orders/:id', element: <RequireUser><CampusServiceOrderDetailPage /></RequireUser> },
   { path: '/campus-services/publish', element: <RequireUser><CampusServicePublishPage /></RequireUser> },
   { path: '/credit-badges', element: <CreditBadgePreviewPage /> },
   { path: '/credit-center', element: <RequireUser><CreditCenterPage /></RequireUser> },

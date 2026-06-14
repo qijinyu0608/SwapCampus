@@ -23,6 +23,15 @@ export class CampusServiceOrdersController {
     return this.campusServicesService.listCampusServiceOrders(query, user);
   }
 
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  getCampusServiceOrderDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.campusServicesService.getCampusServiceOrderDetail(id, user);
+  }
+
   @Post(':id/confirm')
   @UseGuards(JwtAuthGuard)
   confirmCampusServiceOrder(

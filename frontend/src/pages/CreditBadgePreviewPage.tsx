@@ -1,3 +1,4 @@
+import { CreditBadge } from '../components/ui';
 import { getUserCreditBadge, type UserCreditBadgeTone } from '../utils/userPresentation';
 
 const previewScores = [95, 85, 75, 65, 50];
@@ -38,9 +39,7 @@ export function CreditBadgePreviewPage() {
               <strong>{item.score}</strong>
               <span>{item.label}</span>
               <div className="credit-badge-preview-badge-cell">
-                <div className={`ui-credit-badge is-${item.tone}`}>
-                  <span className="ui-credit-badge-label">{item.label}</span>
-                </div>
+                <CreditBadge tone={item.tone} label={item.label} />
               </div>
               <div className="credit-badge-preview-badge-cell">
                 <div className={`ui-credit-badge-preview-b is-${item.tone}`}>

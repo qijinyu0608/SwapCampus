@@ -914,7 +914,12 @@ export function MessagesPage() {
                         <button
                           type="button"
                           className="trade-chat-buy-button"
-                          onClick={() => tradeProductAction ? navigate(tradeProductAction.href) : undefined}
+                          disabled={!tradeProductAction || tradeProductAction.label === '商品已成交'}
+                          onClick={() =>
+                            tradeProductAction && tradeProductAction.label !== '商品已成交'
+                              ? navigate(tradeProductAction.href)
+                              : undefined
+                          }
                         >
                           {tradeProductAction?.label ?? '立即下单'}
                         </button>
@@ -951,7 +956,6 @@ export function MessagesPage() {
                     const avatarSrc = isSelf ? currentUser?.avatarUrl : entry.senderAvatarUrl;
                     const avatarFrame = isSelf ? currentUser?.avatarFrame : entry.senderAvatarFrame;
                     const avatarName = isSelf ? currentUser?.displayName ?? '我' : entry.senderName;
-                    const avatarTrustedBadgeUnlocked = isSelf ? currentUser?.trustedBadgeUnlocked : entry.senderTrustedBadgeUnlocked;
                     const showDivider = index === 0 || !isSameDay(messages[index - 1].createdAt, entry.createdAt);
 
                     return (
@@ -1015,12 +1019,6 @@ export function MessagesPage() {
                               )}
                             </div>
                             <div className={isSelf ? 'trade-chat-bubble-meta self' : 'trade-chat-bubble-meta'}>
-                              {!isSelf ? (
-                                <UserNameWithBadge
-                                  name={avatarName}
-                                  trustedBadgeUnlocked={avatarTrustedBadgeUnlocked}
-                                />
-                              ) : null}
                               <span>{formatBubbleTime(entry.createdAt)}</span>
                             </div>
                           </div>

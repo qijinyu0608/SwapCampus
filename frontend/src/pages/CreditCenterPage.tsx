@@ -153,20 +153,36 @@ function formatLedgerTime(value: string) {
 }
 
 function getMissionActionLabel(item: CreditMissionItem) {
+  if (item.code === 'DAILY_SIGNIN') {
+    return item.completed ? '今日已签到' : '去签到';
+  }
+
   if (item.claimed) {
     return '已领取';
   }
   if (item.completed) {
-    return '领取';
+    return `领取 ${item.rewardPoints} 积分`;
   }
-  return '未完成';
+  return '完成后领取';
 }
 
 function getMissionProgressLabel(item: CreditMissionItem) {
   return `${Math.min(item.progressCurrent, item.progressTarget)}/${item.progressTarget}`;
 }
 
+function getMissionProgressPercent(item: CreditMissionItem) {
+  if (item.progressTarget <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min((item.progressCurrent / item.progressTarget) * 100, 100));
+}
+
 function getMissionStatus(item: CreditMissionItem) {
+  if (item.code === 'DAILY_SIGNIN') {
+    return item.completed ? 'claimed' : 'claimable';
+  }
+
   if (item.claimed) {
     return 'claimed';
   }
@@ -178,15 +194,47 @@ function getMissionStatus(item: CreditMissionItem) {
 
 function getMissionCycleLabel(cycleType: CreditMissionItem['cycleType']) {
   if (cycleType === 'once') {
-    return '一次性';
+    return '一次性任务';
   }
   if (cycleType === 'daily') {
-    return '每日';
+    return '每日任务';
   }
   if (cycleType === 'weekly') {
-    return '每周';
+    return '每周任务';
   }
-  return '每月';
+  return '每月任务';
+}
+
+function getMissionStatusLabel(item: CreditMissionItem) {
+  if (item.code === 'DAILY_SIGNIN') {
+    return item.completed ? '奖励已到账' : '今日待签到';
+  }
+
+  if (item.claimed) {
+    return '奖励已领取';
+  }
+  if (item.completed) {
+    return '待领取奖励';
+  }
+  return '进行中';
+}
+
+function getMissionSupportText(item: CreditMissionItem) {
+  if (item.code === 'DAILY_SIGNIN') {
+    return item.completed
+      ? '签到积分已自动发放，无需额外领取。'
+      : '前往签到日历完成今日签到，积分会自动到账。';
+  }
+
+  if (item.claimed) {
+    return '本轮任务奖励已到账。';
+  }
+
+  if (item.completed) {
+    return '条件已满足，点击按钮即可领取积分。';
+  }
+
+  return `当前进度 ${getMissionProgressLabel(item)}，完成后可领取 ${item.rewardPoints} 积分。`;
 }
 
 function getRewardAvailabilityLabel(item: CreditRewardItem) {
@@ -426,29 +474,59 @@ export function CreditCenterPage() {
               ),
               children: (
                 <div className="credit-center-tab-content">
-                  <SectionHeader title="任务接入" className="is-spacious" />
+                  <SectionHeader title="积分任务" className="is-spacious" />
                   {missions.length ? (
                     <div className="credit-center-task-list">
                       {missions.map((item) => (
                         <div key={item.code} className="credit-center-task-item">
                           <div className="credit-center-task-copy">
-                            <div className="credit-center-reward-headline">
+                            <div className="credit-center-task-headline">
                               <strong>{item.title}</strong>
-                              <span className={`credit-center-task-chip is-${getMissionStatus(item)}`}>
-                                {getMissionActionLabel(item)}
-                              </span>
+                              <div className="credit-center-task-tags">
+                                <span className={`credit-center-task-chip is-${getMissionStatus(item)}`}>
+                                  {getMissionStatusLabel(item)}
+                                </span>
+                              </div>
                             </div>
                             <span>{item.description}</span>
-                            <em>{getMissionCycleLabel(item.cycleType)} · 进度 {getMissionProgressLabel(item)}</em>
+                            <div className="credit-center-task-progress" aria-hidden="true">
+                              <div className="credit-center-task-progress-track">
+                                <div
+                                  className={`credit-center-task-progress-fill is-${getMissionStatus(item)}`}
+                                  style={{ width: `${getMissionProgressPercent(item)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <em>
+                              {getMissionCycleLabel(item.cycleType)}
+                              {item.code === 'DAILY_SIGNIN' ? ' · 签到即得积分' : ` · 奖励 ${item.rewardPoints} 积分`}
+                              {' · '}
+                              进度 {getMissionProgressLabel(item)}
+                              {item.creditScoreDelta > 0 ? ` · 最多 +${item.creditScoreDelta} 信用分` : ''}
+                            </em>
                           </div>
-                          <Button
-                            type={item.completed && !item.claimed ? 'primary' : 'default'}
-                            disabled={!item.completed || item.claimed}
-                            loading={actingMissionCode === item.code}
-                            onClick={() => void handleClaimMission(item.code)}
-                          >
-                            {item.rewardPoints > 0 ? `+${item.rewardPoints}` : getMissionActionLabel(item)}
-                          </Button>
+                          <div className="credit-center-task-action">
+                            <Button
+                              type={item.code === 'DAILY_SIGNIN' ? (item.completed ? 'default' : 'primary') : item.completed && !item.claimed ? 'primary' : 'default'}
+                              disabled={item.code === 'DAILY_SIGNIN' ? item.completed : !item.completed || item.claimed}
+                              loading={item.code === 'DAILY_SIGNIN' ? false : actingMissionCode === item.code}
+                              onClick={() => {
+                                if (item.code === 'DAILY_SIGNIN') {
+                                  setActiveTab('calendar');
+                                  setVisibleMonth(() => {
+                                    const now = new Date();
+                                    return new Date(now.getFullYear(), now.getMonth(), 1);
+                                  });
+                                  return;
+                                }
+
+                                void handleClaimMission(item.code);
+                              }}
+                            >
+                              {getMissionActionLabel(item)}
+                            </Button>
+                            <span className="credit-center-task-action-hint">{getMissionSupportText(item)}</span>
+                          </div>
                         </div>
                       ))}
                     </div>

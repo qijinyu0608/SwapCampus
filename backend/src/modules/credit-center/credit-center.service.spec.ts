@@ -118,10 +118,11 @@ describe('CreditCenterService', () => {
         }),
         update: jest.fn().mockResolvedValue({
           userId: 7,
-          availablePoints: 50
+          availablePoints: 70
         })
       },
       creditRedeemOrder: {
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
           id: 41,
           status: 'FULFILLED'
@@ -134,13 +135,13 @@ describe('CreditCenterService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new CreditCenterService(prisma);
-    const result = await service.redeemReward('PRODUCT_REFRESH_ONCE', { note: '测试兑换' }, baseUser);
+    const result = await service.redeemReward('PROFILE_FRAME_BLUE', { note: '测试兑换' }, baseUser);
 
     expect(result).toEqual({
       id: 41,
-      rewardCode: 'PRODUCT_REFRESH_ONCE',
-      pointsCost: 100,
-      availablePoints: 50,
+      rewardCode: 'PROFILE_FRAME_BLUE',
+      pointsCost: 80,
+      availablePoints: 70,
       status: 'FULFILLED'
     });
     expect(prisma.creditPointLedger.create).toHaveBeenCalledTimes(1);

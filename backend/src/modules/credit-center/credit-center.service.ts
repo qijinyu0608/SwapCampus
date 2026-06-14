@@ -510,33 +510,6 @@ export class CreditCenterService {
       return this.isSameDay(asset.lastSignInAt, now) ? 1 : 0;
     }
 
-    if (missionCode === 'NEWBIE_PROFILE') {
-      const profile = await this.prisma.user.findUnique({
-        where: { id: userId },
-        include: { verification: true }
-      });
-      if (!profile) {
-        throw new NotFoundException('用户不存在');
-      }
-
-      const completed = Boolean(
-        profile.studentId &&
-        profile.displayName.trim() &&
-        profile.verification?.realName?.trim() &&
-        profile.verification?.college?.trim() &&
-        profile.verification?.phone?.trim()
-      );
-      return completed ? 1 : 0;
-    }
-
-    if (missionCode === 'NEWBIE_VERIFY') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { verificationStatus: true }
-      });
-      return user?.verificationStatus === APPROVED_VERIFICATION_STATUS ? 1 : 0;
-    }
-
     if (missionCode === 'NEWBIE_FIRST_PRODUCT') {
       return this.prisma.product.count({
         where: { sellerId: userId }

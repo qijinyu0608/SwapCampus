@@ -7,7 +7,7 @@ const listingStatusMap: Record<string, ListingStatusPresentation> = {
   ON_SALE: { label: '在售', tone: 'success' },
   SOLD: { label: '已售', tone: 'default' },
   OFFLINE: { label: '已下架', tone: 'default' },
-  OPEN: { label: '可接单', tone: 'warning' },
+  OPEN: { label: '可预约', tone: 'warning' },
   BUSY: { label: '名额已满', tone: 'info' },
   PAUSED: { label: '已暂停', tone: 'default' },
   ENDED: { label: '已结束', tone: 'default' },

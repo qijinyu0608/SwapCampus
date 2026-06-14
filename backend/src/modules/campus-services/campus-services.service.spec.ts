@@ -25,9 +25,10 @@ describe('CampusServicesService', () => {
     reviewCampusService: jest.fn().mockResolvedValue({
       provider: 'deepseek',
       model: 'deepseek-v4-flash',
-      status: 'disabled',
+      status: 'enabled',
       decision: 'APPROVED',
       shouldBlock: false,
+      selectedCategory: CampusServiceCategory.ERRAND,
       reason: 'skip',
       issues: []
     })
@@ -142,11 +143,14 @@ describe('CampusServicesService', () => {
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
       where: {
         ownerId: { not: 11 },
-        status: CampusServiceListingStatus.OPEN
+        status: CampusServiceListingStatus.OPEN,
+        validUntilAt: {
+          gt: expect.any(Date)
+        }
       }
     });
     expect(result.intent).toBe('REQUEST');
-    expect(result.intentLabel).toBe('找人帮我');
+    expect(result.intentLabel).toBe('我要购买服务');
     expect(result.serviceType).toEqual({
       key: 'ERRAND',
       label: '跑腿'
@@ -161,7 +165,7 @@ describe('CampusServicesService', () => {
       estimatedMinutes: 18,
       urgency: 'TODAY',
       urgencyLabel: '今日内',
-      summary: '找人帮我 · 2026-06-07 11:30 · 约 18 分钟'
+      summary: '我要购买服务 · 2026-06-07 11:30 · 约 18 分钟'
     });
     expect(result.participantSummary).toEqual({
       publisherLabel: '发布 何栖',
@@ -179,9 +183,9 @@ describe('CampusServicesService', () => {
       canCancel: false,
       canOpenConversation: false
     });
-    expect(result.actionLabels.accept).toBe('接单');
+    expect(result.actionLabels.accept).toBe('报名接单');
     expect(result.status).toBe('OPEN');
-    expect(result.statusLabel).toBe('可接单');
+    expect(result.statusLabel).toBe('可预约');
   });
 
   it('should exclude current user listings from discover search', async () => {
@@ -223,9 +227,72 @@ describe('CampusServicesService', () => {
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
       where: {
         status: CampusServiceListingStatus.OPEN,
+        validUntilAt: {
+          gt: expect.any(Date)
+        },
         ownerId: { not: 11 }
       }
     });
+  });
+
+  it('should exclude expired listings from discover search even before sync changes status', async () => {
+    const listing = createListing({
+      validUntilAt: new Date('2026-06-07T09:30:00Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma, publishingReviewService);
+    await service.listCampusServices({}, authUser);
+
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN,
+        validUntilAt: {
+          gt: expect.any(Date)
+        },
+        ownerId: { not: 11 }
+      }
+    });
+    expect(prisma.campusServiceListing.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: CampusServiceListingStatus.OPEN,
+          validUntilAt: {
+            gt: expect.any(Date)
+          },
+          ownerId: { not: 11 }
+        }
+      })
+    );
+    void listing;
   });
 
   it('should combine selected credit filters with OR when listing campus services', async () => {
@@ -273,7 +340,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
 
     await service.listCampusServices({ credit: ['OUTSTANDING', 'GOOD'] }, authUser);
 
@@ -281,6 +348,9 @@ describe('CampusServicesService', () => {
       where: {
         ownerId: { not: 11 },
         status: CampusServiceListingStatus.OPEN,
+        validUntilAt: {
+          gt: expect.any(Date)
+        },
         owner: {
           is: {
             OR: [
@@ -334,7 +404,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
 
     await service.listCampusServices({
       categories: [CampusServiceCategory.EVENT, CampusServiceCategory.MOVING]
@@ -343,6 +413,9 @@ describe('CampusServicesService', () => {
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
       where: {
         status: CampusServiceListingStatus.OPEN,
+        validUntilAt: {
+          gt: expect.any(Date)
+        },
         ownerId: { not: 11 },
         category: {
           in: [CampusServiceCategory.EVENT, CampusServiceCategory.MOVING]
@@ -374,7 +447,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
 
     await service.listCampusServices({
       categories: 'MOVING,EVENT' as any
@@ -384,6 +457,9 @@ describe('CampusServicesService', () => {
       where: {
         status: CampusServiceListingStatus.OPEN,
         ownerId: { not: 11 },
+        validUntilAt: {
+          gt: expect.any(Date)
+        },
         category: {
           in: [CampusServiceCategory.MOVING, CampusServiceCategory.EVENT]
         }
@@ -414,7 +490,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
     const response = await service.listCampusServices({
       categories: [CampusServiceCategory.MOVING]
     }, authUser);
@@ -499,7 +575,7 @@ describe('CampusServicesService', () => {
     expect(result.viewerContext.role).toBe('PUBLISHER');
     expect(result.actionState.canAccept).toBe(false);
     expect(result.detailBase.status).toBe('OPEN');
-    expect(result.detailBase.statusLabel).toBe('可接单');
+    expect(result.detailBase.statusLabel).toBe('可预约');
     expect(result.imageUrl).toBe('https://cdn.example.com/service-cover.jpg');
     expect(result.images).toEqual([
       'https://cdn.example.com/service-cover.jpg',
@@ -511,12 +587,12 @@ describe('CampusServicesService', () => {
       'https://cdn.example.com/service-extra.jpg'
     ]);
     expect(result.detailBase.metaItems).toEqual(expect.arrayContaining([
-      { key: 'intent', label: '方向', value: '找人帮我' },
+      { key: 'intent', label: '方向', value: '我要购买服务' },
       { key: 'route', label: '地点', value: '南门 -> 实验楼' }
     ]));
     expect(result.fulfillment).toMatchObject({
       intent: 'REQUEST',
-      intentLabel: '找人帮我',
+      intentLabel: '我要购买服务',
       pattern: 'ONE_TIME',
       validUntilAt: '2026-06-07T15:30:00.000Z',
       maxTotalOrders: 1,
@@ -579,7 +655,7 @@ describe('CampusServicesService', () => {
     expect(result.actionState.canReject).toBe(true);
     expect(result.actionLabels.confirm).toBe('确认接单');
     expect(result.actionLabels.reject).toBe('拒绝申请');
-    expect(result.actionLabels.cancel).toBe('取消当前服务单');
+    expect(result.actionLabels.cancel).toBe('取消当前接单');
     expect(result.pendingOrderCount).toBe(1);
     expect(result.activeOrderCount).toBe(0);
     expect(result.waitingCompleteOrderCount).toBe(0);
@@ -710,9 +786,9 @@ describe('CampusServicesService', () => {
     const result = await service.getCampusServiceDetail(67, authUser);
 
     expect(result.actionState.canPause).toBe(true);
-    expect(result.actionLabels.pause).toBe('暂停接新单');
+    expect(result.actionLabels.pause).toBe('暂停招募接单');
     expect(result.actionState.canEnd).toBe(true);
-    expect(result.actionLabels.end).toBe('结束发布');
+    expect(result.actionLabels.end).toBe('结束求助发布');
   });
 
   it('should expose reopen action for paused listing owner', async () => {
@@ -802,7 +878,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
     const result = await service.createCampusService({
       intent: CampusServiceIntent.OFFER,
       pattern: CampusServicePattern.REUSABLE,
@@ -849,7 +925,49 @@ describe('CampusServicesService', () => {
     });
     expect(result.id).toBe(88);
     expect(result.intent).toBe('OFFER');
-    expect(result.intentLabel).toBe('我来提供');
+    expect(result.intentLabel).toBe('我要接单挣钱');
+  });
+
+  it('should fail campus service publishing when llm returns no usable result', async () => {
+    const listingCreate = jest.fn();
+    const service = new CampusServicesService({
+      campusServiceListing: {
+        create: listingCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          accountStatus: AccountStatus.ACTIVE
+        })
+      }
+    } as any, {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'failed',
+        decision: 'REVIEW',
+        shouldBlock: false,
+        selectedCategory: null,
+        reason: 'failed',
+        issues: []
+      })
+    } as any);
+
+    await expect(service.createCampusService({
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE,
+      title: '代取图书馆预约资料',
+      category: CampusServiceCategory.AGENCY,
+      description: '工作日中午可顺路代取',
+      amount: 12,
+      locationNote: '图书馆服务台',
+      estimatedMinutes: 15,
+      validFromAt: '2026-06-11T08:00:00.000Z',
+      validUntilAt: '2026-06-12T08:00:00.000Z',
+      imageUrls: ['https://cdn.example.com/cover.jpg']
+    } as any, authUser)).rejects.toThrow('发布失败，请稍后重试');
+
+    expect(listingCreate).not.toHaveBeenCalled();
   });
 
   it('should update campus service listing fields for publisher', async () => {
@@ -1479,7 +1597,7 @@ describe('CampusServicesService', () => {
       data: {
         conversationId: 991,
         senderId: 11,
-        content: 'QJinyu 已确认当前服务单，进入履约阶段。'
+        content: 'QJinyu 已确认接单，当前协作进入进行中。'
       }
     });
     expect(result.latestOrderId).toBe(807);
@@ -1573,7 +1691,7 @@ describe('CampusServicesService', () => {
       data: {
         conversationId: 992,
         senderId: 11,
-        content: '服务单已拒绝：时间不合适'
+        content: '申请已拒绝：时间不合适'
       }
     });
     expect(result.latestOrderId).toBe(808);
@@ -1666,7 +1784,7 @@ describe('CampusServicesService', () => {
     expect(result.items[0].actionLabels).toEqual({
       confirm: '确认接单',
       reject: '拒绝申请',
-      complete: '提交完成',
+      complete: '提交完工',
       cancel: '退出接单',
       conversation: '看消息'
     });
@@ -1733,7 +1851,7 @@ describe('CampusServicesService', () => {
       canConfirm: false,
       canReject: false
     });
-    expect(result.items[0].actionLabels.complete).toBe('确认完成');
+    expect(result.items[0].actionLabels.complete).toBe('确认完工');
   });
 
   it('should bind participant actions to the viewer order instead of the latest order on reusable listings', async () => {
@@ -1900,8 +2018,8 @@ describe('CampusServicesService', () => {
     expect(result.items[0].actionLabels).toEqual({
       confirm: '确认接单',
       reject: '拒绝申请',
-      complete: '提交完成',
-      cancel: '取消当前服务单',
+      complete: '提交完工',
+      cancel: '取消当前接单',
       conversation: '看消息'
     });
   });
@@ -2059,7 +2177,7 @@ describe('CampusServicesService', () => {
       data: {
         conversationId: 3003,
         senderId: 11,
-        content: 'QJinyu 取消了当前服务协作。'
+        content: 'QJinyu 取消了当前协作。'
       }
     });
     expect(result.id).toBe(93);

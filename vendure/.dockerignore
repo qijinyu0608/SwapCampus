@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.*
+.git
+.DS_Store
+.vendure
+admin-ui
+vendure.sqlite
+static/email/test-emails

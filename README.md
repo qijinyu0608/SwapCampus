@@ -40,9 +40,9 @@
 
 ## 当前不成熟 / 已知边界
 - Socket.IO 目前只是演示级实时推送，缺少已读回执、在线状态、断线补偿等完整 IM 能力
-- “想要/收藏”页面当前以前端本地存储为主，数据库中的 `Favorite` 表仍属于后续启用能力
+- 登录用户的“想要/收藏”已接入后端 `Favorite` 表，游客仍保留本地临时想要
 - 当前认证已统一到 `SuperTokens session`，但仍未补 refresh / rotation 等更完整的会话治理策略
-- MinIO 已进入基础设施编排，但图片上传、桶初始化和完整对象存储闭环尚未完全落地
+- MinIO、媒体上传和商品多图链路已落地，后续仍可继续增强媒体治理和生产化能力
 - 自动化验证目前以后端 Jest 和前端 build 为主，前端交互级测试还不充分
 
 ## 技术栈与架构现状
@@ -177,8 +177,9 @@ make start
 - `db-init` 现在是一次性初始化任务，放在 `init` profile 下
 - 首次启动或需要重置数据时，先执行 `db-init`
 - `db-init` 只负责建表与基础初始化，不再自动写入商品、服务、用户演示数据
+- 如需显式清库重置，执行 `make init-reset`
 - 日常开发重启 `backend` / `frontend` 不会再重复触发数据库 reset 和 seed
-- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`backend`、`frontend`
+- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`vendure`、`backend`、`frontend`
 - 前端生产镜像使用 `nginx` 托管静态资源
 - 默认认证 Core 使用容器内自托管 `http://supertokens:3567`
 - SuperTokens 通过独立 PostgreSQL 容器持久化认证数据，容器重启后账号不会丢失
@@ -195,6 +196,13 @@ make start
 ```bash
 docker compose down -v
 make init
+make start
+```
+
+如果只想强制重建数据库结构但不先手动 `down -v`：
+
+```bash
+make init-reset
 make start
 ```
 
@@ -215,6 +223,7 @@ curl http://127.0.0.1:3001/api/health
 ```bash
 make install
 make init
+make init-reset
 make up
 make start
 make restart-auth
@@ -227,11 +236,27 @@ make backend-test
 make frontend-build
 ```
 
+### API 与环境变量单独配置
+
+容器部署推荐在仓库根目录创建 `.env`，模板见 `.env.example`。
+
+最常用的独立配置项：
+
+- 后端运行时：`API_DOMAIN`、`WEBSITE_DOMAIN`
+- 前端构建时：`VITE_API_BASE_URL`、`VITE_API_DOMAIN`、`VITE_SOCKET_URL`、`VITE_WEBSITE_DOMAIN`
+- 外部密钥：`SUPERTOKENS_API_KEY`、`VENDURE_ADMIN_TOKEN`、`DEEPSEEK_API_KEY`
+
+注意：
+
+- 修改 `VITE_*` 后需要重建前端镜像
+- 仅修改后端变量时，重启相关容器即可
+- 更完整的 AI 执行步骤和 ignore 文件分发说明见 [docs/27-AI部署启动与测试指南.md](/home/th1rt3en/dev/forge/SwapCampus/docs/27-AI部署启动与测试指南.md)
+
 ## 演示路径
 ### 推荐演示路径
-1. 打开 `http://localhost:5178`
-2. 先注册或通过测试脚本创建账号
-3. 发布商品或校园服务后再浏览首页、详情、消息和后台流程
+1. 打开 `http://127.0.0.1:5178`
+2. 注册或登录普通用户
+3. 发布商品、收藏、下单、发消息、进入校园服务和信用中心
 
 ## 后续微服务拆分建议
 当前系统仍适合维持单体后端，不建议为了课程项目过早拆微服务。更合理的演进顺序如下：
@@ -287,10 +312,10 @@ make frontend-build
 - Docker 部署方式已按当前仓库结构设计为本地可复现模式
 
 ## 页面截图
-- 首页：[home-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/home-final.png)
-- 登录：[login-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/login-final.png)
-- 详情：[detail-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/detail-final.png)
-- 发布：[publish-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/publish-final.png)
-- 消息：[messages-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/messages-final.png)
-- 个人中心：[profile-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/profile-final.png)
-- 后台：[admin-final.png](/Users/qijinyu/Documents/software-design/SwapCampus/artifacts/screenshots/admin-final.png)
+- 首页：[home-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/home-final.png)
+- 登录：[login-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/login-final.png)
+- 详情：[detail-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/detail-final.png)
+- 发布：[publish-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/publish-final.png)
+- 消息：[messages-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/messages-final.png)
+- 个人中心：[profile-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/profile-final.png)
+- 后台：[admin-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/admin-final.png)

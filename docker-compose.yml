@@ -87,11 +87,14 @@ services:
     environment:
       APP_ENV: dev
       PORT: 3000
+      VENDURE_DB_PATH: /app/data/vendure.sqlite
       COOKIE_SECRET: vendure-dev-cookie-secret
       SUPERADMIN_USERNAME: superadmin
       SUPERADMIN_PASSWORD: superadmin
     ports:
       - "3002:3000"
+    volumes:
+      - ./vendure-data:/app/data
 
   backend:
     build:
@@ -113,11 +116,16 @@ services:
       MINIO_BUCKET: swapcampus
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_API_KEY: swapcampus-meili-dev-key
+      SUPERTOKENS_API_KEY: ${SUPERTOKENS_API_KEY:-}
       ENABLE_DEV_AUTH_FALLBACK: ${ENABLE_DEV_AUTH_FALLBACK:-true}
       VENDURE_ENABLED: ${VENDURE_ENABLED:-true}
       VENDURE_ADMIN_API_URL: ${VENDURE_ADMIN_API_URL:-http://vendure:3000/admin-api}
       VENDURE_ADMIN_USERNAME: ${VENDURE_ADMIN_USERNAME:-superadmin}
       VENDURE_ADMIN_PASSWORD: ${VENDURE_ADMIN_PASSWORD:-superadmin}
+      VENDURE_ADMIN_TOKEN: ${VENDURE_ADMIN_TOKEN:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
     ports:
       - "3001:3000"
     depends_on:
@@ -142,7 +150,7 @@ services:
       API_DOMAIN: ${API_DOMAIN:-http://127.0.0.1:3001}
       WEBSITE_DOMAIN: ${WEBSITE_DOMAIN:-http://127.0.0.1:5178}
       SUPERTOKENS_CONNECTION_URI: ${SUPERTOKENS_CONNECTION_URI:-http://supertokens:3567}
-    command: sh -c "npm run db:push -- --force-reset && npm run db:init"
+    command: sh -c "npm run db:push && npm run db:init"
     depends_on:
       mysql:
         condition: service_healthy

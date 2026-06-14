@@ -2,12 +2,12 @@ import { AccountStatus, PrismaClient, VerificationStatus } from '@prisma/client'
 import { normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-category-migration';
 
 const prisma = new PrismaClient();
-const PRODUCT_CONDITION_VALUES = ['95新', '9成新', '8成新'] as const;
+const PRODUCT_CONDITION_VALUES = ['九五成', '九成', '八五成', '八成'] as const;
 const LEGACY_CATEGORY_NAMES = ['数码', '教材', '考研资料', '生活用品', '宿舍好物', '小家电', '鞋服', '运动器材', '自行车', '文具'];
 const VERIFICATION_STATUS_VALUES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
 
 function sanitizeProductTitle(title: string) {
-  return title.replace(/\s+(95新|9成新|8成新)$/u, '').replace(/\s+/g, ' ').trim();
+  return title.replace(/\s+(九五成|九成|八五成|八成)$/u, '').replace(/\s+/g, ' ').trim();
 }
 
 function sanitizeProductTags(tags: unknown, category: string) {
@@ -44,7 +44,7 @@ async function main() {
     const category = normalizeProductCategoryName(product.category);
     const condition = PRODUCT_CONDITION_VALUES.includes(product.condition as (typeof PRODUCT_CONDITION_VALUES)[number])
       ? product.condition
-      : '9成新';
+      : '九成';
     const title = sanitizeProductTitle(product.title);
     const tags = sanitizeProductTags(product.tags, category);
 

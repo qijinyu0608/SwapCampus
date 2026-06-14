@@ -4,7 +4,7 @@ export type ProductPublishPayload = {
   title: string;
   description: string;
   price: number;
-  category: string;
+  category?: string;
   condition: string;
   tags: string[];
   imageUrls?: string[];

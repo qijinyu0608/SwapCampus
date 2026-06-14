@@ -8,7 +8,7 @@ import { SearchService } from '../search/search.service';
 import { OrdersService } from '../orders/orders.service';
 import { VendureService } from '../vendure/vendure.service';
 import { isProductCategoryName, normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-categories';
-import { isProductConditionValue, parseProductConditionValue } from './product-conditions';
+import { isProductConditionValue, normalizeProductConditionValue, parseProductConditionValue } from './product-conditions';
 import { CreateProductDto } from './dto/create-product.dto';
 import { moderateProductPayload } from './product-moderation';
 import { SearchProductsDto } from './dto/search-products.dto';
@@ -257,7 +257,7 @@ export class ProductsService {
         title: product.title,
         category: normalizedCategory,
         price: Number(product.price),
-        condition: product.condition,
+        condition: normalizeProductConditionValue(product.condition),
         tags: normalizeTags(product.tags),
         status: product.status,
         description: product.description,
@@ -764,9 +764,6 @@ export class ProductsService {
 
   async createProduct(payload: CreateProductDto, currentUser: AuthenticatedUser) {
     const sellerUser = requireAuthenticatedUser(currentUser);
-    if (!isProductCategoryName(payload.category) || !allowedCategories.includes(payload.category)) {
-      throw new BadRequestException('当前分类不支持发布');
-    }
     if (!isProductConditionValue(payload.condition)) {
       throw new BadRequestException('当前成色不支持发布');
     }
@@ -793,17 +790,21 @@ export class ProductsService {
       title: payload.title,
       description: payload.description,
       price: payload.price,
-      category: payload.category,
-      condition: payload.condition,
+      category: normalizeProductCategoryName(payload.category),
+      condition: normalizeProductConditionValue(payload.condition),
       tags: payload.tags ?? [],
       imageUrls: normalizedImageUrls
     }) ?? null;
 
-    if (llmReview?.shouldBlock) {
+    if (!llmReview || llmReview.status !== 'enabled' || !llmReview.selectedCategory) {
+      throw new BadRequestException('发布失败，请稍后重试');
+    }
+
+    if (llmReview.shouldBlock) {
       throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
     }
 
-    const selectedCategory = llmReview?.selectedCategory ?? payload.category;
+    const selectedCategory = normalizeProductCategoryName(llmReview.selectedCategory);
 
     const seller = await this.prisma.user.findUnique({
       where: { id: sellerUser.id },
@@ -825,7 +826,7 @@ export class ProductsService {
         description: payload.description,
         price: payload.price,
         category: selectedCategory,
-        condition: payload.condition,
+        condition: normalizeProductConditionValue(payload.condition),
         tags: normalizedTags,
         status: ProductStatus.ON_SALE,
         images: normalizedImageUrls.length

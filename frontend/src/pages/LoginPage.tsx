@@ -164,7 +164,8 @@ export function LoginPage() {
       const result = await loginUser(values);
       setCurrentUser(result.user);
       setMessage({ type: 'success', text: result.message ?? '登录成功' });
-      void navigate(nextPath || (result.user.role === 'ADMIN' ? '/admin' : '/'));
+      const targetPath = result.user.role === 'ADMIN' ? '/admin' : (nextPath || '/');
+      void navigate(targetPath);
     } catch (error: any) {
       setMessage({
         type: 'error',
