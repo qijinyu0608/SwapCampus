@@ -15,6 +15,50 @@ describe('ReportsService', () => {
     role: 'ADMIN'
   } as any;
 
+  it('should reject creating report with multiple targets', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 24,
+          accountStatus: 'ACTIVE'
+        })
+      },
+      product: {
+        findUnique: jest.fn()
+      },
+      campusServiceListing: {
+        findUnique: jest.fn()
+      },
+      report: {
+        create: jest.fn()
+      },
+      auditLog: {
+        create: jest.fn()
+      }
+    } as any;
+
+    const service = new ReportsService(prisma, {
+      syncProduct: jest.fn(),
+      syncSellerProducts: jest.fn()
+    } as any);
+
+    await expect(
+      service.createReport({
+        productId: 1,
+        targetUserId: 24,
+        reason: '重复举报对象'
+      }, {
+        id: 24,
+        studentId: '2026000024',
+        email: 'user24@example.com',
+        role: 'USER'
+      } as any)
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.report.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('should ban reported user and offline active products when resolving BAN_USER', async () => {
     const prisma = {
       report: {

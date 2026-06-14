@@ -47,8 +47,16 @@ export class ReportsService {
 
   async createReport(payload: CreateReportDto, currentUser: AuthenticatedUser) {
     const reporterUser = requireAuthenticatedUser(currentUser);
-    if (!payload.productId && !payload.campusServiceListingId && !payload.targetUserId) {
+    const targetCount = [payload.productId, payload.campusServiceListingId, payload.targetUserId]
+      .filter((value) => value !== undefined)
+      .length;
+
+    if (targetCount === 0) {
       throw new BadRequestException('举报对象不能为空');
+    }
+
+    if (targetCount > 1) {
+      throw new BadRequestException('一次举报只能针对一个对象');
     }
 
     const reporter = await this.prisma.user.findUnique({

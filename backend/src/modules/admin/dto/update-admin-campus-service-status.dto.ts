@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export enum AdminCampusServiceAction {
   CANCEL = 'CANCEL'
@@ -14,5 +14,6 @@ export class UpdateAdminCampusServiceStatusDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   reason?: string;
 }

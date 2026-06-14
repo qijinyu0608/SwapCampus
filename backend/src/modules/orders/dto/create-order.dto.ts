@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateOrderDto {
   @IsInt()
@@ -6,17 +6,25 @@ export class CreateOrderDto {
 
   @IsString()
   @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(120)
   meetupLocation?: string;
 
   @IsString()
   @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(80)
   meetupTime?: string;
 
   @IsString()
   @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(80)
   paymentIntent?: string;
 
   @IsString()
   @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(500)
   note?: string;
 }

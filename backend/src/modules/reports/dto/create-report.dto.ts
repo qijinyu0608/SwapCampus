@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateReportDto {
   @IsInt()
@@ -15,5 +15,6 @@ export class CreateReportDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   reason!: string;
 }
