@@ -5,7 +5,7 @@ import { MetaList } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { SectionCard } from '../components/ui';
 import { useAuthState } from '../services/auth-state';
 import {
@@ -147,6 +147,7 @@ export function PublicUserPage() {
               alt={`${userPresentation.displayName}的头像`}
               fallbackLabel={userPresentation.initial}
               className="profile-avatar-image"
+              frame={(userPresentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
             />
           </div>
           <div className="profile-hero-meta">

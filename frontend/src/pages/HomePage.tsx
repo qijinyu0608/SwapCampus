@@ -36,7 +36,7 @@ import {
 import { useAuthState } from '../services/auth-state';
 import { subscribeFavorites } from '../services/favorites';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
 
@@ -484,6 +484,7 @@ export function HomePage() {
                               src={userPresentation.avatarUrl}
                               alt={`${currentUser.displayName}的头像`}
                               fallbackLabel={userPresentation.initial}
+                              frame={(userPresentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
                             />
                           </span>
                           <div className="fish-home-user-copy">

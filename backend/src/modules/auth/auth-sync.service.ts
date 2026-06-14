@@ -14,6 +14,7 @@ type AuthProfileInput = {
   studentId?: string | null;
   college?: string | null;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   role?: UserRole;
   verificationStatus?: VerificationStatus;
   accountStatus?: AccountStatus;
@@ -63,6 +64,11 @@ function normalizeStudentId(studentId?: string | null) {
 
 function normalizeAvatarUrl(avatarUrl?: string | null) {
   const next = avatarUrl?.trim();
+  return next || null;
+}
+
+function normalizeAvatarFrame(avatarFrame?: string | null) {
+  const next = avatarFrame?.trim();
   return next || null;
 }
 
@@ -194,6 +200,7 @@ export class AuthSyncService {
             studentId: account.studentId,
             displayName: account.displayName,
             email: account.email,
+            avatarFrame: null,
             role: account.role,
             creditScore: account.creditScore,
             verificationStatus: account.verificationStatus,
@@ -220,6 +227,7 @@ export class AuthSyncService {
             studentId: account.studentId,
             displayName: account.displayName,
             email: account.email,
+            avatarFrame: null,
             role: account.role,
             creditScore: account.creditScore,
             verificationStatus: account.verificationStatus,
@@ -247,6 +255,7 @@ export class AuthSyncService {
     const studentId = normalizeStudentId(input.studentId);
     const college = normalizeCollege(input.college);
     const avatarUrl = normalizeAvatarUrl(input.avatarUrl);
+    const avatarFrame = normalizeAvatarFrame(input.avatarFrame);
 
     try {
       const user = await this.prisma.user.upsert({
@@ -256,6 +265,7 @@ export class AuthSyncService {
           displayName,
           studentId,
           avatarUrl,
+          avatarFrame,
           role,
           verificationStatus,
           accountStatus,
@@ -279,6 +289,7 @@ export class AuthSyncService {
           displayName,
           studentId,
           avatarUrl,
+          avatarFrame,
           role,
           creditScore: 60,
           verificationStatus,

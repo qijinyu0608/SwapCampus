@@ -40,6 +40,7 @@ function normalizeUser(user: Partial<SessionUser>): SessionUser | null {
     displayName: user.displayName,
     email: user.email ?? '',
     avatarUrl: user.avatarUrl ?? null,
+    avatarFrame: user.avatarFrame ?? null,
     role: normalizeRole(user.role),
     creditScore: user.creditScore,
     verificationStatus: user.verificationStatus,

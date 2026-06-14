@@ -6,4 +6,5 @@ export class UpdateProfileDto {
   college?: string;
   phone?: string;
   avatarUrl?: string;
+  avatarFrame?: string;
 }

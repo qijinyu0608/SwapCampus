@@ -15,6 +15,7 @@ import {
 import { Button, Empty, Form, Input, Modal, Select, Skeleton, Tag, message } from 'antd';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AVATAR_FRAMES, type AvatarFrameKey } from '../components/user/UserAvatar';
 import { EmptyState } from '../components/feedback';
 import { ImageCropUploadModal } from '../components/image-upload';
 import { CampusServicePublisherOrderWorkbench } from '../components/listing';
@@ -79,6 +80,7 @@ type RouteState = {
 };
 
 const PRESET_AVATAR_URLS = new Set<string>(AVATAR_OPTIONS.map((item) => item.src));
+const AVATAR_FRAME_KEYS = new Set<AvatarFrameKey | 'none'>(['none', ...AVATAR_FRAMES.map((item) => item.key)]);
 
 const orderStatusMap: Record<string, string> = {
   PENDING: '待约定',
@@ -303,7 +305,8 @@ export function ProfilePage() {
   const [publisherOrderDialogTarget, setPublisherOrderDialogTarget] = useState<CampusServiceOrderListItem | null>(null);
   const [publisherOrderDialogReason, setPublisherOrderDialogReason] = useState('');
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(AVATAR_OPTIONS[0]?.src ?? '');
-  const [form] = Form.useForm<UserProfile & { studentId?: string; phone: string; realName: string }>();
+  const [selectedAvatarFrame, setSelectedAvatarFrame] = useState<AvatarFrameKey | 'none'>('none');
+  const [form] = Form.useForm<UserProfile & { studentId?: string; phone: string; realName: string; avatarFrame?: string }>();
 
   useEffect(() => () => {
     if (pendingAvatarUrl?.startsWith('blob:')) {
@@ -472,6 +475,11 @@ export function ProfilePage() {
           setTrustSummary(trustResult);
           setPendingAvatarUrl(null);
           setSelectedAvatarUrl(profileResult.avatarUrl ?? AVATAR_OPTIONS[0]?.src ?? '');
+          setSelectedAvatarFrame(
+            profileResult.avatarFrame && AVATAR_FRAME_KEYS.has(profileResult.avatarFrame as AvatarFrameKey | 'none')
+              ? (profileResult.avatarFrame as AvatarFrameKey | 'none')
+              : 'none'
+          );
           form.setFieldsValue({
             displayName: profileResult.displayName,
             studentId: profileResult.studentId ?? undefined,
@@ -479,7 +487,8 @@ export function ProfilePage() {
             realName: profileResult.realName,
             college: profileResult.college,
             phone: profileResult.phone,
-            avatarUrl: profileResult.avatarUrl ?? ''
+            avatarUrl: profileResult.avatarUrl ?? '',
+            avatarFrame: profileResult.avatarFrame ?? 'none'
           });
         }
       })
@@ -1167,6 +1176,7 @@ export function ProfilePage() {
     college: string;
     phone: string;
     avatarUrl?: string;
+    avatarFrame?: string;
   }) {
     if (!currentUser) {
       return;
@@ -1183,10 +1193,16 @@ export function ProfilePage() {
       setTrustSummary(trustResult);
       setPendingAvatarUrl(null);
       setSelectedAvatarUrl(result.avatarUrl ?? AVATAR_OPTIONS[0]?.src ?? '');
+      setSelectedAvatarFrame(
+        result.avatarFrame && AVATAR_FRAME_KEYS.has(result.avatarFrame as AvatarFrameKey | 'none')
+          ? (result.avatarFrame as AvatarFrameKey | 'none')
+          : 'none'
+      );
       form.setFieldsValue({
         ...values,
         studentId: result.studentId ?? undefined,
-        avatarUrl: result.avatarUrl ?? ''
+        avatarUrl: result.avatarUrl ?? '',
+        avatarFrame: result.avatarFrame ?? 'none'
       });
       message.success('资料已更新');
       await refreshCurrentUser();
@@ -1227,6 +1243,11 @@ export function ProfilePage() {
     form.setFieldValue('avatarUrl', src);
   }
 
+  function handleAvatarFrameSelect(frame: AvatarFrameKey | 'none') {
+    setSelectedAvatarFrame(frame);
+    form.setFieldValue('avatarFrame', frame);
+  }
+
   function renderProfileEditor() {
     if (loadingProfile) {
       return renderSectionPanel('资料编辑', <Skeleton active paragraph={{ rows: 8 }} />);
@@ -1248,6 +1269,7 @@ export function ProfilePage() {
           college: string;
           phone: string;
           avatarUrl?: string;
+          avatarFrame?: string;
         })}
       >
         <div className="register-section">
@@ -1266,7 +1288,7 @@ export function ProfilePage() {
                 aria-pressed={selectedAvatarUrl === item.src}
                 aria-label={item.key === 'default' ? '选择默认头像' : `选择预设头像 ${index}`}
               >
-                <UserAvatar src={item.src} alt="" fallbackLabel="" />
+                <UserAvatar src={item.src} alt="" fallbackLabel="" frame={selectedAvatarFrame} />
               </button>
             ))}
             <button
@@ -1277,7 +1299,7 @@ export function ProfilePage() {
               aria-label="上传自定义头像"
             >
               {isCustomAvatarSelected ? (
-                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" />
+                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame={selectedAvatarFrame} />
               ) : (
                 <span className="register-avatar-upload-placeholder" aria-hidden="true">+</span>
               )}
@@ -1286,10 +1308,41 @@ export function ProfilePage() {
         </div>
         <div className="register-section">
           <div className="register-section-head">
+            <strong>头像框</strong>
+          </div>
+          <div className="register-avatar-grid profile-avatar-frame-grid" role="radiogroup" aria-label="选择头像框">
+            <button
+              type="button"
+              className={selectedAvatarFrame === 'none' ? 'register-avatar-option active' : 'register-avatar-option'}
+              onClick={() => handleAvatarFrameSelect('none')}
+              aria-pressed={selectedAvatarFrame === 'none'}
+              aria-label="不使用头像框"
+            >
+              <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" />
+            </button>
+            {AVATAR_FRAMES.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={selectedAvatarFrame === item.key ? 'register-avatar-option active' : 'register-avatar-option'}
+                onClick={() => handleAvatarFrameSelect(item.key)}
+                aria-pressed={selectedAvatarFrame === item.key}
+                aria-label={`选择头像框 ${item.label}`}
+              >
+                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame={item.key} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="register-section">
+          <div className="register-section-head">
             <strong>基础信息</strong>
           </div>
         </div>
         <Form.Item name="avatarUrl" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="avatarFrame" hidden>
           <Input />
         </Form.Item>
         <div className="profile-form-grid">
@@ -1413,6 +1466,7 @@ export function ProfilePage() {
                 alt={`${presentation.displayName}的头像`}
                 fallbackLabel={presentation.initial}
                 className="profile-following-avatar"
+                frame={(presentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
               />
               <div className="profile-following-copy">
                 <div className="profile-following-head">
@@ -1545,6 +1599,7 @@ export function ProfilePage() {
                   alt={`${userPresentation.displayName}的头像`}
                   fallbackLabel={userPresentation.initial}
                   className="profile-avatar-image"
+                  frame={(userPresentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
                 />
                 <span className="profile-avatar-overlay">
                   <ProfileOutlined />

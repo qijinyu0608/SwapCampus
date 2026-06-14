@@ -3,7 +3,7 @@ import { Button, Empty, Skeleton, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { KeyValueGrid } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
-import { UserAvatar } from '../components/user/UserAvatar';
+import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import { getRoleLabel, hasTradingAccess, isGuestUser } from '../services/session';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
@@ -68,6 +68,7 @@ export function ProfileDetailPage() {
               alt={`${presentation.displayName}的头像`}
               fallbackLabel={presentation.initial}
               className="profile-avatar-image"
+              frame={(presentation.avatarFrame as AvatarFrameKey | null) ?? undefined}
             />
           </div>
           <div>

@@ -42,6 +42,7 @@ export class AuthService {
     displayName: string;
     email: string;
     avatarUrl: string | null;
+    avatarFrame: string | null;
     role: UserRole;
     creditScore: number;
     verificationStatus: VerificationStatus;
@@ -54,6 +55,7 @@ export class AuthService {
       displayName: user.displayName,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      avatarFrame: user.avatarFrame,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -93,6 +95,7 @@ export class AuthService {
       displayName: string;
       email: string;
       avatarUrl: string | null;
+      avatarFrame: string | null;
       role: UserRole;
       accountStatus: AccountStatus;
     }
@@ -108,6 +111,7 @@ export class AuthService {
         displayName: user.displayName,
         email: user.email,
         avatarUrl: user.avatarUrl ?? null,
+        avatarFrame: user.avatarFrame ?? null,
         role: user.role,
         accountStatus: user.accountStatus
       },
@@ -146,6 +150,7 @@ export class AuthService {
       studentId,
       college,
       avatarUrl,
+      avatarFrame: null,
       role: UserRole.USER,
       verificationStatus: VerificationStatus.PENDING,
       accountStatus: AccountStatus.ACTIVE
@@ -184,6 +189,7 @@ export class AuthService {
         displayName: candidate.displayName,
         email: candidate.email,
         avatarUrl: candidate.avatarUrl,
+        avatarFrame: candidate.avatarFrame ?? null,
         role: candidate.role,
         creditScore: candidate.creditScore,
         verificationStatus: candidate.verificationStatus,
@@ -264,6 +270,7 @@ export class AuthService {
         displayName: true,
         email: true,
         avatarUrl: true,
+        avatarFrame: true,
         role: true,
         creditScore: true,
         verificationStatus: true,

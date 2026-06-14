@@ -214,6 +214,7 @@ export type AuthUser = {
   displayName: string;
   email: string;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   role: 'USER' | 'ADMIN';
   creditScore?: number;
   verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -415,6 +416,7 @@ export type ConversationSummary = {
     id: number | null;
     displayName: string;
     avatarUrl: string | null;
+    avatarFrame?: string | null;
     college: string | null;
     isSeller: boolean;
   };
@@ -763,6 +765,7 @@ export type UserTrustSummary = {
   studentId?: string | null;
   email: string;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   creditScore: number;
   creditLevel: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -783,6 +786,7 @@ export type UserProfile = {
   studentId?: string | null;
   email: string;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   role: 'USER' | 'ADMIN';
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -838,6 +842,7 @@ export type FollowingUser = {
   studentId?: string | null;
   email: string;
   avatarUrl?: string | null;
+  avatarFrame?: string | null;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -1252,6 +1257,7 @@ export async function updateUserProfile(
     college: string;
     phone: string;
     avatarUrl?: string | null;
+    avatarFrame?: string | null;
   }
 ) {
   const response = await apiClient.patch<UserProfile>(`/users/${id}/profile`, payload);

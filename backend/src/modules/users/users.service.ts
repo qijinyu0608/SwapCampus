@@ -159,6 +159,7 @@ type FollowUserSummary = {
   studentId: string | null;
   email: string;
   avatarUrl: string | null;
+  avatarFrame: string | null;
   creditScore: number;
   verificationStatus: VerificationStatus;
   accountStatus: AccountStatus;
@@ -222,6 +223,7 @@ export class UsersService {
     studentId: string | null;
     email: string;
     avatarUrl: string | null;
+    avatarFrame: string | null;
     role: UserRole;
     creditScore: number;
     verificationStatus: VerificationStatus;
@@ -238,6 +240,7 @@ export class UsersService {
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      avatarFrame: user.avatarFrame,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -338,6 +341,7 @@ export class UsersService {
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      avatarFrame: user.avatarFrame,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
       accountStatus: user.accountStatus,
@@ -414,6 +418,7 @@ export class UsersService {
       studentId: user.studentId,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      avatarFrame: user.avatarFrame,
       creditScore: user.creditScore,
       creditLevel: getCreditLevel(user.creditScore),
       verificationStatus: user.verificationStatus,
@@ -630,6 +635,7 @@ export class UsersService {
         studentId: item.following.studentId,
         email: item.following.email,
         avatarUrl: item.following.avatarUrl,
+        avatarFrame: item.following.avatarFrame,
         creditScore: item.following.creditScore,
         verificationStatus: item.following.verificationStatus,
         accountStatus: item.following.accountStatus,
@@ -660,6 +666,7 @@ export class UsersService {
         studentId: true,
         email: true,
         avatarUrl: true,
+        avatarFrame: true,
         creditScore: true,
         verificationStatus: true,
         accountStatus: true,
@@ -703,6 +710,7 @@ export class UsersService {
       followerCount,
       user: this.mapFollowUser({
         ...targetUser,
+        avatarFrame: targetUser.avatarFrame,
         activeProductCount,
         followerCount
       }, follow.createdAt)
@@ -751,6 +759,7 @@ export class UsersService {
     const nextCollege = payload.college?.trim();
     const nextPhone = payload.phone?.trim();
     const nextAvatarUrl = payload.avatarUrl?.trim();
+    const nextAvatarFrame = payload.avatarFrame?.trim();
 
     if (payload.displayName !== undefined && !nextDisplayName) {
       throw new BadRequestException('展示名不能为空');
@@ -791,6 +800,7 @@ export class UsersService {
           displayName: nextDisplayName ?? undefined,
           email: nextEmail ?? undefined,
           avatarUrl: payload.avatarUrl !== undefined ? (nextAvatarUrl || null) : undefined,
+          avatarFrame: payload.avatarFrame !== undefined ? (nextAvatarFrame || null) : undefined,
           verification: {
             upsert: {
               update: {
@@ -1036,6 +1046,7 @@ export class UsersService {
         email: user.email,
         studentId: user.studentId,
         avatarUrl: user.avatarUrl,
+        avatarFrame: user.avatarFrame,
         creditScore: user.creditScore,
         verificationStatus: user.verificationStatus,
         accountStatus: user.accountStatus,

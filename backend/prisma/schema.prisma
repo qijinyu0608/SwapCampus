@@ -161,6 +161,7 @@ model User {
   displayName                 String
   email                       String               @unique
   avatarUrl                   String?
+  avatarFrame                 String?
   role                        UserRole             @default(USER)
   creditScore                 Int                  @default(60)
   verificationStatus          VerificationStatus   @default(PENDING)

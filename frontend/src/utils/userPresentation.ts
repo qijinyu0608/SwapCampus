@@ -3,9 +3,9 @@ import type { SessionUser } from '../services/session';
 
 type VerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-type UserLike = Partial<Pick<UserProfile, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'creditScore' | 'verificationStatus' | 'college'>>
-  | Partial<Pick<UserTrustSummary, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'creditScore' | 'verificationStatus' | 'college'>>
-  | (Partial<Pick<SessionUser, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'creditScore' | 'verificationStatus'>> & { college?: string });
+type UserLike = Partial<Pick<UserProfile, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'creditScore' | 'verificationStatus' | 'college'>>
+  | Partial<Pick<UserTrustSummary, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'creditScore' | 'verificationStatus' | 'college'>>
+  | (Partial<Pick<SessionUser, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'creditScore' | 'verificationStatus'>> & { college?: string });
 
 export type UserCreditBadgeTone = 'excellent' | 'great' | 'good' | 'stable' | 'low';
 
@@ -19,6 +19,7 @@ export type UserPresentationModel = {
   displayName: string;
   initial: string;
   avatarUrl: string | null;
+  avatarFrame: string | null;
   collegeLabel: string;
   emailLabel: string;
   creditScore: number;
@@ -88,6 +89,7 @@ export function getUserPresentation(user?: UserLike | null): UserPresentationMod
     displayName: getUserDisplayName(user),
     initial: getUserInitial(user),
     avatarUrl: user?.avatarUrl?.trim() || null,
+    avatarFrame: user?.avatarFrame?.trim() || null,
     collegeLabel: getUserCollegeLabel(user),
     emailLabel: getUserEmailLabel(user),
     creditScore: creditBadge.score,
