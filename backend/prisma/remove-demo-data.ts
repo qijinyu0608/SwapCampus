@@ -4,6 +4,7 @@ import { getSuperTokensConfig } from '../src/modules/auth/supertokens.config';
 
 const prisma = new PrismaClient();
 const PRODUCT_INDEX_UID = 'products';
+const DEFAULT_DEV_MEILISEARCH_API_KEY = 'swapcampus-meili-dev-key';
 
 let superTokensInitialized = false;
 
@@ -42,7 +43,7 @@ export async function clearProductSearchIndex() {
   }
 
   const headers: Record<string, string> = {};
-  const apiKey = process.env.MEILISEARCH_API_KEY?.trim();
+  const apiKey = process.env.MEILISEARCH_API_KEY?.trim() || DEFAULT_DEV_MEILISEARCH_API_KEY;
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
@@ -131,11 +132,13 @@ async function main() {
   console.log('[db:remove-demo-data] removed all current user/product/campus-service demo data');
 }
 
-main()
-  .catch((error) => {
-    console.error('[db:remove-demo-data] failed', error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error('[db:remove-demo-data] failed', error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
