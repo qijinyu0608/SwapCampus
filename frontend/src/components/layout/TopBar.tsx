@@ -1,12 +1,10 @@
 import {
   CustomerServiceOutlined,
-  HomeOutlined,
   LoginOutlined,
   LogoutOutlined,
   MessageOutlined,
   PlusCircleOutlined,
-  SafetyCertificateOutlined,
-  UserOutlined
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { Tooltip } from 'antd';
 import { useRef, type MouseEvent } from 'react';
@@ -70,24 +68,9 @@ export function TopBar({ currentUser }: TopBarProps) {
   const authenticatedMode = adminMode || userMode;
 
   const leftItems: NavIconItem[] = adminMode
-    ? [
-        {
-          key: 'home',
-          to: '/',
-          label: '首页',
-          icon: <HomeOutlined />,
-          activeMatch: (pathname) => pathname === '/'
-        }
-      ]
+    ? []
     : userMode
       ? [
-        {
-          key: 'home',
-          to: '/',
-          label: '首页',
-          icon: <HomeOutlined />,
-          activeMatch: (pathname) => pathname === '/'
-        },
         {
           key: 'campus-services',
           to: '/campus-services',
@@ -96,15 +79,7 @@ export function TopBar({ currentUser }: TopBarProps) {
           activeMatch: (pathname) => pathname.startsWith('/campus-services')
         }
       ]
-      : [
-          {
-            key: 'home',
-            to: '/',
-            label: '首页',
-            icon: <HomeOutlined />,
-            activeMatch: (pathname) => pathname === '/'
-          }
-        ];
+      : [];
 
   const rightItems: NavIconItem[] = adminMode
     ? [
@@ -114,13 +89,6 @@ export function TopBar({ currentUser }: TopBarProps) {
           label: '后台',
           icon: <SafetyCertificateOutlined />,
           activeMatch: (pathname) => pathname.startsWith('/admin')
-        },
-        {
-          key: 'profile',
-          to: '/profile',
-          label: '我的',
-          icon: <UserOutlined />,
-          activeMatch: (pathname) => pathname.startsWith('/profile')
         }
       ]
     : userMode
@@ -139,13 +107,6 @@ export function TopBar({ currentUser }: TopBarProps) {
           label: '消息',
           icon: <MessageOutlined />,
           activeMatch: (pathname) => pathname.startsWith('/messages')
-        },
-        {
-          key: 'profile',
-          to: '/profile',
-          label: '我的',
-          icon: <UserOutlined />,
-          activeMatch: (pathname) => pathname.startsWith('/profile') || pathname.startsWith('/favorites')
         }
       ]
       : [

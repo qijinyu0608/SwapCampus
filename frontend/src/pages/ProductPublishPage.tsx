@@ -1,7 +1,8 @@
-import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, message as antMessage } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, InputNumber, Modal, Select, Slider, message as antMessage } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionRow, SectionHeader } from '../components/layout';
+import { ThinkingOverlay } from '../components/feedback';
 import { CampusServicePublishWorkbench, PublishImageManager, type PublishImageItem } from '../components/publish';
 import {
   defaultAllowedCategories,
@@ -19,6 +20,12 @@ import {
   PublishRulesDocument
 } from '../components/product';
 import { SectionCard } from '../components/ui';
+import {
+  formatProductConditionValue,
+  PRODUCT_CONDITION_MAX,
+  PRODUCT_CONDITION_MIN,
+  PRODUCT_CONDITION_STEP
+} from '../constants/productConditions';
 import { useAuthState } from '../services/auth-state';
 import { fetchPublishingRules, getApiErrorMessage, type PublishingRules } from '../services/api';
 import { createProductWithImages, uploadProductImageAsset } from '../services/product-publish';
@@ -27,13 +34,13 @@ import { hasTradingAccess, isGuestUser } from '../services/session';
 const PUBLISH_RULES_STORAGE_KEY = 'swapcampus:publish-rules-dismiss-until';
 const PUBLISH_RULES_SUPPRESS_DAYS = 7;
 const PUBLISH_RULES_WAIT_SECONDS = 8;
-const DEFAULT_PUBLISH_CONDITION = '未说明';
 
 type PublishType = 'product' | 'service-request' | 'service-offer';
 
 type ProductPublishFormValues = {
   title: string;
   category: string;
+  conditionValue: number;
   price: number;
   description: string;
   tags?: string;
@@ -158,7 +165,7 @@ export function ProductPublishPage() {
         description: values.description,
         price: values.price,
         category: values.category,
-        condition: DEFAULT_PUBLISH_CONDITION,
+        condition: formatProductConditionValue(values.conditionValue),
         tags: finalTags,
         imageUrls: uploadedImages.map((item) => item.url)
       });
@@ -239,22 +246,18 @@ export function ProductPublishPage() {
   const rulesLinkLabel = isServicePublish ? '查看发布规则和服务发布约束' : '查看发布规则';
   const publishTypeOptions: Array<{
     key: PublishType;
-    eyebrow: string;
     title: string;
   }> = [
     {
       key: 'product',
-      eyebrow: '闲置交易',
       title: '发布商品'
     },
     {
       key: 'service-request',
-      eyebrow: '校园服务',
       title: '找人帮我'
     },
     {
       key: 'service-offer',
-      eyebrow: '校园服务',
       title: '我来提供'
     }
   ];
@@ -299,9 +302,6 @@ export function ProductPublishPage() {
 
       <div className="publish-layout">
         <section className="publish-type-panel">
-          <div className="publish-type-panel-head">
-            <SectionHeader title="发布类型" className="is-prominent" />
-          </div>
           <div className="publish-type-grid" role="tablist" aria-label="发布类型">
             {publishTypeOptions.map((option) => (
               <button
@@ -312,7 +312,6 @@ export function ProductPublishPage() {
                 className={['publish-type-card', publishType === option.key ? 'is-active' : ''].filter(Boolean).join(' ')}
                 onClick={() => setPublishType(option.key)}
               >
-                <span className="publish-type-eyebrow">{option.eyebrow}</span>
                 <strong>{option.title}</strong>
               </button>
             ))}
@@ -320,13 +319,20 @@ export function ProductPublishPage() {
         </section>
 
         {isProductPublish ? (
-          <div className="publish-workbench-main">
+          <div className="publish-workbench-main publish-workbench-shell">
+            <ThinkingOverlay open={submittingProduct} />
             <SectionCard
               className="publish-main-card publish-editor-card"
               title={<SectionHeader title="商品信息" className="is-prominent" />}
             >
               {message ? <Alert style={{ marginBottom: 16 }} type={message.type} showIcon message={message.text} /> : null}
-              <Form form={form} layout="vertical" onFinish={(values) => void handleSubmit(values)} className="form-shell publish-form">
+              <Form
+                form={form}
+                layout="vertical"
+                onFinish={(values) => void handleSubmit(values)}
+                className="form-shell publish-form"
+                initialValues={{ conditionValue: PRODUCT_CONDITION_MAX }}
+              >
                 <PublishImageManager
                   title="商品图片"
                   modalTitle="上传商品图片"
@@ -337,23 +343,74 @@ export function ProductPublishPage() {
                 />
 
                 <div className="publish-form-grid">
-                  <Form.Item name="title" label="商品标题" rules={[{ required: true, message: '请输入商品标题' }]}>
+                  <Form.Item
+                    name="title"
+                    label="商品标题"
+                    extra="标题会直接出现在搜索结果和商品卡片里，建议写清品类、品牌或课程名。"
+                    rules={[{ required: true, message: '请输入商品标题' }]}
+                  >
                     <Input placeholder="例如：九成新计算机网络教材" maxLength={40} showCount />
                   </Form.Item>
-                  <Form.Item name="category" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
+                  <Form.Item
+                    name="category"
+                    label="分类"
+                    extra="分类决定它会被归到哪个频道，也影响同类推荐。"
+                    rules={[{ required: true, message: '请选择分类' }]}
+                  >
                     <Select options={allowedCategories.map((item) => ({ value: item }))} placeholder="请选择分类" />
                   </Form.Item>
-                  <Form.Item name="price" label="价格" rules={[{ required: true, message: '请输入价格' }]}>
+                  <Form.Item
+                    name="conditionValue"
+                    label="商品成色"
+                    extra="滑条只用于选择成色，左侧 00 表示零零成，右侧 10 表示全新。"
+                    rules={[{ required: true, message: '请选择商品成色' }]}
+                  >
+                    <Slider
+                      min={PRODUCT_CONDITION_MIN}
+                      max={PRODUCT_CONDITION_MAX}
+                      step={PRODUCT_CONDITION_STEP}
+                      marks={{
+                        [PRODUCT_CONDITION_MIN]: '00',
+                        [PRODUCT_CONDITION_MAX]: '10'
+                      }}
+                      tooltip={{ formatter: (value) => formatProductConditionValue(value ?? PRODUCT_CONDITION_MIN) }}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    noStyle
+                    shouldUpdate={(prev, next) => prev.conditionValue !== next.conditionValue}
+                  >
+                    {() => (
+                      <div className="publish-form-span-2" style={{ marginTop: -8, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+                        当前成色：{formatProductConditionValue(form.getFieldValue('conditionValue') ?? PRODUCT_CONDITION_MAX)}
+                      </div>
+                    )}
+                  </Form.Item>
+                  <Form.Item
+                    name="price"
+                    label="价格"
+                    extra="这是买家第一眼会比较的数字，建议按实际成交预期填写。"
+                    rules={[{ required: true, message: '请输入价格' }]}
+                  >
                     <InputNumber min={0} style={{ width: '100%' }} controls={false} prefix="¥" placeholder="88" />
                   </Form.Item>
                   <div className="publish-form-span-2 publish-description-group">
-                    <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入商品描述' }]}>
+                    <Form.Item
+                      name="description"
+                      label="描述"
+                      extra="这里写使用情况、瑕疵、配件、版本和交易地点，减少来回追问。"
+                      rules={[{ required: true, message: '请输入商品描述' }]}
+                    >
                       <Input.TextArea rows={7} placeholder="写清使用情况、配件、容量/版本、可交易地点。" maxLength={240} showCount />
                     </Form.Item>
                   </div>
                 </div>
 
-                <Form.Item name="tags" label="标签">
+                <Form.Item
+                  name="tags"
+                  label="标签"
+                  extra="标签用于补充关键词，比如“教材、考研、可验货”，方便搜索命中。"
+                >
                   <Input placeholder="例如：教材, 考试周, 可验货" />
                 </Form.Item>
 

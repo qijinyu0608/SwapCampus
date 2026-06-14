@@ -20,16 +20,30 @@ export class ProductsController {
   ) {}
 
   @Get()
-  searchProducts(@Query() query: SearchProductsDto) {
-    return this.productsService.searchProducts(query);
+  searchProducts(
+    @Query() query: SearchProductsDto,
+    @Req() request?: SessionRequest,
+    @Res({ passthrough: true }) response?: SessionResponse
+  ) {
+    return resolveOptionalAuthUser(
+      this.prisma,
+      (request ?? {}) as SessionRequest & { user?: AuthenticatedUser },
+      response
+    )
+      .then((user) => this.productsService.searchProducts(query, user?.id));
   }
 
   @Get('home-recommendations')
-  getHomeRecommendations(@Req() request: SessionRequest) {
-    const session = request.session;
-    const accessTokenPayload = session?.getAccessTokenPayload();
-    const currentUserId = accessTokenPayload ? Number(accessTokenPayload.userId) : undefined;
-    return this.productsService.getHomeRecommendations(currentUserId);
+  getHomeRecommendations(
+    @Req() request?: SessionRequest,
+    @Res({ passthrough: true }) response?: SessionResponse
+  ) {
+    return resolveOptionalAuthUser(
+      this.prisma,
+      (request ?? {}) as SessionRequest & { user?: AuthenticatedUser },
+      response
+    )
+      .then((user) => this.productsService.getHomeRecommendations(user?.id));
   }
 
   @Get('publishing-rules')

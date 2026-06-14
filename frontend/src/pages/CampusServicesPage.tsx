@@ -11,6 +11,7 @@ import { PeelBack, PeelBottom, PeelTop, PeelWrapper, usePeel } from 'react-peel'
 import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
 import { ProductGrid, ProductSummaryCard, ResultFilterBar } from '../components/product';
+import { CAMPUS_SERVICE_CATEGORY_LABEL, CAMPUS_SERVICE_CATEGORY_OPTIONS } from '../constants/campusServiceCategories';
 import { useAuthState } from '../services/auth-state';
 import {
   acceptCampusServiceListing,
@@ -30,7 +31,6 @@ import {
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { resolvePrimaryProductImage } from '../utils/productCover';
 
-type ServiceCategoryFilter = 'ALL' | CampusServiceCategory;
 type ServiceSortKey = 'composite' | 'price_asc' | 'price_desc';
 type ServiceCreditFilter = 'EXCELLENT' | 'STABLE' | 'NORMAL' | 'IMPROVE';
 
@@ -178,7 +178,7 @@ export function CampusServicesPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthState();
   const [listings, setListings] = useState<CampusServiceListItem[]>([]);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<ServiceCategoryFilter>('ALL');
+  const [activeCategories, setActiveCategories] = useState<CampusServiceCategory[]>([]);
   const [activeIntent, setActiveIntent] = useState<'REQUEST' | 'OFFER'>('REQUEST');
   const [activeSort, setActiveSort] = useState<ServiceSortKey>('composite');
   const [minReward, setMinReward] = useState<number | null>(null);
@@ -194,19 +194,13 @@ export function CampusServicesPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(12);
   const [total, setTotal] = useState(0);
-  const categoryTabs = useMemo(() => {
-    const categoryMap = new Map<CampusServiceCategory, string>();
-
-    listings.forEach((listing) => {
-      if (!categoryMap.has(listing.category)) {
-        categoryMap.set(listing.category, listing.serviceType.label);
-      }
-    });
-
-    return [
-      { key: 'ALL', label: activeIntent === 'REQUEST' ? '全部需求' : '全部服务' },
-      ...Array.from(categoryMap.entries()).map(([key, label]) => ({ key, label }))
-    ];
+  const categoryOptions = useMemo(() => {
+    return CAMPUS_SERVICE_CATEGORY_OPTIONS
+      .filter((item) => item.key !== 'HELP')
+      .map((item) => ({
+        key: item.key,
+        label: CAMPUS_SERVICE_CATEGORY_LABEL[item.key] ?? item.title
+      }));
   }, [activeIntent, listings]);
 
   function submitKeywordSearch(nextKeyword: string) {
@@ -225,12 +219,21 @@ export function CampusServicesPage() {
     setPage(1);
   }
 
+  function toggleCategoryFilter(key: CampusServiceCategory) {
+    setActiveCategories((current) => (
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    ));
+    setPage(1);
+  }
+
   async function loadListings(nextPage = page) {
     setLoading(true);
     try {
       const result = await fetchCampusServiceListings({
         intent: activeIntent,
-        category: activeCategoryFilter === 'ALL' ? undefined : activeCategoryFilter,
+        categories: activeCategories.length ? activeCategories : undefined,
         status: 'OPEN',
         keyword: keyword.trim() || undefined,
         sort: activeSort,
@@ -258,7 +261,7 @@ export function CampusServicesPage() {
 
   useEffect(() => {
     void loadListings(1);
-  }, [activeCategoryFilter, activeCreditFilters, activeIntent, activeSort, keyword, maxReward, minReward, pageSize]);
+  }, [activeCategories, activeCreditFilters, activeIntent, activeSort, keyword, maxReward, minReward, pageSize]);
 
   useEffect(() => {
     if (keywordInput === '' && keyword !== '') {
@@ -266,18 +269,6 @@ export function CampusServicesPage() {
       setPage(1);
     }
   }, [keyword, keywordInput]);
-
-  useEffect(() => {
-    if (activeCategoryFilter === 'ALL') {
-      return;
-    }
-
-    const hasActiveCategory = listings.some((listing) => listing.category === activeCategoryFilter);
-    if (!hasActiveCategory) {
-      setActiveCategoryFilter('ALL');
-      setPage(1);
-    }
-  }, [activeCategoryFilter, listings]);
 
   async function handleComplete(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
     event.stopPropagation();
@@ -434,12 +425,9 @@ export function CampusServicesPage() {
 
       <section className="service-market-main">
         <ResultFilterBar
-          tabs={categoryTabs}
-          activeTab={activeCategoryFilter}
-          onTabChange={(key) => {
-            setActiveCategoryFilter(key as ServiceCategoryFilter);
-            setPage(1);
-          }}
+          categoryOptions={categoryOptions}
+          activeCategories={activeCategories}
+          onCategoryToggle={(key) => toggleCategoryFilter(key as CampusServiceCategory)}
           sortOptions={[
             { key: 'composite', label: '综合' },
             { key: 'price_asc', label: '价格低到高' },

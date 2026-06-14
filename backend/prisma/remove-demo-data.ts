@@ -34,7 +34,7 @@ async function deleteSuperTokensAccounts(userIds: string[]) {
   }
 }
 
-async function clearProductSearchIndex() {
+export async function clearProductSearchIndex() {
   const host = process.env.MEILISEARCH_HOST?.trim();
   if (!host) {
     console.warn('[db:remove-demo-data] skip Meilisearch cleanup: MEILISEARCH_HOST is not set');
@@ -110,6 +110,9 @@ async function main() {
   await prisma.review.deleteMany();
   await prisma.order.deleteMany();
   await prisma.campusServiceOrder.deleteMany();
+  await prisma.campusServiceFavorite.deleteMany();
+  await prisma.campusServiceBehavior.deleteMany();
+  await prisma.campusServiceImage.deleteMany();
   await prisma.campusServiceListing.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.favorite.deleteMany();
@@ -117,6 +120,10 @@ async function main() {
   await prisma.userBehavior.deleteMany();
   await prisma.productImage.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.creditRedeemOrder.deleteMany();
+  await prisma.creditMissionClaim.deleteMany();
+  await prisma.creditPointLedger.deleteMany();
+  await prisma.userCreditAsset.deleteMany();
   await prisma.studentVerification.deleteMany();
   await prisma.user.deleteMany();
   await clearProductSearchIndex();

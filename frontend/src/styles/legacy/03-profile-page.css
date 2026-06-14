@@ -1409,6 +1409,38 @@
   gap: 6px;
 }
 
+.credit-center-calendar-toolbar {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.credit-center-calendar-toolbar strong {
+  text-align: center;
+  color: #111827;
+  font-size: 15px;
+}
+
+.credit-center-calendar-nav.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  color: #374151;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent 22%);
+  background: color-mix(in srgb, var(--paper) 90%, var(--panel) 10%);
+}
+
+.credit-center-calendar-nav.ant-btn:disabled {
+  color: #c0c6cf;
+  background: color-mix(in srgb, var(--paper) 96%, var(--panel) 4%);
+}
+
 .credit-center-calendar-weekdays {
   margin-bottom: 8px;
 }
@@ -1435,10 +1467,6 @@
   transition: border-color 180ms ease, background-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
-.credit-center-calendar-cell.is-empty {
-  background: transparent;
-}
-
 .credit-center-calendar-cell.is-missed {
   background: color-mix(in srgb, var(--paper) 92%, #f3f4f6 8%);
   color: #9ca3af;
@@ -1462,6 +1490,12 @@
   background: transparent;
   color: #c0c6cf;
   border-color: color-mix(in srgb, var(--line) 55%, transparent 45%);
+}
+
+.credit-center-calendar-cell.is-adjacent-month {
+  color: #c0c6cf;
+  background: color-mix(in srgb, var(--paper) 96%, var(--panel) 4%);
+  border-color: color-mix(in srgb, var(--line) 45%, transparent 55%);
 }
 
 .credit-center-calendar-cell.is-today {
@@ -1616,6 +1650,33 @@
   font-style: normal;
 }
 
+.credit-center-task-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.credit-center-task-chip.is-active {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.credit-center-task-chip.is-claimable {
+  background: #eef6ff;
+  color: #335c8a;
+}
+
+.credit-center-task-chip.is-claimed {
+  background: #e8f7ee;
+  color: #1f7a4f;
+}
+
 .credit-center-reward-headline {
   display: flex;
   align-items: center;
@@ -1690,111 +1751,128 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 78px;
-  height: 78px;
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.08));
 }
 
-.credit-center-reward-badge-crest {
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, transparent 56%, rgba(180, 83, 9, 0.3) 57%, rgba(180, 83, 9, 0.3) 61%, transparent 62%),
-    conic-gradient(
-      from 0deg,
-      #facc15 0deg 12deg,
-      #f59e0b 12deg 24deg,
-      #fef3c7 24deg 36deg,
-      #f59e0b 36deg 48deg,
-      #facc15 48deg 60deg,
-      #f59e0b 60deg 72deg,
-      #fef3c7 72deg 84deg,
-      #f59e0b 84deg 96deg,
-      #facc15 96deg 108deg,
-      #f59e0b 108deg 120deg,
-      #fef3c7 120deg 132deg,
-      #f59e0b 132deg 144deg,
-      #facc15 144deg 156deg,
-      #f59e0b 156deg 168deg,
-      #fef3c7 168deg 180deg,
-      #f59e0b 180deg 192deg,
-      #facc15 192deg 204deg,
-      #f59e0b 204deg 216deg,
-      #fef3c7 216deg 228deg,
-      #f59e0b 228deg 240deg,
-      #facc15 240deg 252deg,
-      #f59e0b 252deg 264deg,
-      #fef3c7 264deg 276deg,
-      #f59e0b 276deg 288deg,
-      #facc15 288deg 300deg,
-      #f59e0b 300deg 312deg,
-      #fef3c7 312deg 324deg,
-      #f59e0b 324deg 336deg,
-      #facc15 336deg 348deg,
-      #f59e0b 348deg 360deg
-    );
-  filter: drop-shadow(0 10px 16px rgba(245, 158, 11, 0.18));
-}
-
-.credit-center-reward-badge-core {
+.credit-center-reward-badge-medal {
   position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 30% 26%, #fff8d6 0%, #ffe082 30%, #f59e0b 64%, #b45309 100%);
-  color: #6b3d00;
-  font-size: 24px;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  border: 3px solid #fff5cc;
   box-shadow:
-    inset 0 2px 8px rgba(255, 255, 255, 0.58),
-    inset 0 -4px 10px rgba(146, 64, 14, 0.2),
-    0 10px 20px rgba(245, 158, 11, 0.2);
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -4px 0 rgba(180, 83, 9, 0.28),
+    0 6px 0 #d97706,
+    0 10px 16px rgba(217, 119, 6, 0.16);
 }
 
-.credit-center-reward-badge::before {
-  content: '';
+.credit-center-reward-badge-medal::before {
+  content: "";
   position: absolute;
-  inset: 13px;
+  inset: 6px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 248, 220, 0.72);
-  z-index: 4;
+  border: 2px solid rgba(255, 247, 210, 0.88);
   pointer-events: none;
 }
 
-.credit-center-reward-badge-spark {
+.credit-center-reward-badge-core {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #fff7d6 0%, #fde68a 100%);
+  color: #92400e;
+  font-size: 20px;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -2px 0 rgba(217, 119, 6, 0.18),
+    0 3px 0 rgba(245, 158, 11, 0.7);
+}
+
+.credit-center-reward-badge-core::before {
+  content: "";
   position: absolute;
-  top: 12px;
-  right: 16px;
-  z-index: 5;
-  width: 12px;
-  height: 12px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.1) 72%, transparent 74%);
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 251, 235, 0.72);
+  pointer-events: none;
+}
+
+.credit-center-reward-badge-seal {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  border: 2px solid #eff6ff;
+  color: #eff6ff;
+  font-size: 13px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 3px 0 #1d4ed8,
+    0 8px 12px rgba(37, 99, 235, 0.16);
 }
 
 .credit-center-reward-badge-ribbon {
   position: absolute;
-  bottom: 0;
-  z-index: 1;
-  width: 20px;
-  height: 34px;
-  background:
-    linear-gradient(180deg, #60a5fa 0%, #2563eb 35%, #1d4ed8 100%);
+  bottom: 8px;
+  z-index: 0;
+  width: 18px;
+  height: 38px;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
   clip-path: polygon(0 0, 100% 0, 100% 74%, 62% 74%, 50% 100%, 38% 74%, 0 74%);
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 0 #b91c1c;
 }
 
 .credit-center-reward-badge-ribbon.left {
-  left: 14px;
-  transform: rotate(-7deg);
+  left: 18px;
+  transform: rotate(-8deg);
 }
 
 .credit-center-reward-badge-ribbon.right {
-  right: 14px;
-  transform: rotate(7deg);
+  right: 18px;
+  transform: rotate(8deg);
+}
+
+.credit-center-reward-badge-wing {
+  position: absolute;
+  top: 22px;
+  width: 24px;
+  height: 18px;
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 100%);
+  border: 1px solid rgba(217, 119, 6, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 3px 0 rgba(217, 119, 6, 0.34);
+  clip-path: polygon(0 50%, 28% 10%, 100% 0, 82% 50%, 100% 100%, 28% 90%);
+}
+
+.credit-center-reward-badge-wing.left {
+  left: 4px;
+  transform: rotate(-8deg);
+}
+
+.credit-center-reward-badge-wing.right {
+  right: 4px;
+  transform: scaleX(-1) rotate(-8deg);
 }
 
 .credit-center-reward-chip {
@@ -2022,6 +2100,11 @@
   min-height: 280px;
 }
 
+.profile-page .profile-order-panel {
+  display: grid;
+  gap: 14px;
+}
+
 .profile-page .profile-order-scope,
 .profile-page .profile-order-tabs {
   display: flex;
@@ -2065,6 +2148,13 @@
 .profile-page .profile-order-scope button:hover {
   color: #8a5a00;
   background: #fff4cf;
+}
+
+.profile-page .profile-order-user-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .profile-page .profile-published-panel {
@@ -2411,6 +2501,77 @@
   box-shadow: none !important;
 }
 
+.profile-page .profile-order-card.profile-order-card-list {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.profile-page .profile-order-card.profile-order-card-list .checkout-shop-card {
+  border-top: 0;
+}
+
+.profile-page .profile-order-shop-copy {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.profile-page .profile-order-shop-copy .profile-order-avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+.profile-page .profile-order-shop-copy .profile-order-avatar .user-avatar-frame-shell,
+.profile-page .profile-order-shop-copy .profile-order-avatar .user-avatar-inner {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-page .profile-order-shop-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+  margin-left: auto;
+}
+
+.profile-page .profile-order-list-item {
+  grid-template-columns: minmax(0, 1.7fr) minmax(220px, 1fr) 132px auto;
+}
+
+.profile-page .profile-order-item-copy {
+  gap: 8px;
+}
+
+.profile-page .profile-order-item-copy h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.profile-page .profile-order-item-copy .profile-order-product-category {
+  display: inline-flex;
+}
+
+.profile-page .profile-order-item-attrs {
+  min-width: 0;
+}
+
+.profile-page .profile-order-item-price {
+  align-content: center;
+}
+
+.profile-page .profile-order-list-actions {
+  justify-content: flex-end;
+  align-items: center;
+  align-self: stretch;
+}
+
 .profile-page .profile-offline-flow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2640,6 +2801,19 @@
     width: 88px;
     height: 88px;
   }
+
+  .profile-page .profile-order-card.profile-order-card-list .checkout-shop-info {
+    padding: 14px 16px;
+  }
+
+  .profile-page .profile-order-list-item {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .profile-page .profile-order-list-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2682,6 +2856,10 @@
     width: 100%;
     height: auto;
     aspect-ratio: 1 / 1;
+  }
+
+  .profile-page .profile-order-shop-copy {
+    align-items: flex-start;
   }
 
   .profile-page .profile-form-actions {
@@ -3063,6 +3241,15 @@
 
 .public-user-products {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-user-review-list {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-user-review-list .ant-rate {
+  font-size: 15px;
 }
 
 .profile-order-summary-item strong {

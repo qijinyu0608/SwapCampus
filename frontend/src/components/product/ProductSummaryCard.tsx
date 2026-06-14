@@ -1,8 +1,11 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import type { ListingSummary } from '../../services/api';
+import { formatCurrencyAmount } from '../../utils/price';
 
 type ProductSummaryCardProps = {
-  item: ListingSummary;
+  item: ListingSummary & {
+    condition?: string;
+  };
   imageSrc: string;
   coverClassName?: string;
   signal?: ReactNode;
@@ -17,6 +20,40 @@ type ProductSummaryCardProps = {
   className?: string;
   onOpen?: () => void;
 };
+
+function resolveConditionTone(condition?: string) {
+  if (!condition) {
+    return 'default';
+  }
+
+  if (condition === '全新') {
+    return 'new';
+  }
+
+  const match = condition.match(/^(\d+(?:\.\d)?)成$/);
+  if (!match) {
+    return 'default';
+  }
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) {
+    return 'default';
+  }
+
+  if (value >= 9) {
+    return 'new';
+  }
+
+  if (value >= 8) {
+    return 'good';
+  }
+
+  if (value >= 7) {
+    return 'mid';
+  }
+
+  return 'old';
+}
 
 export function ProductSummaryCard({
   item,
@@ -36,6 +73,12 @@ export function ProductSummaryCard({
 }: ProductSummaryCardProps) {
   const classes = ['fish-item-card', className ?? ''].filter(Boolean).join(' ');
   const normalizedTags = (tagItems ?? []).filter(Boolean);
+  const conditionTone = resolveConditionTone(item.condition);
+  const conditionTag = item.condition ? (
+    <span className={`fish-item-tag is-condition is-condition-${conditionTone}`}>
+      <span className="fish-item-tag-content">{item.condition}</span>
+    </span>
+  ) : null;
   const coverClasses = ['fish-item-cover', item.imageUrl ? 'has-image' : '', coverClassName ?? ''].filter(Boolean).join(' ');
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -61,6 +104,7 @@ export function ProductSummaryCard({
       <div className="fish-item-body">
         <h3>{title ?? item.title}</h3>
         <div className="fish-item-tags-row" aria-label="商品标签">
+          {conditionTag}
           {normalizedTags.map((tag, index) => (
             <span key={index} className="fish-item-tag">
               <span className="fish-item-tag-content">{tag}</span>
@@ -69,7 +113,7 @@ export function ProductSummaryCard({
         </div>
         {bodyMeta ? <div className="fish-item-body-meta">{bodyMeta}</div> : null}
         <div className="fish-item-price-row">
-          <strong>{priceValue ?? `¥${item.price}`}</strong>
+          <strong>{priceValue ?? formatCurrencyAmount(item.price)}</strong>
           {priceMeta ? <span className="fish-item-price-meta">{priceMeta}</span> : null}
         </div>
         {secondaryActions ? <div className="fish-item-secondary-row">{secondaryActions}</div> : null}

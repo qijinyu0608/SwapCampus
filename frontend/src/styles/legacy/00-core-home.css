@@ -695,7 +695,7 @@
   padding: 0;
 }
 
-.fish-home-user-copy span,
+.fish-home-user-copy > span,
 .fish-home-user-panel-head span {
   font-size: 10px;
   color: var(--muted);
@@ -2022,6 +2022,35 @@
   overflow: hidden;
   white-space: nowrap;
   flex: 0 1 auto;
+}
+
+.fish-item-tag.is-condition {
+  padding: 0 8px;
+  border-radius: 4px;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.fish-item-tag.is-condition.is-condition-new {
+  background: #e7f6ee;
+  color: #14744d;
+}
+
+.fish-item-tag.is-condition.is-condition-good {
+  background: #e9f1ff;
+  color: #2152bf;
+}
+
+.fish-item-tag.is-condition.is-condition-mid {
+  background: #fff3dd;
+  color: #c96b17;
+}
+
+.fish-item-tag.is-condition.is-condition-old {
+  background: #fde8e8;
+  color: #b42318;
 }
 
 .fish-item-tag-content {

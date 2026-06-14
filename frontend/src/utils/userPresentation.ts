@@ -3,9 +3,9 @@ import type { SessionUser } from '../services/session';
 
 type VerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-type UserLike = Partial<Pick<UserProfile, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'creditScore' | 'verificationStatus' | 'college'>>
-  | Partial<Pick<UserTrustSummary, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'creditScore' | 'verificationStatus' | 'college'>>
-  | (Partial<Pick<SessionUser, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'creditScore' | 'verificationStatus'>> & { college?: string });
+type UserLike = Partial<Pick<UserProfile, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'trustedBadgeUnlocked' | 'creditScore' | 'verificationStatus' | 'college'>>
+  | Partial<Pick<UserTrustSummary, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'trustedBadgeUnlocked' | 'creditScore' | 'verificationStatus' | 'college'>>
+  | (Partial<Pick<SessionUser, 'displayName' | 'studentId' | 'email' | 'avatarUrl' | 'avatarFrame' | 'avatarFrameUnlocked' | 'trustedBadgeUnlocked' | 'creditScore' | 'verificationStatus'>> & { college?: string });
 
 export type UserCreditBadgeTone = 'excellent' | 'great' | 'good' | 'stable' | 'low';
 
@@ -20,6 +20,7 @@ export type UserPresentationModel = {
   initial: string;
   avatarUrl: string | null;
   avatarFrame: string | null;
+  trustedBadgeUnlocked: boolean;
   collegeLabel: string;
   emailLabel: string;
   creditScore: number;
@@ -32,19 +33,15 @@ export function getUserCreditBadge(score?: number): UserCreditBadge {
   const value = typeof score === 'number' ? score : 60;
 
   if (value >= 90) {
-    return { label: '信用极好', score: value, tone: 'excellent' };
+    return { label: '信用优秀', score: value, tone: 'excellent' };
   }
 
-  if (value >= 80) {
-    return { label: '信用优秀', score: value, tone: 'great' };
-  }
-
-  if (value >= 70) {
-    return { label: '信用良好', score: value, tone: 'good' };
+  if (value >= 75) {
+    return { label: '信用稳定', score: value, tone: 'stable' };
   }
 
   if (value >= 60) {
-    return { label: '信用稳定', score: value, tone: 'stable' };
+    return { label: '信用正常', score: value, tone: 'good' };
   }
 
   return { label: '信用待提升', score: value, tone: 'low' };
@@ -90,6 +87,7 @@ export function getUserPresentation(user?: UserLike | null): UserPresentationMod
     initial: getUserInitial(user),
     avatarUrl: user?.avatarUrl?.trim() || null,
     avatarFrame: user?.avatarFrameUnlocked ? (user?.avatarFrame?.trim() || null) : null,
+    trustedBadgeUnlocked: Boolean(user?.trustedBadgeUnlocked),
     collegeLabel: getUserCollegeLabel(user),
     emailLabel: getUserEmailLabel(user),
     creditScore: creditBadge.score,

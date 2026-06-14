@@ -12,6 +12,7 @@
     "db:init": "tsx prisma/init.ts",
     "db:remove-demo-data": "tsx prisma/remove-demo-data.ts",
     "db:seed-demo-data": "tsx prisma/seed-demo-data.ts",
+    "db:reset-and-seed-demo": "tsx prisma/reset-and-seed-demo.ts",
     "db:reindex-products": "tsx prisma/reindex-products.ts",
     "db:migrate-product-statuses": "tsx prisma/migrate-product-statuses.ts",
     "db:generate-product-samples": "tsx prisma/generate-product-samples.ts",

@@ -29,6 +29,7 @@ import { ProductsController } from './modules/products/products.controller';
 import { ProductsService } from './modules/products/products.service';
 import { ReportsController } from './modules/reports/reports.controller';
 import { ReportsService } from './modules/reports/reports.service';
+import { PublishingReviewService } from './modules/moderation/publishing-review.service';
 import { SearchService } from './modules/search/search.service';
 import { UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
@@ -70,6 +71,7 @@ import { PrismaService } from './prisma/prisma.service';
     ProductsService,
     OrdersService,
     ReportsService,
+    PublishingReviewService,
     SearchService,
     UsersService,
     VendureService,

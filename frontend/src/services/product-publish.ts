@@ -25,6 +25,16 @@ export async function createProductWithImages(payload: ProductPublishPayload) {
     id: number;
     title: string;
     status: string;
+    review?: {
+      provider: string;
+      model: string;
+      status: 'enabled' | 'disabled' | 'failed';
+      decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
+      shouldBlock: boolean;
+      selectedCategory: string;
+      reason: string;
+      issues: string[];
+    } | null;
   };
 }
 

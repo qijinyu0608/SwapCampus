@@ -12,6 +12,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { MessagesPage } from '../pages/MessagesPage';
 import { OrderCheckoutPage } from '../pages/OrderCheckoutPage';
 import { OrderDetailPage } from '../pages/OrderDetailPage';
+import { OrderSnapshotPage } from '../pages/OrderSnapshotPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductPublishPage } from '../pages/ProductPublishPage';
 import { ProductPublishRulesPage } from '../pages/ProductPublishRulesPage';
@@ -40,6 +41,7 @@ export const appRoutes: AppRouteDefinition[] = [
   { path: '/products/:id', element: <ProductDetailPage /> },
   { path: '/orders/checkout', element: <RequireUser><OrderCheckoutPage /></RequireUser> },
   { path: '/orders/:id', element: <RequireUser><OrderDetailPage /></RequireUser> },
+  { path: '/orders/:id/snapshot', element: <RequireUser><OrderSnapshotPage /></RequireUser> },
   { path: '/users/:id', element: <PublicUserPage /> },
   { path: '/publish', element: <RequireUser><ProductPublishPage /></RequireUser> },
   { path: '/publish/rules', element: <RequireUser><ProductPublishRulesPage /></RequireUser> },

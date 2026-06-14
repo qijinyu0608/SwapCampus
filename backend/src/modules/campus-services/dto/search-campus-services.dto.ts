@@ -59,6 +59,11 @@ export class SearchCampusServicesDto {
   category?: CampusServiceCategory;
 
   @IsOptional()
+  @Transform(({ value }) => toStringArray(value))
+  @IsEnum(CampusServiceCategory, { each: true })
+  categories?: CampusServiceCategory[];
+
+  @IsOptional()
   @IsEnum(CampusServiceListingStatus)
   status?: CampusServiceListingStatus;
 

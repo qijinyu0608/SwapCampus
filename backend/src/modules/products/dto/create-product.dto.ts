@@ -1,5 +1,4 @@
-import { IsArray, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { PRODUCT_CONDITION_VALUES } from '../product-conditions';
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
@@ -20,7 +19,6 @@ export class CreateProductDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(PRODUCT_CONDITION_VALUES)
   condition!: string;
 
   @IsArray()

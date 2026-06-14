@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionRow } from '../components/layout';
 import { SectionCard } from '../components/ui';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import {
   acceptCampusServiceListing,
   createConversation,
@@ -148,16 +149,15 @@ export function OrderCheckoutPage() {
     }
 
     if (product) {
-      return {
-        title: product.title,
-        amount: product.detailBase.amountLabel,
-        image: resolvePrimaryProductImage(product),
-        publisher: product.seller,
-        mainColumnLabel: '商品信息',
-        columnLabel: '商品属性',
-        attrItems: [
-          { key: 'category', label: '分类', value: product.detailBase.metaItems.find((item) => item.key === 'category')?.value ?? product.category },
-          { key: 'sellerStatus', label: '卖家状态', value: product.detailBase.metaItems.find((item) => item.key === 'seller-status')?.value ?? '普通账号' }
+        return {
+          title: product.title,
+          amount: product.detailBase.amountLabel,
+          image: resolvePrimaryProductImage(product),
+          publisher: product.seller,
+          mainColumnLabel: '商品信息',
+          columnLabel: '商品属性',
+          attrItems: [
+          { key: 'category', label: '分类', value: product.detailBase.metaItems.find((item) => item.key === 'category')?.value ?? product.category }
         ] satisfies CheckoutMetaItem[],
         sideItems: [
           { key: 'orderType', label: '订单类型', value: orderTypeLabelForMode('product') },
@@ -310,10 +310,15 @@ export function OrderCheckoutPage() {
 
               <div className="checkout-shop-card">
                 {sellerPresentation ? (
-                  <div className="checkout-shop-info" aria-label="当前卖家信息">
+                  <div className="checkout-shop-info" aria-label="订单对象信息">
                     <div className="checkout-shop-copy is-inline">
-                      <strong>{sellerPresentation.displayName}</strong>
-                      <span>{summary.publisher.studentId ? `学号 ${summary.publisher.studentId}` : '学号未公开'}</span>
+                      <UserNameWithBadge
+                        as="strong"
+                        name={sellerPresentation.displayName}
+                        trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
+                      />
+                    </div>
+                    <div className="checkout-shop-actions">
                       <Button
                         className="checkout-chat-button is-icon-only"
                         onClick={() => void handleOpenChat()}
@@ -321,8 +326,6 @@ export function OrderCheckoutPage() {
                         aria-label="聊一聊"
                         icon={<MessageOutlined />}
                       />
-                    </div>
-                    <div className="checkout-shop-actions">
                       <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
                         <span className="ui-credit-badge-label">{sellerPresentation.creditBadge.label}</span>
                       </div>

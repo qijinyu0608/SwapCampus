@@ -4,7 +4,7 @@ import { convertToRecipeUserId } from 'supertokens-node';
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import Session from 'supertokens-node/recipe/session';
 import { PrismaService } from '../../prisma/prisma.service';
-import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
+import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import { DEFAULT_TENANT_ID } from './auth.constants';
 import { buildDevFallbackHeaderValue, isDevAuthFallbackEnabled } from './dev-auth.utils';
 import { AuthSyncService } from './auth-sync.service';
@@ -12,11 +12,16 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { AuthenticatedUser } from './auth.types';
 import type { SessionRequest, SessionResponse } from './supertokens.types';
+import { moderateText } from '../products/product-moderation';
+import { MediaService } from '../media/media.service';
+import { MEDIA_PURPOSES, MEDIA_UPLOAD_PROFILES } from '../media/media.constants';
+import type { Express } from 'express';
 
 const TEST_ADMIN_ACCOUNT = 'admin';
 const TEST_ADMIN_PASSWORD = 'admin';
 const TEST_USER_ACCOUNT = 'user';
 const TEST_USER_PASSWORD = 'user';
+const prohibitedDisplayNameKeywords = ['刀具', '代抢', '账号', '药品', '烟草', '酒精', '发票', '银行卡', '代写', '代考', '外挂', '校园贷'];
 
 @Injectable()
 export class AuthService {
@@ -24,7 +29,9 @@ export class AuthService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(AuthSyncService)
-    private readonly authSyncService: AuthSyncService
+    private readonly authSyncService: AuthSyncService,
+    @Inject(MediaService)
+    private readonly mediaService: MediaService
   ) {}
 
   private mapSuperTokensError(error: unknown): never {
@@ -48,8 +55,9 @@ export class AuthService {
     creditScore: number;
     verificationStatus: VerificationStatus;
     accountStatus: AccountStatus;
-  }, options?: { avatarFrameUnlocked?: boolean }) {
+  }, options?: { avatarFrameUnlocked?: boolean; trustedBadgeUnlocked?: boolean }) {
     const avatarFrameUnlocked = options?.avatarFrameUnlocked ?? false;
+    const trustedBadgeUnlocked = options?.trustedBadgeUnlocked ?? false;
 
     return {
       id: user.id,
@@ -60,6 +68,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
       avatarFrameUnlocked,
+      trustedBadgeUnlocked,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
@@ -129,12 +138,66 @@ export class AuthService {
     await this.authSyncService.ensureRoles();
   }
 
-  async register(payload: RegisterDto, request: SessionRequest, response: SessionResponse) {
+  async register(
+    payload: RegisterDto,
+    request: SessionRequest,
+    response: SessionResponse,
+    files?: {
+      avatar?: Express.Multer.File[];
+      studentCard?: Express.Multer.File[];
+    }
+  ) {
     const email = payload.email.trim().toLowerCase();
     const displayName = payload.displayName.trim();
-    const studentId = payload.studentId?.trim() || undefined;
+    const studentId = payload.studentId.trim();
     const college = payload.college?.trim() || undefined;
-    const avatarUrl = payload.avatarUrl?.trim() || undefined;
+    const graduationYear = payload.graduationYear;
+    const verificationCode = payload.verificationCode.trim();
+    const moderationResult = moderateText(displayName, prohibitedDisplayNameKeywords);
+    const avatarFile = files?.avatar?.[0];
+    const studentCardFile = files?.studentCard?.[0];
+
+    if (!studentCardFile) {
+      throw new ConflictException('请上传学生证或学生卡照片');
+    }
+
+    if (!verificationCode) {
+      throw new ConflictException('请输入验证码');
+    }
+
+    if (!moderationResult.passed) {
+      throw new ConflictException(
+        `用户名包含疑似违规内容“${moderationResult.matchedTerm}”，请修改后再注册`
+      );
+    }
+
+    let avatarUrl = payload.avatarUrl?.trim() || undefined;
+    if (avatarFile) {
+      const avatarProfile = MEDIA_UPLOAD_PROFILES[MEDIA_PURPOSES.AVATAR];
+      const uploadedAvatar = await this.mediaService.uploadImage({
+        fileBuffer: avatarFile.buffer,
+        mimeType: avatarFile.mimetype,
+        originalName: avatarFile.originalname,
+        purpose: MEDIA_PURPOSES.AVATAR,
+        ownerId: 0,
+        circularCrop: avatarProfile.circularCrop,
+        maxWidth: avatarProfile.maxWidth,
+        maxHeight: avatarProfile.maxHeight
+      });
+      avatarUrl = uploadedAvatar.url;
+    }
+
+    const studentCardProfile = MEDIA_UPLOAD_PROFILES[MEDIA_PURPOSES.PRODUCT];
+    const uploadedStudentCard = await this.mediaService.uploadImage({
+      fileBuffer: studentCardFile.buffer,
+      mimeType: studentCardFile.mimetype,
+      originalName: studentCardFile.originalname,
+      purpose: MEDIA_PURPOSES.PRODUCT,
+      ownerId: 0,
+      circularCrop: studentCardProfile.circularCrop,
+      maxWidth: studentCardProfile.maxWidth,
+      maxHeight: studentCardProfile.maxHeight
+    });
 
     let signUpResult: Awaited<ReturnType<typeof EmailPassword.signUp>>;
     try {
@@ -153,7 +216,9 @@ export class AuthService {
       displayName,
       studentId,
       college,
+      graduationYear,
       avatarUrl,
+      studentCardPhotoUrl: uploadedStudentCard.url,
       avatarFrame: null,
       role: UserRole.USER,
       verificationStatus: VerificationStatus.PENDING,
@@ -163,11 +228,14 @@ export class AuthService {
     const linkedUser = this.requireLinkedSuperTokensUser(user);
     await this.createSession(request, response, linkedUser);
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id),
+      hasTrustedBadgeRewardUnlocked(this.prisma, linkedUser.id)
+    ]);
 
     return {
-      message: '注册成功',
-      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
+      message: '注册成功，请在 24 小时内等待审核，并留意邮箱反馈结果',
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked, trustedBadgeUnlocked })
     };
   }
 
@@ -188,7 +256,10 @@ export class AuthService {
         throw new ForbiddenException('账号已被封禁');
       }
 
-      const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, candidate.id);
+      const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+        hasAvatarFrameRewardUnlocked(this.prisma, candidate.id),
+        hasTrustedBadgeRewardUnlocked(this.prisma, candidate.id)
+      ]);
 
       const authUser = {
         id: candidate.id,
@@ -202,7 +273,8 @@ export class AuthService {
         creditScore: candidate.creditScore,
         verificationStatus: candidate.verificationStatus,
         accountStatus: candidate.accountStatus,
-        avatarFrameUnlocked
+        avatarFrameUnlocked,
+        trustedBadgeUnlocked
       };
 
       return {
@@ -242,12 +314,15 @@ export class AuthService {
     await this.authSyncService.syncUserRole(linkedUser.supertokensUserId, linkedUser.role);
     await this.createSession(request, response, linkedUser);
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id),
+      hasTrustedBadgeRewardUnlocked(this.prisma, linkedUser.id)
+    ]);
 
     return {
       message: '登录成功',
       account,
-      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked, trustedBadgeUnlocked })
     };
   }
 
@@ -294,10 +369,13 @@ export class AuthService {
     }
 
     const linkedUser = this.requireLinkedSuperTokensUser(user);
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, linkedUser.id),
+      hasTrustedBadgeRewardUnlocked(this.prisma, linkedUser.id)
+    ]);
 
     return {
-      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked })
+      user: this.buildAuthUser(linkedUser, { avatarFrameUnlocked, trustedBadgeUnlocked })
     };
   }
 }

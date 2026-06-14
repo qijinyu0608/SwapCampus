@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AccountStatus, MessageType, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AVATAR_FRAME_REWARD_CODE } from '../credit-center/credit-center.utils';
+import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
@@ -303,16 +303,12 @@ export class OrdersService {
       }
     });
 
-    const unlockedUserIds = new Set<number>(
-      (await this.prisma.creditRedeemOrder.findMany({
-        where: {
-          userId: { in: users.map((user) => user.id) },
-          rewardCode: AVATAR_FRAME_REWARD_CODE,
-          status: 'FULFILLED'
-        },
-        select: { userId: true }
-      })).map((item) => item.userId)
-    );
+    const [unlockedUserIds, trustedBadgeUnlockedUserIds] = await Promise.all([
+      Promise.all(users.map(async (user) => (await hasAvatarFrameRewardUnlocked(this.prisma, user.id)) ? user.id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null))),
+      Promise.all(users.map(async (user) => (await hasTrustedBadgeRewardUnlocked(this.prisma, user.id)) ? user.id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null)))
+    ]);
 
     return {
       items: orders.map((order) => this.mapOrderListItem({
@@ -323,7 +319,8 @@ export class OrdersService {
         productImageUrl: firstImageMap.get(order.productId) ?? null,
         buyer: userMap.get(order.buyerId),
         seller: userMap.get(order.sellerId),
-        unlockedUserIds
+        unlockedUserIds,
+        trustedBadgeUnlockedUserIds
       })),
       pagination: {
         page,
@@ -332,6 +329,26 @@ export class OrdersService {
         totalPages: total ? Math.ceil(total / pageSize) : 1
       }
     };
+  }
+
+  async getOrderByProductId(productId: number) {
+    return this.prisma.order.findFirst({
+      where: {
+        productId,
+        status: { not: OrderStatus.CANCELED }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        productId: true,
+        buyerId: true,
+        sellerId: true,
+        status: true,
+        createdAt: true,
+        completedAt: true,
+        autoConfirmAt: true
+      }
+    });
   }
 
   async getOrderDetail(orderId: number, currentUser: AuthenticatedUser) {
@@ -396,23 +413,17 @@ export class OrdersService {
 
     this.assertParticipant(order, authUser.id);
 
-    const [images, unlockedUsers] = await Promise.all([
+    const [images, unlockedUserIds, trustedBadgeUnlockedUserIds] = await Promise.all([
       this.prisma.productImage.findMany({
         where: { productId: order.productId },
         orderBy: { sortOrder: 'asc' },
         select: { imageUrl: true }
       }),
-      this.prisma.creditRedeemOrder.findMany({
-        where: {
-          userId: { in: [order.buyerId, order.sellerId] },
-          rewardCode: AVATAR_FRAME_REWARD_CODE,
-          status: 'FULFILLED'
-        },
-        select: { userId: true }
-      })
+      Promise.all([order.buyerId, order.sellerId].map(async (id) => (await hasAvatarFrameRewardUnlocked(this.prisma, id)) ? id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null))),
+      Promise.all([order.buyerId, order.sellerId].map(async (id) => (await hasTrustedBadgeRewardUnlocked(this.prisma, id)) ? id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null)))
     ]);
-
-    const unlockedUserIds = new Set(unlockedUsers.map((item) => item.userId));
     const snapshot = this.parseOrderSnapshot(order.orderSnapshot, {
       productId: order.productId,
       title: order.product.title,
@@ -432,7 +443,8 @@ export class OrdersService {
       productImageUrl: images[0]?.imageUrl ?? null,
       buyer: order.buyer,
       seller: order.seller,
-      unlockedUserIds
+      unlockedUserIds,
+      trustedBadgeUnlockedUserIds
     });
 
     return {
@@ -780,8 +792,9 @@ export class OrdersService {
       verificationStatus: VerificationStatus;
     } | null;
     unlockedUserIds: Set<number>;
+    trustedBadgeUnlockedUserIds?: Set<number>;
   }) {
-    const { order, product, conversationId, productImageUrl, buyer, seller, unlockedUserIds, currentUserId } = params;
+    const { order, product, conversationId, productImageUrl, buyer, seller, unlockedUserIds, trustedBadgeUnlockedUserIds, currentUserId } = params;
     const isBuyer = order.buyerId === currentUserId;
     return {
       ...order,
@@ -798,11 +811,13 @@ export class OrdersService {
       buyerName: buyer?.displayName ?? `用户#${order.buyerId}`,
       buyerAvatarUrl: buyer?.avatarUrl ?? null,
       buyerAvatarFrame: unlockedUserIds.has(order.buyerId) ? (buyer?.avatarFrame ?? null) : null,
+      buyerTrustedBadgeUnlocked: trustedBadgeUnlockedUserIds?.has(order.buyerId) ?? false,
       buyerCreditScore: buyer?.creditScore ?? null,
       buyerVerified: buyer?.verificationStatus === VerificationStatus.APPROVED,
       sellerName: seller?.displayName ?? `用户#${order.sellerId}`,
       sellerAvatarUrl: seller?.avatarUrl ?? null,
       sellerAvatarFrame: unlockedUserIds.has(order.sellerId) ? (seller?.avatarFrame ?? null) : null,
+      sellerTrustedBadgeUnlocked: trustedBadgeUnlockedUserIds?.has(order.sellerId) ?? false,
       sellerCreditScore: seller?.creditScore ?? null,
       sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED,
       autoConfirmAt: order.autoConfirmAt ?? null,

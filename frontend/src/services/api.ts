@@ -79,6 +79,7 @@ export type ListingParticipantBase = {
   studentId?: string | null;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  trustedBadgeUnlocked?: boolean;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -105,6 +106,13 @@ export type ListingDetailBase = ListingSummary & {
   summaryTags: string[];
   metaItems: ListingDetailMetaItem[];
   timeline: ListingTimelineItem[];
+  tradeState?: {
+    orderId: number | null;
+    orderStatus: 'PENDING' | 'IN_PROGRESS' | 'WAITING_REVIEW' | 'COMPLETED' | 'CANCELED' | null;
+    isBuyer: boolean;
+    isSeller: boolean;
+    canOpenOrderDetail: boolean;
+  };
 };
 
 export type ProductSummary = ListingSummary & {
@@ -197,11 +205,13 @@ export type DashboardStats = {
 };
 
 export type RegisterPayload = {
-  studentId?: string;
+  studentId: string;
   displayName: string;
   email: string;
   college?: string;
+  graduationYear: number;
   avatarUrl?: string;
+  verificationCode: string;
   password: string;
 };
 
@@ -218,6 +228,7 @@ export type AuthUser = {
   avatarUrl?: string | null;
   avatarFrame?: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   role: 'USER' | 'ADMIN';
   creditScore?: number;
   verificationStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -360,11 +371,13 @@ export type OrderItem = {
   buyerName: string;
   buyerAvatarUrl?: string | null;
   buyerAvatarFrame?: string | null;
+  buyerTrustedBadgeUnlocked?: boolean;
   buyerCreditScore: number | null;
   buyerVerified: boolean;
   sellerName: string;
   sellerAvatarUrl?: string | null;
   sellerAvatarFrame?: string | null;
+  sellerTrustedBadgeUnlocked?: boolean;
   sellerCreditScore: number | null;
   sellerVerified: boolean;
 };
@@ -467,6 +480,7 @@ export type ConversationSummary = {
     displayName: string;
     avatarUrl: string | null;
     avatarFrame?: string | null;
+    trustedBadgeUnlocked?: boolean;
     college: string | null;
     isSeller: boolean;
   };
@@ -479,6 +493,10 @@ export type ConversationSummary = {
     imageUrl: string | null;
     status: string;
     meetupLocation: string | null;
+    orderId?: number | null;
+    orderStatus?: 'PENDING' | 'IN_PROGRESS' | 'WAITING_REVIEW' | 'COMPLETED' | 'CANCELED' | null;
+    isBuyer?: boolean;
+    isSeller?: boolean;
   } | null;
 };
 
@@ -488,6 +506,7 @@ export type ConversationMessage = {
   senderName: string;
   senderAvatarUrl?: string | null;
   senderAvatarFrame?: string | null;
+  senderTrustedBadgeUnlocked?: boolean;
   content: string;
   type: string;
   attachment?: {
@@ -731,17 +750,13 @@ export type CampusServiceCreatePayload = {
   reward?: number;
   amount?: number;
   priceMode?: CampusServicePriceMode;
-  locationFrom?: string;
-  locationTo?: string;
   locationMode?: CampusServiceLocationMode;
   locationNote?: string;
-  deadlineLabel?: string;
   validFromAt?: string;
   validUntilAt?: string;
   estimatedMinutes: number;
   urgency?: CampusServiceUrgency;
   fulfillmentMode?: CampusServiceFulfillmentMode;
-  contactPreference?: CampusServiceContactPreference;
   itemCount?: number;
   maxTotalOrders?: number;
   maxConcurrentOrders?: number;
@@ -852,6 +867,7 @@ export type UserTrustSummary = {
   avatarUrl?: string | null;
   avatarFrame?: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   creditScore: number;
   creditLevel: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -866,6 +882,29 @@ export type UserTrustSummary = {
   averageRating: number | null;
 };
 
+export type UserReceivedReviewItem = {
+  id: number;
+  orderId: number;
+  rating: number;
+  content: string;
+  createdAt: string;
+  reviewerId: number;
+  reviewerName: string;
+  reviewerAvatarUrl?: string | null;
+  reviewerAvatarFrame?: string | null;
+  reviewerTrustedBadgeUnlocked?: boolean;
+  productId: number;
+  productTitle: string;
+};
+
+export type UserReceivedReviewsResponse = {
+  items: UserReceivedReviewItem[];
+  summary: {
+    total: number;
+    averageRating: number | null;
+  };
+};
+
 export type UserProfile = {
   id: number;
   displayName: string;
@@ -874,12 +913,14 @@ export type UserProfile = {
   avatarUrl?: string | null;
   avatarFrame?: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   role: 'USER' | 'ADMIN';
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
   realName: string;
   college: string;
+  graduationYear?: number | null;
   phone: string;
 };
 
@@ -931,6 +972,7 @@ export type FollowingUser = {
   avatarUrl?: string | null;
   avatarFrame?: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -1111,7 +1153,35 @@ export async function fetchDashboardStats() {
 
 export async function registerUser(payload: RegisterPayload) {
   clearCurrentUserStorage();
-  const response = await authClient.post<AuthSessionResponse>('/auth/register', payload);
+  const formData = new FormData();
+  formData.append('studentId', payload.studentId);
+  formData.append('displayName', payload.displayName);
+  formData.append('email', payload.email);
+  formData.append('verificationCode', payload.verificationCode);
+  formData.append('password', payload.password);
+  if (payload.college) {
+    formData.append('college', payload.college);
+  }
+  formData.append('graduationYear', String(payload.graduationYear));
+  if (payload.avatarUrl) {
+    formData.append('avatarUrl', payload.avatarUrl);
+  }
+  const response = await authClient.post<AuthSessionResponse>('/auth/register', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  saveDevAuthToken(response.data.devAuthToken ?? null);
+  return response.data;
+}
+
+export async function registerUserMultipart(formData: FormData) {
+  clearCurrentUserStorage();
+  const response = await authClient.post<AuthSessionResponse>('/auth/register', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
   saveDevAuthToken(response.data.devAuthToken ?? null);
   return response.data;
 }
@@ -1297,6 +1367,11 @@ export async function fetchUserTrustSummary(id: number) {
   return response.data;
 }
 
+export async function fetchUserReceivedReviews(id: number) {
+  const response = await apiClient.get<UserReceivedReviewsResponse>(`/users/${id}/reviews`);
+  return response.data;
+}
+
 export async function fetchUserProfile(id: number) {
   const response = await apiClient.get<UserProfile>(`/users/${id}/profile`);
   return response.data;
@@ -1348,6 +1423,7 @@ export async function updateUserProfile(
     email: string;
     realName: string;
     college: string;
+    graduationYear: number;
     phone: string;
     avatarUrl?: string | null;
     avatarFrame?: string | null;
@@ -1466,6 +1542,7 @@ export async function fetchAuditLogs() {
 export async function fetchCampusServiceListings(params?: {
   intent?: CampusServiceIntent;
   category?: CampusServiceCategory;
+  categories?: CampusServiceCategory[];
   status?: CampusServiceStatus;
   ownerId?: number;
   keyword?: string;

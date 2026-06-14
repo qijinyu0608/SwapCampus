@@ -22,9 +22,24 @@ import {
   loadCampusServiceActivityStats
 } from '../campus-services/campus-service-moderation';
 import { SearchService } from '../search/search.service';
-import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
+import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+
+type ReceivedReviewItem = {
+  id: number;
+  orderId: number;
+  rating: number;
+  content: string;
+  createdAt: string;
+  reviewerId: number;
+  reviewerName: string;
+  reviewerAvatarUrl: string | null;
+  reviewerAvatarFrame: string | null;
+  reviewerTrustedBadgeUnlocked: boolean;
+  productId: number;
+  productTitle: string;
+};
 
 function getCreditLevel(score: number) {
   if (score >= 90) {
@@ -162,6 +177,7 @@ type FollowUserSummary = {
   avatarUrl: string | null;
   avatarFrame: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   creditScore: number;
   verificationStatus: VerificationStatus;
   accountStatus: AccountStatus;
@@ -180,6 +196,82 @@ export class UsersService {
     @Inject(SearchService)
     private readonly searchService: SearchService
   ) {}
+
+  private async listReceivedReviews(userId: number): Promise<{
+    items: ReceivedReviewItem[];
+    averageRating: number | null;
+  }> {
+    const reviews = await this.prisma.review.findMany({
+      where: {
+        OR: [
+          {
+            order: {
+              sellerId: userId
+            }
+          },
+          {
+            order: {
+              buyerId: userId
+            }
+          }
+        ],
+        reviewerId: {
+          not: userId
+        }
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        reviewer: {
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            avatarFrame: true
+          }
+        },
+        order: {
+          select: {
+            id: true,
+            productId: true,
+            product: {
+              select: {
+                title: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const reviewerIds = [...new Set(reviews.map((item) => item.reviewerId))];
+    const trustedBadgeEntries = reviewerIds.length
+      ? await Promise.all(reviewerIds.map(async (reviewerId) => ([
+        reviewerId,
+        await hasTrustedBadgeRewardUnlocked(this.prisma, reviewerId)
+      ]) as const))
+      : [];
+    const trustedBadgeMap = new Map<number, boolean>(trustedBadgeEntries);
+
+    return {
+      items: reviews.map((review) => ({
+        id: review.id,
+        orderId: review.orderId,
+        rating: review.rating,
+        content: review.content,
+        createdAt: review.createdAt.toISOString(),
+        reviewerId: review.reviewerId,
+        reviewerName: review.reviewer.displayName,
+        reviewerAvatarUrl: review.reviewer.avatarUrl ?? null,
+        reviewerAvatarFrame: review.reviewer.avatarFrame ?? null,
+        reviewerTrustedBadgeUnlocked: trustedBadgeMap.get(review.reviewerId) ?? false,
+        productId: review.order.productId,
+        productTitle: review.order.product.title
+      })),
+      averageRating: reviews.length
+        ? Number((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1))
+        : null
+    };
+  }
 
   private mapSuperTokensError(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -233,10 +325,12 @@ export class UsersService {
     verification: {
       realName: string;
       college: string;
+      graduationYear: number | null;
       phone: string;
     } | null;
-  }, options?: { avatarFrameUnlocked?: boolean }) {
+  }, options?: { avatarFrameUnlocked?: boolean; trustedBadgeUnlocked?: boolean }) {
     const avatarFrameUnlocked = options?.avatarFrameUnlocked ?? false;
+    const trustedBadgeUnlocked = options?.trustedBadgeUnlocked ?? false;
     return {
       id: user.id,
       displayName: user.displayName,
@@ -245,12 +339,14 @@ export class UsersService {
       avatarUrl: user.avatarUrl,
       avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
       avatarFrameUnlocked,
+      trustedBadgeUnlocked,
       role: user.role,
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
       accountStatus: user.accountStatus,
       realName: user.verification?.realName ?? user.displayName,
       college: user.verification?.college ?? '待填写',
+      graduationYear: user.verification?.graduationYear ?? null,
       phone: user.verification?.phone ?? '待填写'
     };
   }
@@ -347,6 +443,7 @@ export class UsersService {
       avatarUrl: user.avatarUrl,
       avatarFrame: user.avatarFrameUnlocked ? user.avatarFrame : null,
       avatarFrameUnlocked: Boolean(user.avatarFrameUnlocked),
+      trustedBadgeUnlocked: Boolean((user as FollowUserSummary & { trustedBadgeUnlocked?: boolean }).trustedBadgeUnlocked),
       creditScore: user.creditScore,
       verificationStatus: user.verificationStatus,
       accountStatus: user.accountStatus,
@@ -367,8 +464,11 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
-    return this.mapProfile(user, { avatarFrameUnlocked });
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, userId),
+      hasTrustedBadgeRewardUnlocked(this.prisma, userId)
+    ]);
+    return this.mapProfile(user, { avatarFrameUnlocked, trustedBadgeUnlocked });
   }
 
   async getTrustSummary(userId: number, currentUser?: AuthenticatedUser) {
@@ -381,17 +481,14 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    const [allOrders, reviews, reports, followerCount, isFollowing] = await Promise.all([
+    const [allOrders, reviewSummary, reports, followerCount, isFollowing] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           OR: [{ buyerId: userId }, { sellerId: userId }]
         },
         select: { status: true }
       }),
-      this.prisma.review.findMany({
-        where: { reviewerId: userId },
-        select: { rating: true }
-      }),
+      this.listReceivedReviews(userId),
       this.prisma.report.count({
         where: { targetUserId: userId }
       }),
@@ -414,11 +511,11 @@ export class UsersService {
     const completedOrders = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.COMPLETED).length;
     const activeOrders = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.IN_PROGRESS || order.status === OrderStatus.PENDING).length;
     const waitingReviews = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.WAITING_REVIEW).length;
-    const averageRating = reviews.length
-      ? Number((reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length).toFixed(1))
-      : null;
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, userId),
+      hasTrustedBadgeRewardUnlocked(this.prisma, userId)
+    ]);
 
     return {
       id: user.id,
@@ -428,6 +525,7 @@ export class UsersService {
       avatarUrl: user.avatarUrl,
       avatarFrame: avatarFrameUnlocked ? user.avatarFrame : null,
       avatarFrameUnlocked,
+      trustedBadgeUnlocked,
       creditScore: user.creditScore,
       creditLevel: getCreditLevel(user.creditScore),
       verificationStatus: user.verificationStatus,
@@ -439,7 +537,27 @@ export class UsersService {
       reportCount: reports,
       followerCount,
       isFollowing: Boolean(isFollowing),
-      averageRating
+      averageRating: reviewSummary.averageRating
+    };
+  }
+
+  async getReceivedReviews(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    });
+
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+
+    const reviewSummary = await this.listReceivedReviews(userId);
+    return {
+      items: reviewSummary.items,
+      summary: {
+        total: reviewSummary.items.length,
+        averageRating: reviewSummary.averageRating
+      }
     };
   }
 
@@ -636,18 +754,14 @@ export class UsersService {
 
     const productCountMap = new Map(productCounts.map((item) => [item.sellerId, item._count._all]));
     const followerCountMap = new Map(followerCounts.map((item) => [item.followingId, item._count._all]));
-    const unlockedFollowingIds = followingIds.length
-      ? new Set(
-          (await this.prisma.creditRedeemOrder.findMany({
-            where: {
-              userId: { in: followingIds },
-              rewardCode: 'PROFILE_FRAME_BLUE',
-              status: 'FULFILLED'
-            },
-            select: { userId: true }
-          })).map((item) => item.userId)
-        )
-      : new Set<number>();
+    const [unlockedFollowingIds, trustedBadgeUnlockedIds] = followingIds.length
+      ? await Promise.all([
+          Promise.all(followingIds.map(async (id) => (await hasAvatarFrameRewardUnlocked(this.prisma, id)) ? id : null))
+            .then((items) => new Set(items.filter((item): item is number => item !== null))),
+          Promise.all(followingIds.map(async (id) => (await hasTrustedBadgeRewardUnlocked(this.prisma, id)) ? id : null))
+            .then((items) => new Set(items.filter((item): item is number => item !== null)))
+        ])
+      : [new Set<number>(), new Set<number>()];
 
     return {
       items: follows.map((item) => this.mapFollowUser({
@@ -658,6 +772,7 @@ export class UsersService {
         avatarUrl: item.following.avatarUrl,
         avatarFrame: item.following.avatarFrame,
         avatarFrameUnlocked: unlockedFollowingIds.has(item.followingId),
+        trustedBadgeUnlocked: trustedBadgeUnlockedIds.has(item.followingId),
         creditScore: item.following.creditScore,
         verificationStatus: item.following.verificationStatus,
         accountStatus: item.following.accountStatus,
@@ -725,7 +840,10 @@ export class UsersService {
         status: ProductStatus.ON_SALE
       }
     });
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, targetUserId);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, targetUserId),
+      hasTrustedBadgeRewardUnlocked(this.prisma, targetUserId)
+    ]);
 
     return {
       isFollowing: true,
@@ -735,6 +853,7 @@ export class UsersService {
         ...targetUser,
         avatarFrame: targetUser.avatarFrame,
         avatarFrameUnlocked,
+        trustedBadgeUnlocked,
         activeProductCount,
         followerCount
       }, follow.createdAt)
@@ -781,9 +900,11 @@ export class UsersService {
     const nextEmail = payload.email?.trim();
     const nextRealName = payload.realName?.trim();
     const nextCollege = payload.college?.trim();
+    const nextGraduationYear = typeof payload.graduationYear === 'number' ? payload.graduationYear : null;
     const nextPhone = payload.phone?.trim();
     const nextAvatarUrl = payload.avatarUrl?.trim();
     const nextAvatarFrame = payload.avatarFrame?.trim();
+    const nextStudentCardPhotoUrl = payload.studentCardPhotoUrl?.trim();
 
     if (payload.displayName !== undefined && !nextDisplayName) {
       throw new BadRequestException('展示名不能为空');
@@ -791,6 +912,10 @@ export class UsersService {
 
     if (payload.studentId !== undefined && !nextStudentId) {
       throw new BadRequestException('学号不能为空');
+    }
+
+    if (payload.studentId !== undefined && nextStudentId && !/^\d{9}$/.test(nextStudentId)) {
+      throw new BadRequestException('学号必须为 9 位数字');
     }
 
     if (payload.email !== undefined) {
@@ -811,11 +936,23 @@ export class UsersService {
       throw new BadRequestException('学院不能为空');
     }
 
+    const hasValidGraduationYear = nextGraduationYear !== null
+      && Number.isInteger(nextGraduationYear)
+      && nextGraduationYear >= 2000
+      && nextGraduationYear <= 2100;
+
+    if (payload.graduationYear !== undefined && !hasValidGraduationYear) {
+      throw new BadRequestException('毕业年份不正确');
+    }
+
     if (payload.phone !== undefined && !nextPhone) {
       throw new BadRequestException('手机号不能为空');
     }
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, userId);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, userId),
+      hasTrustedBadgeRewardUnlocked(this.prisma, userId)
+    ]);
     if (payload.avatarFrame !== undefined && nextAvatarFrame && !avatarFrameUnlocked) {
       throw new BadRequestException('请先前往信用中心兑换头像框权益');
     }
@@ -835,12 +972,16 @@ export class UsersService {
               update: {
                 realName: nextRealName ?? undefined,
                 college: nextCollege ?? undefined,
-                phone: nextPhone ?? undefined
+                graduationYear: payload.graduationYear !== undefined ? nextGraduationYear : undefined,
+                phone: nextPhone ?? undefined,
+                studentCardPhotoUrl: payload.studentCardPhotoUrl !== undefined ? (nextStudentCardPhotoUrl || null) : undefined
               },
               create: {
                 realName: nextRealName ?? (nextDisplayName ?? user.displayName),
                 college: nextCollege ?? '待填写',
-                phone: nextPhone ?? '待填写'
+                graduationYear: nextGraduationYear ?? null,
+                phone: nextPhone ?? '待填写',
+                studentCardPhotoUrl: nextStudentCardPhotoUrl || null
               }
             }
           }
@@ -850,7 +991,7 @@ export class UsersService {
 
       await this.searchService.syncSellerProducts(userId);
 
-      return this.mapProfile(updated, { avatarFrameUnlocked });
+      return this.mapProfile(updated, { avatarFrameUnlocked, trustedBadgeUnlocked });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('邮箱已被使用');

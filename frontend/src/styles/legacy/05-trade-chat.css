@@ -14,7 +14,7 @@
   min-height: 360px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 0;
   background: color-mix(in srgb, var(--paper) 94%, var(--primary-soft) 6%);
   box-shadow: none;
   min-height: 0;
@@ -431,20 +431,6 @@
 .trade-chat-main-user {
   display: grid;
   gap: 6px;
-}
-
-.trade-chat-role-tag {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--neutral-100);
-  color: var(--muted-strong);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.trade-chat-main.service-mode .trade-chat-role-tag {
-  background: var(--primary-soft);
-  color: var(--primary-deep);
 }
 
 .trade-chat-head-actions {

@@ -7,19 +7,22 @@ import {
   MessageType
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AVATAR_FRAME_REWARD_CODE, hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
+import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { MessagesGateway } from './messages.gateway';
+import { moderateText } from '../products/product-moderation';
 import {
   collectConversationParticipantIds,
   messageConversationAccessInclude,
   resolveCampusConversationParticipants,
   type MessageConversationAccessRecord
 } from './message-conversation.helpers';
+
+const prohibitedMessageKeywords = ['刀具', '代抢', '账号', '药品', '烟草', '酒精', '发票', '银行卡', '代写', '代考', '外挂', '校园贷'];
 
 type MessageAttachment = {
   kind: 'image' | 'video';
@@ -150,7 +153,9 @@ export class MessagesService {
       avatarUrl?: string | null;
       avatarFrame?: string | null;
     };
-  }, avatarFrameUnlocked = false) {
+  }, options?: { avatarFrameUnlocked?: boolean; trustedBadgeUnlocked?: boolean }) {
+    const avatarFrameUnlocked = options?.avatarFrameUnlocked ?? false;
+    const trustedBadgeUnlocked = options?.trustedBadgeUnlocked ?? false;
     const attachment = this.parseMessageAttachment(message.type, message.content);
     const orderEvent = this.parseOrderEventPayload(message.type, message.content);
     const previewText = this.getMessagePreview(message.type, message.content);
@@ -161,6 +166,7 @@ export class MessagesService {
       senderName: message.sender.displayName,
       senderAvatarUrl: message.sender.avatarUrl ?? null,
       senderAvatarFrame: avatarFrameUnlocked ? (message.sender.avatarFrame ?? null) : null,
+      senderTrustedBadgeUnlocked: trustedBadgeUnlocked,
       content: message.type === MessageType.TEXT || message.type === MessageType.EMOJI ? message.content : '',
       type: message.type,
       attachment,
@@ -222,6 +228,15 @@ export class MessagesService {
       type,
       content: JSON.stringify(payload)
     };
+  }
+
+  private ensureMessageContentAllowed(content: string) {
+    const moderationResult = moderateText(content, prohibitedMessageKeywords);
+    if (!moderationResult.passed) {
+      throw new BadRequestException(
+        `消息包含疑似违规内容“${moderationResult.matchedTerm}”，请修改后再发送`
+      );
+    }
   }
 
   private mapCampusConversationStatus(params: {
@@ -429,6 +444,14 @@ export class MessagesService {
           }
         })
       : [];
+    const [avatarFrameUnlockedIds, trustedBadgeUnlockedIds] = participantIds.length
+      ? await Promise.all([
+          Promise.all(participantIds.map(async (id) => (await hasAvatarFrameRewardUnlocked(this.prisma, id)) ? id : null))
+            .then((items) => new Set(items.filter((item): item is number => item !== null))),
+          Promise.all(participantIds.map(async (id) => (await hasTrustedBadgeRewardUnlocked(this.prisma, id)) ? id : null))
+            .then((items) => new Set(items.filter((item): item is number => item !== null)))
+        ])
+      : [new Set<number>(), new Set<number>()];
 
     const productMap = new Map(products.map((product) => [product.id, product]));
     const firstImageByProductId = new Map<number, string>();
@@ -533,7 +556,8 @@ export class MessagesService {
           id: counterpart?.id ?? counterpartId ?? null,
           displayName: counterpart?.displayName ?? '同校同学',
           avatarUrl: counterpart?.avatarUrl ?? null,
-          avatarFrame: counterpart?.avatarFrame ?? null,
+          avatarFrame: counterpartId && avatarFrameUnlockedIds.has(counterpartId) ? (counterpart?.avatarFrame ?? null) : null,
+          trustedBadgeUnlocked: counterpartId ? trustedBadgeUnlockedIds.has(counterpartId) : false,
           college: counterpart?.verification?.college ?? null,
           isSeller: Boolean(productSellerId && counterpartId === productSellerId)
         },
@@ -546,7 +570,11 @@ export class MessagesService {
               condition: product.condition,
               imageUrl: firstImageByProductId.get(product.id) ?? null,
               status: product.status,
-              meetupLocation: conversation.order?.meetupLocation ?? null
+              meetupLocation: conversation.order?.meetupLocation ?? null,
+              orderId: conversation.order?.id ?? null,
+              orderStatus: conversation.order?.status ?? null,
+              isBuyer: Boolean(userId && conversation.order?.buyerId === userId),
+              isSeller: Boolean(userId && productSellerId === userId)
             }
           : null
       };
@@ -582,6 +610,9 @@ export class MessagesService {
     }
 
     const initialMessage = dto.initialMessage?.trim();
+    if (initialMessage) {
+      this.ensureMessageContentAllowed(initialMessage);
+    }
 
     const existing = await this.prisma.conversation.findFirst({
       where: {
@@ -670,18 +701,18 @@ export class MessagesService {
       return [];
     }
 
-    const unlockedUserIds = new Set<number>(
-      (await this.prisma.creditRedeemOrder.findMany({
-        where: {
-          userId: { in: [...new Set(conversation.messages.map((message) => message.senderId))] },
-          rewardCode: AVATAR_FRAME_REWARD_CODE,
-          status: 'FULFILLED'
-        },
-        select: { userId: true }
-      })).map((item) => item.userId)
-    );
+    const senderIds = [...new Set(conversation.messages.map((message) => message.senderId))];
+    const [avatarFrameUnlockedIds, trustedBadgeUnlockedIds] = await Promise.all([
+      Promise.all(senderIds.map(async (id) => (await hasAvatarFrameRewardUnlocked(this.prisma, id)) ? id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null))),
+      Promise.all(senderIds.map(async (id) => (await hasTrustedBadgeRewardUnlocked(this.prisma, id)) ? id : null))
+        .then((items) => new Set(items.filter((item): item is number => item !== null)))
+    ]);
 
-    return conversation.messages.map((message) => this.mapMessageResponse(message, unlockedUserIds.has(message.senderId)));
+    return conversation.messages.map((message) => this.mapMessageResponse(message, {
+      avatarFrameUnlocked: avatarFrameUnlockedIds.has(message.senderId),
+      trustedBadgeUnlocked: trustedBadgeUnlockedIds.has(message.senderId)
+    }));
   }
 
   async sendMessage(conversationId: number, dto: SendMessageDto, currentUser: AuthenticatedUser) {
@@ -718,6 +749,9 @@ export class MessagesService {
     }
 
     const normalized = this.normalizeOutgoingMessage(dto);
+    if (normalized.type === MessageType.TEXT || normalized.type === MessageType.EMOJI) {
+      this.ensureMessageContentAllowed(normalized.content);
+    }
 
     const message = await this.prisma.message.create({
       data: {
@@ -733,7 +767,10 @@ export class MessagesService {
       data: { updatedAt: new Date() }
     });
 
-    const avatarFrameUnlocked = await hasAvatarFrameRewardUnlocked(this.prisma, authUser.id);
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, authUser.id),
+      hasTrustedBadgeRewardUnlocked(this.prisma, authUser.id)
+    ]);
 
     const response = this.mapMessageResponse({
       ...message,
@@ -742,7 +779,7 @@ export class MessagesService {
         avatarUrl: sender.avatarUrl ?? null,
         avatarFrame: sender.avatarFrame ?? null
       }
-    }, avatarFrameUnlocked);
+    }, { avatarFrameUnlocked, trustedBadgeUnlocked });
 
     this.messagesGateway.emitNewMessage({
       conversationId,

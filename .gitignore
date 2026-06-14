@@ -4,6 +4,8 @@ package-lock.json
 .DS_Store
 .env
 .env.*
+backend/.env
+backend/.env.*
 docker-compose.override*.yml
 .apt-meili
 .local

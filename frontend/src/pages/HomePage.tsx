@@ -36,6 +36,7 @@ import {
 import { useAuthState } from '../services/auth-state';
 import { subscribeFavorites } from '../services/favorites';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
@@ -488,7 +489,11 @@ export function HomePage() {
                             />
                           </span>
                           <div className="fish-home-user-copy">
-                            <strong>{currentUser.displayName}</strong>
+                            <UserNameWithBadge
+                              as="strong"
+                              name={currentUser.displayName}
+                              trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
+                            />
                             <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
                               <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
                             </div>

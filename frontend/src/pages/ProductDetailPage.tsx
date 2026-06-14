@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { DetailShell } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import {
@@ -22,6 +23,7 @@ import { isFavorite, subscribeFavorites, toggleFavorite } from '../services/favo
 import { hasTradingAccess, isGuestUser } from '../services/session';
 import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/productCover';
 import { getUserPresentation } from '../utils/userPresentation';
+import { formatCurrencyAmount } from '../utils/price';
 
 const reportTypeOptions = [
   '商品描述与实物不符',
@@ -335,6 +337,23 @@ export function ProductDetailPage() {
   const detailDescription = descriptionExpanded || detail.detailBase.description.length <= 88
     ? detail.detailBase.description
     : `${detail.detailBase.description.slice(0, 88)}...`;
+  const tradeState = detail.detailBase.tradeState;
+  const hasActiveOrder = Boolean(tradeState?.orderStatus && tradeState.orderStatus !== 'CANCELED');
+  const primaryActionLabel = !hasActiveOrder
+    ? null
+    : tradeState?.orderStatus === 'COMPLETED'
+      ? '商品已成交'
+      : tradeState?.isBuyer
+        ? '确定收货'
+        : '商品已售出';
+  const primaryActionHref = tradeState?.canOpenOrderDetail && tradeState.orderId
+    ? `/orders/${tradeState.orderId}`
+    : null;
+  const tradeStatusLabel = tradeState?.orderStatus === 'COMPLETED'
+    ? '商品已成交'
+    : hasActiveOrder
+      ? '商品已售出'
+      : null;
   const sellerIdentity = sellerPresentation.creditBadge.label;
   const sellerStats = [
     detail.seller.college,
@@ -361,7 +380,11 @@ export function ProductDetailPage() {
           />
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
-              <strong>{detail.seller.displayName}</strong>
+              <UserNameWithBadge
+                as="strong"
+                name={detail.seller.displayName}
+                trustedBadgeUnlocked={sellerPresentation.trustedBadgeUnlocked}
+              />
               <div className={`ui-credit-badge is-${sellerPresentation.creditBadge.tone}`}>
                 <span className="ui-credit-badge-label">{sellerIdentity}</span>
               </div>
@@ -432,7 +455,7 @@ export function ProductDetailPage() {
 
 	              <div className="detail-price-block">
 	                <div className="listing-detail-amount">
-	                  <strong>{detail.detailBase.amountLabel}</strong>
+	                  <strong>{formatCurrencyAmount(detail.detailBase.price)}</strong>
 	                </div>
 	              </div>
             </div>
@@ -455,13 +478,27 @@ export function ProductDetailPage() {
 
             <div className="detail-info-foot">
               <div className="detail-main-actions">
-                <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
-                  聊一聊
-                </Button>
-                <Button size="large" onClick={handleCreateOrder}>
-                  立即下单
-                </Button>
+                {hasActiveOrder ? (
+                  <Button
+                    type="primary"
+                    size="large"
+                    disabled={!primaryActionHref}
+                    onClick={primaryActionHref ? () => void navigate(primaryActionHref) : undefined}
+                  >
+                    {primaryActionLabel}
+                  </Button>
+                ) : (
+                  <>
+                    <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
+                      聊一聊
+                    </Button>
+                    <Button size="large" onClick={handleCreateOrder}>
+                      立即下单
+                    </Button>
+                  </>
+                )}
               </div>
+              {tradeStatusLabel ? <div className="detail-trade-status">{tradeStatusLabel}</div> : null}
 
               <div className="detail-bottom-line">
                 <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>

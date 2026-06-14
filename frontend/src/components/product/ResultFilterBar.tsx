@@ -18,10 +18,18 @@ export type ResultCreditOption = {
   label: string;
 };
 
+export type ResultCategoryOption = {
+  key: string;
+  label: string;
+};
+
 type ResultFilterBarProps = {
-  tabs: ResultFilterTab[];
-  activeTab: string;
-  onTabChange: (key: string) => void;
+  tabs?: ResultFilterTab[];
+  activeTab?: string;
+  onTabChange?: (key: string) => void;
+  categoryOptions?: ResultCategoryOption[];
+  activeCategories?: string[];
+  onCategoryToggle?: (key: string) => void;
   sortOptions: ResultSortOption[];
   activeSort: string;
   onSortChange: (key: string) => void;
@@ -39,6 +47,9 @@ export function ResultFilterBar({
   tabs,
   activeTab,
   onTabChange,
+  categoryOptions,
+  activeCategories,
+  onCategoryToggle,
   sortOptions,
   activeSort,
   onSortChange,
@@ -52,7 +63,9 @@ export function ResultFilterBar({
   trailingContent
 }: ResultFilterBarProps) {
   const [creditOpen, setCreditOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const selectedCreditCount = activeCredits?.length ?? 0;
+  const selectedCategoryCount = activeCategories?.length ?? 0;
   const creditLabel = useMemo(() => {
     if (!selectedCreditCount) {
       return '信用';
@@ -60,28 +73,79 @@ export function ResultFilterBar({
 
     return `信用 ${selectedCreditCount}`;
   }, [selectedCreditCount]);
+  const categoryLabel = useMemo(() => {
+    if (!selectedCategoryCount) {
+      return '分类';
+    }
+
+    return `分类 ${selectedCategoryCount}`;
+  }, [selectedCategoryCount]);
 
   return (
     <div className="result-filter-bar">
-      <div className="result-filter-bar-tabs" role="tablist" aria-label="结果分类">
-        {tabs.map((tab) => {
-          const active = activeTab === tab.key;
+      {tabs?.length ? (
+        <div className="result-filter-bar-tabs" role="tablist" aria-label="结果分类">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.key;
 
-          return (
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={active ? 'result-filter-tab active' : 'result-filter-tab'}
+                onClick={() => onTabChange?.(tab.key)}
+              >
+                {tab.label}
+                <span className="result-filter-tab-line" />
+              </button>
+            );
+          })}
+        </div>
+      ) : categoryOptions?.length && activeCategories && onCategoryToggle ? (
+        <div className="result-filter-leading" role="group" aria-label="分类筛选">
+          <Popover
+            trigger="click"
+            placement="bottomLeft"
+            open={categoryOpen}
+            onOpenChange={setCategoryOpen}
+            content={(
+              <div className="result-filter-category-popover" role="menu" aria-label="分类筛选矩阵">
+                {categoryOptions.map((option) => {
+                  const active = activeCategories.includes(option.key);
+
+                  return (
+                    <label
+                      key={option.key}
+                      className={active ? 'result-filter-category-chip active' : 'result-filter-category-chip'}
+                    >
+                      <Checkbox
+                        checked={active}
+                        onChange={() => onCategoryToggle(option.key)}
+                      >
+                        {option.label}
+                      </Checkbox>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          >
             <button
-              key={tab.key}
               type="button"
-              role="tab"
-              aria-selected={active}
-              className={active ? 'result-filter-tab active' : 'result-filter-tab'}
-              onClick={() => onTabChange(tab.key)}
+              className={selectedCategoryCount ? 'result-filter-category-trigger active' : 'result-filter-category-trigger'}
+              aria-haspopup="menu"
+              aria-expanded={categoryOpen}
             >
-              {tab.label}
-              <span className="result-filter-tab-line" />
+              <span className="result-filter-group-label">{categoryLabel}</span>
+              <DownOutlined className={categoryOpen ? 'result-filter-credit-arrow active' : 'result-filter-credit-arrow'} />
             </button>
-          );
-        })}
-      </div>
+          </Popover>
+        </div>
+      ) : (
+        <div className="result-filter-leading" />
+      )}
 
       <div className="result-filter-bar-controls">
         <div className="result-filter-segment" role="tablist" aria-label="排序方式">

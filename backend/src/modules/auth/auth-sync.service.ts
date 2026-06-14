@@ -13,8 +13,10 @@ type AuthProfileInput = {
   displayName: string;
   studentId?: string | null;
   college?: string | null;
+  graduationYear?: number | null;
   avatarUrl?: string | null;
   avatarFrame?: string | null;
+  studentCardPhotoUrl?: string | null;
   role?: UserRole;
   verificationStatus?: VerificationStatus;
   accountStatus?: AccountStatus;
@@ -84,6 +86,19 @@ function normalizeDisplayName(displayName: string) {
 function normalizeCollege(college?: string | null) {
   const next = college?.trim();
   return next || '待填写';
+}
+
+function normalizeGraduationYear(graduationYear?: number | null) {
+  if (graduationYear == null) {
+    return null;
+  }
+
+  return Number.isInteger(graduationYear) ? graduationYear : null;
+}
+
+function normalizeStudentCardPhotoUrl(studentCardPhotoUrl?: string | null) {
+  const next = studentCardPhotoUrl?.trim();
+  return next || null;
 }
 
 @Injectable()
@@ -254,8 +269,10 @@ export class AuthSyncService {
     const accountStatus = input.accountStatus ?? AccountStatus.ACTIVE;
     const studentId = normalizeStudentId(input.studentId);
     const college = normalizeCollege(input.college);
+    const graduationYear = normalizeGraduationYear(input.graduationYear);
     const avatarUrl = normalizeAvatarUrl(input.avatarUrl);
     const avatarFrame = normalizeAvatarFrame(input.avatarFrame);
+    const studentCardPhotoUrl = normalizeStudentCardPhotoUrl(input.studentCardPhotoUrl);
 
     try {
       const user = await this.prisma.user.upsert({
@@ -273,12 +290,16 @@ export class AuthSyncService {
             upsert: {
               update: {
                 realName: displayName,
-                college
+                college,
+                graduationYear,
+                studentCardPhotoUrl
               },
               create: {
                 realName: displayName,
                 college,
-                phone: '待填写'
+                graduationYear,
+                phone: '待填写',
+                studentCardPhotoUrl
               }
             }
           }
@@ -298,7 +319,9 @@ export class AuthSyncService {
             create: {
               realName: displayName,
               college,
-              phone: '待填写'
+              graduationYear,
+              phone: '待填写',
+              studentCardPhotoUrl
             }
           }
         },

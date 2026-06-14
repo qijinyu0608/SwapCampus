@@ -327,6 +327,7 @@ export class SearchService implements OnModuleInit {
     category?: string;
     condition?: string;
     sellerId?: number;
+    excludeSellerId?: number;
     ids?: number[];
     status?: string;
     trade?: 'all' | 'meetup' | 'dorm_pickup' | 'available_today';
@@ -374,6 +375,11 @@ export class SearchService implements OnModuleInit {
     const sellerId = params.sellerId === undefined ? undefined : Math.trunc(toFiniteNumber(params.sellerId, Number.NaN));
     if (Number.isFinite(sellerId)) {
       filters.push(`sellerId = ${sellerId}`);
+    }
+
+    const excludeSellerId = params.excludeSellerId === undefined ? undefined : Math.trunc(toFiniteNumber(params.excludeSellerId, Number.NaN));
+    if (Number.isFinite(excludeSellerId)) {
+      filters.push(`sellerId != ${excludeSellerId}`);
     }
 
     if (params.ids?.length) {

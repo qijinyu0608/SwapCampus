@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Dayjs } from 'dayjs';
 import { ActionRow, PageCard, SectionHeader } from '../layout';
+import { ThinkingOverlay } from '../feedback';
 import { CAMPUS_SERVICE_CATEGORY_OPTIONS } from '../../constants/campusServiceCategories';
 import {
   defaultAllowedCategories,
@@ -39,6 +40,7 @@ import {
   type CampusServiceFulfillmentMode,
   getApiErrorMessage,
   type CampusServiceIntent,
+  type CampusServiceLocationMode,
   type CampusServicePattern,
   type CampusServicePriceMode,
   type CampusServiceUrgency,
@@ -52,15 +54,6 @@ import { PublishImageManager, type PublishImageItem } from './PublishImageManage
 const PUBLISH_RULES_STORAGE_KEY = 'swapcampus:service-publish-rules-dismiss-until';
 const PUBLISH_RULES_SUPPRESS_DAYS = 7;
 const PUBLISH_RULES_WAIT_SECONDS = 8;
-
-function formatDateTimeForPicker(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
 
 function parsePickerValue(value: Dayjs | string) {
   if (typeof value !== 'string') {
@@ -97,6 +90,12 @@ const fulfillmentModeOptions: Array<{ value: CampusServiceFulfillmentMode; label
   { value: 'DROP_OFF', label: '放置交付' }
 ];
 
+const locationModeOptions: Array<{ value: CampusServiceLocationMode; label: string }> = [
+  { value: 'ONLINE', label: '线上' },
+  { value: 'ON_SITE', label: '线下' },
+  { value: 'FLEXIBLE', label: '私聊' }
+];
+
 const priceModeOptions: Array<{ value: CampusServicePriceMode; label: string }> = [
   { value: 'FIXED', label: '固定金额' },
   { value: 'NEGOTIABLE', label: '面议' },
@@ -114,6 +113,7 @@ type PublishFormValues = {
   description: string;
   priceMode: CampusServicePriceMode;
   reward?: number;
+  locationMode?: CampusServiceLocationMode;
   locationNote?: string;
   validUntilAt: Dayjs | string;
   estimatedMinutes: number;
@@ -373,9 +373,8 @@ export function CampusServicePublishWorkbench({
         amount: values.priceMode === 'FREE' ? 0 : values.reward,
         reward: values.priceMode === 'FREE' ? 0 : values.reward,
         maxTotalOrders: values.maxTotalOrders ?? undefined,
+        locationMode: values.locationMode ?? 'FLEXIBLE',
         locationNote: values.locationNote?.trim() || undefined,
-        contactPreference: 'CHAT_ONLY',
-        deadlineLabel: formatDateTimeForPicker(parsedValidUntilAt),
         autoConfirm: values.autoConfirm ?? publishStrategy.autoConfirm,
         imageUrls: uploadedImages.map((item) => item.url)
       };
@@ -412,7 +411,8 @@ export function CampusServicePublishWorkbench({
       : '已阅读并同意';
 
   return (
-    <div className={variant === 'publish' ? 'publish-workbench-main service-publish-workbench' : 'two-col service-market-layout'}>
+    <div className={variant === 'publish' ? 'publish-workbench-main service-publish-workbench publish-workbench-shell' : 'two-col service-market-layout'}>
+      <ThinkingOverlay open={submitting} />
       {enableRulesGate ? (
         <Modal
           open={rulesModalOpen}
@@ -465,6 +465,7 @@ export function CampusServicePublishWorkbench({
             priceMode: 'FIXED',
             itemCount: 1,
             urgency: 'NORMAL',
+            locationMode: 'FLEXIBLE',
             fulfillmentMode: 'FLEXIBLE',
             maxConcurrentOrders: 1,
             maxTotalOrders: 1,
@@ -533,6 +534,9 @@ export function CampusServicePublishWorkbench({
             </Form.Item>
             <Form.Item name="urgency" label="紧急程度" initialValue="NORMAL" rules={[{ required: true }]}>
               <Select options={urgencyOptions} />
+            </Form.Item>
+            <Form.Item name="locationMode" label="联系与交付" initialValue="FLEXIBLE" rules={[{ required: true }]}>
+              <Select options={locationModeOptions} />
             </Form.Item>
             <Form.Item name="fulfillmentMode" label="交付方式" initialValue="FLEXIBLE" rules={[{ required: true }]}>
               <Select options={fulfillmentModeOptions} />

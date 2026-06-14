@@ -1,4 +1,5 @@
 import { ProductsService } from './products.service';
+import { resetProductModerationCacheForTests } from './product-moderation';
 
 describe('ProductsService', () => {
   const authUser = {
@@ -17,6 +18,26 @@ describe('ProductsService', () => {
       variantId: 'vendure-variant-1'
     })
   } as any;
+  const publishingReviewService = {
+    reviewProduct: jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      status: 'disabled',
+      decision: 'APPROVED',
+      shouldBlock: false,
+      selectedCategory: '教材资料',
+      reason: 'skip',
+      issues: []
+    })
+  } as any;
+
+  beforeEach(() => {
+    resetProductModerationCacheForTests();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it('should return fallback dashboard stats when prisma query fails', async () => {
     const service = new ProductsService({
@@ -30,7 +51,7 @@ describe('ProductsService', () => {
       productImage: {
         findMany: jest.fn()
       }
-    } as any, searchService, vendureService);
+    } as any, searchService, vendureService, publishingReviewService);
 
     const stats = await service.getDashboardStats();
 
@@ -38,10 +59,10 @@ describe('ProductsService', () => {
     expect(stats.onSaleCount).toBe(0);
   });
 
-  it('should create product directly on sale without moderation gate', async () => {
+  it('should create product directly on sale when moderation passes', async () => {
     const productCreate = jest.fn().mockResolvedValue({
       id: 200,
-      title: '课程代写服务',
+      title: '高数教材',
       status: 'ON_SALE'
     });
     const service = new ProductsService({
@@ -49,32 +70,60 @@ describe('ProductsService', () => {
         create: productCreate,
         update: jest.fn().mockResolvedValue({
           id: 200,
-          title: '课程代写服务',
+          title: '高数教材',
           status: 'ON_SALE'
         })
       },
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, vendureService);
+    } as any, searchService, vendureService, publishingReviewService);
 
     const product = await service.createProduct({
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 20,
+      category: '教材资料',
+      condition: '9.0成',
+      tags: ['教材', '期末'],
+      imageUrls: ['https://img.example.com/course.jpg']
+    }, authUser);
+
+    expect(product).toMatchObject({ id: 200, title: '高数教材', status: 'ON_SALE' });
+    expect(product.review).toMatchObject({
+      provider: 'deepseek',
+      decision: 'APPROVED'
+    });
+    expect(productCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'ON_SALE',
+        tags: ['教材', '期末']
+      })
+    }));
+  });
+
+  it('should reject product publishing when moderation fails', async () => {
+    const productCreate = jest.fn();
+    const service = new ProductsService({
+      product: {
+        create: productCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
+      }
+    } as any, searchService, vendureService, publishingReviewService);
+
+    await expect(service.createProduct({
       title: '课程代写服务',
       description: '可以帮忙赶作业',
       price: 20,
       category: '教材资料',
-      condition: '9成新',
-      tags: ['代写'],
+      condition: '9.0成',
+      tags: ['作业辅导'],
       imageUrls: ['https://img.example.com/course.jpg']
-    }, authUser);
+    }, authUser)).rejects.toThrow('商品标题包含疑似违规内容“代写”，请修改后再发布');
 
-    expect(product).toEqual({ id: 200, title: '课程代写服务', status: 'ON_SALE' });
-    expect(productCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        status: 'ON_SALE',
-        tags: ['代写']
-      })
-    }));
+    expect(productCreate).not.toHaveBeenCalled();
   });
 
   it('should allow previously moderated content to publish directly on sale', async () => {
@@ -95,19 +144,23 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, vendureService);
+    } as any, searchService, vendureService, publishingReviewService);
 
     const product = await service.createProduct({
       title: '10000mAh 充电宝',
       description: '容量 10000mAh，接口正常',
       price: 35,
       category: '宿舍生活',
-      condition: '9成新',
+      condition: '9.0成',
       tags: ['充电宝', '白名单'],
       imageUrls: ['https://img.example.com/powerbank.jpg']
     }, authUser);
 
-    expect(product).toEqual({ id: 201, title: '10000mAh 充电宝', status: 'ON_SALE' });
+    expect(product).toMatchObject({ id: 201, title: '10000mAh 充电宝', status: 'ON_SALE' });
+    expect(product.review).toMatchObject({
+      provider: 'deepseek',
+      decision: 'APPROVED'
+    });
     expect(productCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -129,14 +182,14 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, vendureService);
+    } as any, searchService, vendureService, publishingReviewService);
 
     await service.createProduct({
       title: '二手显示器',
       description: '配件齐全，可当面验货',
       price: 180,
       category: '数码电子',
-      condition: '8成新',
+      condition: '8.0成',
       tags: ['显示器', '可验货'],
       imageUrls: [
         ' https://img.example.com/a.png ',
@@ -166,14 +219,14 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, vendureService);
+    } as any, searchService, vendureService, publishingReviewService);
 
     await expect(service.createProduct({
       title: '无图商品',
       description: '没有图片',
       price: 10,
       category: '教材资料',
-      condition: '9成新',
+      condition: '9.0成',
       tags: []
     }, authUser)).rejects.toThrow('请至少上传 1 张商品图片');
     expect(productCreate).not.toHaveBeenCalled();
@@ -189,7 +242,7 @@ describe('ProductsService', () => {
             title: '测试教材',
             category: '教材资料',
             price: 18,
-            condition: '9成新',
+            condition: '9.0成',
             tags: [],
             status: 'ON_SALE',
             description: 'desc'
@@ -234,6 +287,110 @@ describe('ProductsService', () => {
     });
   });
 
+  it('should exclude current user products from search results', async () => {
+    const search = jest.fn().mockResolvedValue({
+      hits: [{ id: 101 }, { id: 102 }],
+      page: 1,
+      hitsPerPage: 20,
+      totalHits: 2,
+      totalPages: 1
+    });
+    const service = new ProductsService({
+      product: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 102,
+            sellerId: 9,
+            title: '测试教材',
+            category: '教材资料',
+            price: 18,
+            condition: '9.0成',
+            tags: [],
+            status: 'ON_SALE',
+            description: 'desc'
+          }
+        ])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 9, displayName: '卖家', creditScore: 88, verificationStatus: 'APPROVED' }
+        ])
+      },
+      productImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      favorite: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any, {
+      isEnabled: jest.fn().mockReturnValue(true),
+      searchProducts: search
+    } as any, vendureService);
+
+    const result = await service.searchProducts({
+      q: '教材',
+      page: 1,
+      pageSize: 20
+    }, 1);
+
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({
+      sellerId: undefined,
+      excludeSellerId: 1
+    }));
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].id).toBe(102);
+  });
+
+  it('should exclude current user products from home recommendations', async () => {
+    const prisma = {
+      product: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 201,
+            sellerId: 2,
+            title: '二手电扇',
+            category: '宿舍生活',
+            price: 28,
+            condition: '9.0成',
+            tags: [],
+            status: 'ON_SALE',
+            description: 'desc',
+            createdAt: new Date('2026-06-08T00:00:00Z')
+          }
+        ])
+      },
+      favorite: {
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([])
+      },
+      order: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 2, displayName: '卖家', creditScore: 88, verificationStatus: 'APPROVED' }
+        ])
+      },
+      productImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      userBehavior: {
+        groupBy: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new ProductsService(prisma, searchService, vendureService);
+
+    await service.getHomeRecommendations(2);
+
+    expect(prisma.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        sellerId: { not: 2 }
+      })
+    }));
+  });
+
   it('should expose product detailBase with normalized display fields', async () => {
     const product = {
       id: 301,
@@ -241,7 +398,7 @@ describe('ProductsService', () => {
       title: '高数教材',
       category: '教材资料',
       price: 36,
-      condition: '9成新',
+      condition: '9.0成',
       tags: ['教材', '期末'],
       status: 'ON_SALE',
       description: '有少量笔记',
@@ -292,6 +449,9 @@ describe('ProductsService', () => {
           { id: 502, status: 'PENDING' }
         ])
       },
+      creditRedeemOrder: {
+        findFirst: jest.fn().mockResolvedValue(null)
+      },
       message: {
         count: jest.fn().mockResolvedValue(12)
       },
@@ -312,7 +472,7 @@ describe('ProductsService', () => {
       title: '高数教材',
       description: '有少量笔记',
       price: 36,
-      amountLabel: '¥36',
+      amountLabel: '¥36.00',
       imageUrl: '/images/products/book.png',
       tags: ['教材', '期末'],
       summaryTags: ['教材', '期末'],
@@ -321,6 +481,9 @@ describe('ProductsService', () => {
       publisher: {
         id: 9,
         displayName: '卖家甲',
+        studentId: null,
+        avatarUrl: null,
+        avatarFrame: null,
         creditScore: 91,
         verificationStatus: 'APPROVED',
         accountStatus: 'ACTIVE'
@@ -334,7 +497,14 @@ describe('ProductsService', () => {
       timeline: [
         { key: 'published', label: '发布时间', value: '2026-06-07T08:00:00.000Z' },
         { key: 'updated', label: '最近变更', value: '2026-06-08T09:30:00.000Z' }
-      ]
+      ],
+      tradeState: {
+        canOpenOrderDetail: false,
+        isBuyer: false,
+        isSeller: false,
+        orderId: null,
+        orderStatus: null
+      }
     });
     expect(result.seller.creditLevel).toBe('优秀');
     expect(result.stats.favoriteCount).toBe(5);
@@ -357,7 +527,7 @@ describe('ProductsService', () => {
           title: '高数教材',
           category: '教材资料',
           price: 36,
-          condition: '9成新',
+          condition: '9.0成',
           tags: ['教材', '期末'],
           status: 'ON_SALE',
           description: '有少量笔记',
@@ -405,6 +575,9 @@ describe('ProductsService', () => {
           { id: 501, status: 'COMPLETED' },
           { id: 502, status: 'PENDING' }
         ])
+      },
+      creditRedeemOrder: {
+        findFirst: jest.fn().mockResolvedValue(null)
       },
       review: {
         findMany: jest.fn().mockResolvedValue([

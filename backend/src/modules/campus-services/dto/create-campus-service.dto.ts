@@ -1,7 +1,6 @@
 import { IsArray, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import {
   CampusServiceCategory,
-  CampusServiceContactPreference,
   CampusServiceFulfillmentMode,
   CampusServiceIntent,
   CampusServiceLocationMode,
@@ -44,14 +43,6 @@ export class CreateCampusServiceDto {
   @IsOptional()
   amount?: number;
 
-  @IsString()
-  @IsOptional()
-  locationFrom?: string;
-
-  @IsString()
-  @IsOptional()
-  locationTo?: string;
-
   @IsEnum(CampusServiceLocationMode)
   @IsOptional()
   locationMode?: CampusServiceLocationMode;
@@ -59,10 +50,6 @@ export class CreateCampusServiceDto {
   @IsString()
   @IsOptional()
   locationNote?: string;
-
-  @IsString()
-  @IsOptional()
-  deadlineLabel?: string;
 
   @IsString()
   @IsOptional()
@@ -83,10 +70,6 @@ export class CreateCampusServiceDto {
   @IsEnum(CampusServiceFulfillmentMode)
   @IsOptional()
   fulfillmentMode?: CampusServiceFulfillmentMode;
-
-  @IsEnum(CampusServiceContactPreference)
-  @IsOptional()
-  contactPreference?: CampusServiceContactPreference;
 
   @IsInt()
   @Min(1)

@@ -24,6 +24,7 @@ import {
 import {
   AVATAR_FRAME_REWARD_DURATION_DAYS,
   hasAvatarFrameRewardUnlocked,
+  hasTrustedBadgeRewardUnlocked,
   hasFulfilledReward
 } from './credit-center.utils';
 
@@ -350,7 +351,9 @@ export class CreditCenterService {
       code: reward.code,
       redeemed: reward.code === 'PROFILE_FRAME_BLUE'
         ? await hasAvatarFrameRewardUnlocked(this.prisma, authUser.id)
-        : await hasFulfilledReward(this.prisma, authUser.id, reward.code)
+        : reward.code === 'BADGE_TRUSTED_WEEK'
+          ? await hasTrustedBadgeRewardUnlocked(this.prisma, authUser.id)
+          : await hasFulfilledReward(this.prisma, authUser.id, reward.code)
     })));
     const redeemedMap = new Map(redeemedItems.map((item) => [item.code, item.redeemed]));
 
@@ -397,12 +400,16 @@ export class CreditCenterService {
 
       const redeemed = rewardCode === 'PROFILE_FRAME_BLUE'
         ? await hasAvatarFrameRewardUnlocked(tx as { creditRedeemOrder: { findFirst: (args: any) => Promise<{ fulfilledAt: Date | null } | null> } }, authUser.id)
-        : await hasFulfilledReward(tx as Pick<PrismaService, 'creditRedeemOrder'>, authUser.id, rewardCode);
+        : rewardCode === 'BADGE_TRUSTED_WEEK'
+          ? await hasTrustedBadgeRewardUnlocked(tx as { creditRedeemOrder: { findFirst: (args: any) => Promise<{ fulfilledAt: Date | null } | null> } }, authUser.id)
+          : await hasFulfilledReward(tx as Pick<PrismaService, 'creditRedeemOrder'>, authUser.id, rewardCode);
       if (redeemed) {
         throw new BadRequestException(
           rewardCode === 'PROFILE_FRAME_BLUE'
             ? `头像框权益仍在有效期内，单次激活可维持 ${AVATAR_FRAME_REWARD_DURATION_DAYS} 天`
-            : '该权益已兑换，无需重复操作'
+            : rewardCode === 'BADGE_TRUSTED_WEEK'
+              ? '守约徽章仍在有效期内'
+              : '该权益已兑换，无需重复操作'
         );
       }
 

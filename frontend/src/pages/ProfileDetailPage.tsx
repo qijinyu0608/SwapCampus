@@ -3,6 +3,7 @@ import { Button, Empty, Skeleton, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { KeyValueGrid } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import { getRoleLabel, hasTradingAccess, isGuestUser } from '../services/session';
@@ -72,7 +73,11 @@ export function ProfileDetailPage() {
             />
           </div>
           <div>
-            <h1>{presentation.displayName}</h1>
+            <UserNameWithBadge
+              as="h1"
+              name={presentation.displayName}
+              trustedBadgeUnlocked={presentation.trustedBadgeUnlocked}
+            />
             <p>{profile.email}</p>
             <div className="profile-detail-tags">
               <Tag color="gold">{presentation.verificationLabel}</Tag>

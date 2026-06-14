@@ -2,8 +2,11 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   GiftOutlined,
+  LeftOutlined,
+  RightOutlined,
   SafetyCertificateOutlined,
-  StarOutlined
+  StarOutlined,
+  TrophyOutlined
 } from '@ant-design/icons';
 import { Button, Empty, Spin, Tabs, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -29,34 +32,109 @@ import { useAuthState } from '../services/auth-state';
 import { hasTradingAccess } from '../services/session';
 import { getUserCreditBadge } from '../utils/userPresentation';
 
-function buildCalendarDays() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const totalDays = new Date(year, month + 1, 0).getDate();
-  const offset = (firstDay.getDay() + 6) % 7;
-  const cells: Array<{ date: number | null; isToday: boolean; isPast: boolean; isFuture: boolean }> = [];
+type CalendarCell = {
+  key: string;
+  date: number;
+  fullDate: string;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isPast: boolean;
+  isFuture: boolean;
+  isChecked: boolean;
+};
 
-  for (let index = 0; index < offset; index += 1) {
-    cells.push({ date: null, isToday: false, isPast: false, isFuture: false });
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatMonthLabel(date: Date) {
+  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
+}
+
+function isSameMonth(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+}
+
+function resolveLedgerDateKey(item: CreditLedgerItem) {
+  if (item.sourceType !== 'SIGNIN') {
+    return null;
   }
 
-  for (let date = 1; date <= totalDays; date += 1) {
+  if (item.sourceId && /^\d{4}-\d{2}-\d{2}$/.test(item.sourceId)) {
+    return item.sourceId;
+  }
+
+  const date = new Date(item.createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return formatDateKey(date);
+}
+
+function buildCalendarMonth(viewMonth: Date, checkedDateKeys: Set<string>) {
+  const now = new Date();
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const previousMonthTotalDays = new Date(year, month, 0).getDate();
+  const offset = firstDay.getDay();
+  const cells: CalendarCell[] = [];
+
+  for (let index = 0; index < offset; index += 1) {
+    const date = previousMonthTotalDays - offset + index + 1;
+    const fullDate = new Date(year, month - 1, date);
+    const dateKey = formatDateKey(fullDate);
     cells.push({
+      key: dateKey,
       date,
-      isToday: now.getDate() === date,
-      isPast: date < now.getDate(),
-      isFuture: date > now.getDate()
+      fullDate: dateKey,
+      isCurrentMonth: false,
+      isToday: dateKey === formatDateKey(now),
+      isPast: fullDate < new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isFuture: fullDate > new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isChecked: checkedDateKeys.has(dateKey)
     });
   }
 
+  for (let date = 1; date <= totalDays; date += 1) {
+    const fullDate = new Date(year, month, date);
+    const dateKey = formatDateKey(fullDate);
+    cells.push({
+      key: dateKey,
+      date,
+      fullDate: dateKey,
+      isCurrentMonth: true,
+      isToday: dateKey === formatDateKey(now),
+      isPast: fullDate < new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isFuture: fullDate > new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isChecked: checkedDateKeys.has(dateKey)
+    });
+  }
+
+  let nextMonthDate = 1;
   while (cells.length % 7 !== 0) {
-    cells.push({ date: null, isToday: false, isPast: false, isFuture: false });
+    const fullDate = new Date(year, month + 1, nextMonthDate);
+    const dateKey = formatDateKey(fullDate);
+    cells.push({
+      key: dateKey,
+      date: nextMonthDate,
+      fullDate: dateKey,
+      isCurrentMonth: false,
+      isToday: dateKey === formatDateKey(now),
+      isPast: fullDate < new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isFuture: fullDate > new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      isChecked: checkedDateKeys.has(dateKey)
+    });
+    nextMonthDate += 1;
   }
 
   return {
-    monthLabel: `${year}年${month + 1}月`,
+    monthLabel: formatMonthLabel(viewMonth),
     cells
   };
 }
@@ -82,6 +160,10 @@ function getMissionActionLabel(item: CreditMissionItem) {
     return '领取';
   }
   return '未完成';
+}
+
+function getMissionProgressLabel(item: CreditMissionItem) {
+  return `${Math.min(item.progressCurrent, item.progressTarget)}/${item.progressTarget}`;
 }
 
 function getMissionStatus(item: CreditMissionItem) {
@@ -127,11 +209,16 @@ function renderRewardPreview(item: CreditRewardItem) {
   return (
     <div className="credit-center-reward-preview is-badge" aria-hidden="true">
       <div className="credit-center-reward-badge">
-        <div className="credit-center-reward-badge-crest" />
-        <div className="credit-center-reward-badge-core">
-          <CheckCircleOutlined />
+        <span className="credit-center-reward-badge-wing left" />
+        <span className="credit-center-reward-badge-wing right" />
+        <div className="credit-center-reward-badge-medal">
+          <div className="credit-center-reward-badge-core">
+            <SafetyCertificateOutlined />
+          </div>
+          <span className="credit-center-reward-badge-seal">
+            <CheckCircleOutlined />
+          </span>
         </div>
-        <div className="credit-center-reward-badge-spark" />
         <span className="credit-center-reward-badge-ribbon left" />
         <span className="credit-center-reward-badge-ribbon right" />
       </div>
@@ -176,6 +263,10 @@ function CreditScoreGauge(props: {
 export function CreditCenterPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthState();
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [summary, setSummary] = useState<CreditCenterSummary | null>(null);
   const [missions, setMissions] = useState<CreditMissionItem[]>([]);
   const [ledgerItems, setLedgerItems] = useState<CreditLedgerItem[]>([]);
@@ -185,7 +276,7 @@ export function CreditCenterPage() {
   const [actingMissionCode, setActingMissionCode] = useState<string | null>(null);
   const [actingRewardCode, setActingRewardCode] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'calendar' | 'rewards' | 'ledger'>('calendar');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'calendar' | 'rewards' | 'ledger'>('tasks');
 
   async function loadCreditCenter() {
     setLoading(true);
@@ -218,24 +309,14 @@ export function CreditCenterPage() {
     void loadCreditCenter();
   }, [currentUser]);
 
-  const calendar = useMemo(() => buildCalendarDays(), []);
-  const checkedDates = useMemo(() => {
-    if (!summary) {
-      return new Set<number>();
-    }
-
-    const streak = Math.max(0, Math.min(summary.signInStreak, 31));
-    const today = new Date().getDate();
-    const dates = new Set<number>();
-    for (let offset = 0; offset < streak; offset += 1) {
-      const value = today - offset;
-      if (value > 0) {
-        dates.add(value);
-      }
-    }
-    return dates;
-  }, [summary]);
+  const checkedDateKeys = useMemo(
+    () => new Set(ledgerItems.map(resolveLedgerDateKey).filter((item): item is string => Boolean(item))),
+    [ledgerItems]
+  );
+  const calendar = useMemo(() => buildCalendarMonth(visibleMonth, checkedDateKeys), [checkedDateKeys, visibleMonth]);
+  const isCurrentVisibleMonth = useMemo(() => isSameMonth(visibleMonth, new Date()), [visibleMonth]);
   const creditBadge = useMemo(() => getUserCreditBadge(summary?.creditScore), [summary?.creditScore]);
+
   async function handleCheckIn() {
     setSubmittingCheckIn(true);
     try {
@@ -333,8 +414,50 @@ export function CreditCenterPage() {
       <section className="profile-section-panel credit-center-tabs-panel">
         <Tabs
           activeKey={activeTab}
-          onChange={(value) => setActiveTab(value as 'calendar' | 'rewards' | 'ledger')}
+          onChange={(value) => setActiveTab(value as 'tasks' | 'calendar' | 'rewards' | 'ledger')}
           items={[
+            {
+              key: 'tasks',
+              label: (
+                <span className="credit-center-tab-label">
+                  <TrophyOutlined />
+                  任务
+                </span>
+              ),
+              children: (
+                <div className="credit-center-tab-content">
+                  <SectionHeader title="任务接入" className="is-spacious" />
+                  {missions.length ? (
+                    <div className="credit-center-task-list">
+                      {missions.map((item) => (
+                        <div key={item.code} className="credit-center-task-item">
+                          <div className="credit-center-task-copy">
+                            <div className="credit-center-reward-headline">
+                              <strong>{item.title}</strong>
+                              <span className={`credit-center-task-chip is-${getMissionStatus(item)}`}>
+                                {getMissionActionLabel(item)}
+                              </span>
+                            </div>
+                            <span>{item.description}</span>
+                            <em>{getMissionCycleLabel(item.cycleType)} · 进度 {getMissionProgressLabel(item)}</em>
+                          </div>
+                          <Button
+                            type={item.completed && !item.claimed ? 'primary' : 'default'}
+                            disabled={!item.completed || item.claimed}
+                            loading={actingMissionCode === item.code}
+                            onClick={() => void handleClaimMission(item.code)}
+                          >
+                            {item.rewardPoints > 0 ? `+${item.rewardPoints}` : getMissionActionLabel(item)}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty description="暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  )}
+                </div>
+              )
+            },
             {
               key: 'calendar',
               label: (
@@ -351,27 +474,49 @@ export function CreditCenterPage() {
                         title="签到日历"
                         className="is-spacious"
                       />
+                      <div className="credit-center-calendar-toolbar">
+                        <Button
+                          type="text"
+                          className="credit-center-calendar-nav"
+                          icon={<LeftOutlined />}
+                          aria-label="查看上个月"
+                          onClick={() => {
+                            setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+                          }}
+                        />
+                        <strong>{calendar.monthLabel}</strong>
+                        <Button
+                          type="text"
+                          className="credit-center-calendar-nav"
+                          icon={<RightOutlined />}
+                          aria-label="查看下个月"
+                          disabled={isCurrentVisibleMonth}
+                          onClick={() => {
+                            setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+                          }}
+                        />
+                      </div>
                       <div className="credit-center-calendar-weekdays">
-                        {['一', '二', '三', '四', '五', '六', '日'].map((item) => (
+                        {['日', '一', '二', '三', '四', '五', '六'].map((item) => (
                           <span key={item}>{item}</span>
                         ))}
                       </div>
                       <div className="credit-center-calendar-grid">
-                        {calendar.cells.map((cell, index) => {
-                          const isChecked = cell.date !== null && checkedDates.has(cell.date);
+                        {calendar.cells.map((cell) => {
                           return (
                             <div
-                              key={`${cell.date ?? 'empty'}-${index}`}
-                          className={[
-                            'credit-center-calendar-cell',
-                            cell.isToday ? 'is-today' : '',
-                            isChecked ? 'is-checked' : '',
-                            !isChecked && cell.isPast ? 'is-missed' : '',
-                            cell.isFuture ? 'is-future' : '',
-                            cell.date === null ? 'is-empty' : ''
-                          ].filter(Boolean).join(' ')}
-                        >
-                              {cell.date === null ? '' : cell.date}
+                              key={cell.key}
+                              className={[
+                                'credit-center-calendar-cell',
+                                cell.isToday ? 'is-today' : '',
+                                cell.isChecked ? 'is-checked' : '',
+                                !cell.isChecked && cell.isPast && cell.isCurrentMonth ? 'is-missed' : '',
+                                cell.isFuture && cell.isCurrentMonth ? 'is-future' : '',
+                                !cell.isCurrentMonth ? 'is-adjacent-month' : ''
+                              ].filter(Boolean).join(' ')}
+                              title={cell.fullDate}
+                            >
+                              {cell.date}
                             </div>
                           );
                         })}

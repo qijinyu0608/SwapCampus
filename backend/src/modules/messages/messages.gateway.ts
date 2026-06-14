@@ -26,6 +26,7 @@ type NewMessageEvent = {
     senderName: string;
     senderAvatarUrl?: string | null;
     senderAvatarFrame?: string | null;
+    senderTrustedBadgeUnlocked?: boolean;
     content: string;
     type: string;
     attachment?: Record<string, unknown> | null;

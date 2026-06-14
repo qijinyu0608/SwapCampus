@@ -5,11 +5,14 @@ import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.uti
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
+import { OrdersService } from '../orders/orders.service';
 import { VendureService } from '../vendure/vendure.service';
 import { isProductCategoryName, normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-categories';
-import { isProductConditionValue, PRODUCT_CONDITION_VALUES } from './product-conditions';
+import { isProductConditionValue, parseProductConditionValue } from './product-conditions';
 import { CreateProductDto } from './dto/create-product.dto';
+import { moderateProductPayload } from './product-moderation';
 import { SearchProductsDto } from './dto/search-products.dto';
+import { PublishingReviewService } from '../moderation/publishing-review.service';
 
 const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 
@@ -112,7 +115,7 @@ function buildProductTags(payload: Pick<CreateProductDto, 'title' | 'category' |
       return false;
     }
 
-    if (PRODUCT_CONDITION_VALUES.includes(tag as (typeof PRODUCT_CONDITION_VALUES)[number])) {
+    if (parseProductConditionValue(tag) !== null || tag === '全新') {
       return false;
     }
 
@@ -165,7 +168,11 @@ export class ProductsService {
     @Inject(SearchService)
     private readonly searchService: SearchService,
     @Inject(VendureService)
-    private readonly vendureService: VendureService
+    private readonly vendureService: VendureService,
+    @Inject(PublishingReviewService)
+    private readonly publishingReviewService?: PublishingReviewService,
+    @Inject(OrdersService)
+    private readonly ordersService?: OrdersService
   ) {}
 
   private async buildProductCards(products: Array<{
@@ -179,6 +186,18 @@ export class ProductsService {
     status: ProductStatus;
     description: string;
   }>, userId?: number) {
+    const statsClient = this.prisma as PrismaService & {
+      userBehavior?: {
+        groupBy: (args: {
+          by: ['productId'];
+          where: {
+            productId: { in: number[] };
+            eventType: BehaviorEventType;
+          };
+          _count: { _all: true };
+        }) => Promise<Array<{ productId: number; _count: { _all: number } }>>;
+      };
+    };
     const sellerIds = [...new Set(products.map((product) => product.sellerId))];
     const productIds = products.map((product) => product.id);
 
@@ -196,14 +215,16 @@ export class ProductsService {
         where: { productId: { in: productIds } },
         _count: { _all: true }
       }),
-      this.prisma.userBehavior.groupBy({
-        by: ['productId'],
-        where: {
-          productId: { in: productIds },
-          eventType: BehaviorEventType.CONTACT
-        },
-        _count: { _all: true }
-      }),
+      typeof statsClient.userBehavior?.groupBy === 'function'
+        ? statsClient.userBehavior.groupBy({
+            by: ['productId'],
+            where: {
+              productId: { in: productIds },
+              eventType: BehaviorEventType.CONTACT
+            },
+            _count: { _all: true }
+          })
+        : Promise.resolve([]),
       userId
         ? this.prisma.favorite.findMany({
             where: {
@@ -258,7 +279,7 @@ export class ProductsService {
       where: {
         status: ProductStatus.ON_SALE,
         ...(excludeProductIds.length ? { id: { notIn: excludeProductIds } } : {}),
-        ...(excludeSellerId ? { sellerId: { not: excludeSellerId } } : {})
+        ...(excludeSellerId !== undefined ? { sellerId: { not: excludeSellerId } } : {})
       },
       orderBy: { createdAt: 'desc' },
       take: 180
@@ -271,7 +292,7 @@ export class ProductsService {
     const seedPriceBands = new Map<string, number>();
     const excludedProductIds = new Set<number>();
 
-    if (userId) {
+    if (userId !== undefined) {
       const [favorites, orders] = await Promise.all([
         this.prisma.favorite.findMany({
           where: { userId },
@@ -416,17 +437,20 @@ export class ProductsService {
     return this.buildProductCards(selected, userId);
   }
 
-  async searchProducts(query: SearchProductsDto) {
+  async searchProducts(query: SearchProductsDto, currentUserId?: number) {
     const ids = query.ids
       ?.split(',')
       .map((item) => Number(item.trim()))
       .filter((item) => Number.isFinite(item) && item > 0);
+
+    const excludeOwnListings = currentUserId !== undefined && query.sellerId === undefined;
 
     const result = await this.searchService.searchProducts({
       q: query.q,
       category: query.category,
       condition: query.condition,
       sellerId: query.sellerId,
+      excludeSellerId: excludeOwnListings ? currentUserId : undefined,
       ids,
       status: query.status,
       trade: query.trade,
@@ -458,7 +482,8 @@ export class ProductsService {
 
     const products = await this.prisma.product.findMany({
       where: {
-        id: { in: productIds }
+        id: { in: productIds },
+        ...(excludeOwnListings ? { sellerId: { not: currentUserId } } : {})
       }
     });
     const cards = await this.buildProductCards(products);
@@ -516,7 +541,7 @@ export class ProductsService {
       });
     }
 
-    const [seller, images, relatedProducts, reportCount, favoriteCount, wantCount, viewCount, sellerOrders] = await Promise.all([
+    const [seller, images, relatedProducts, reportCount, favoriteCount, wantCount, viewCount, sellerOrders, activeOrder] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: product.sellerId },
         include: { verification: true }
@@ -556,6 +581,7 @@ export class ProductsService {
         where: { sellerId: product.sellerId },
         select: { id: true, status: true }
       }),
+      this.ordersService?.getOrderByProductId(product.id) ?? Promise.resolve(null)
     ]);
 
     const sellerOrderIds = sellerOrders.map((order) => order.id);
@@ -616,7 +642,7 @@ export class ProductsService {
         title: detailCard.title,
         description: detailCard.description,
         price: detailCard.price,
-        amountLabel: `¥${detailCard.price}`,
+        amountLabel: `¥${detailCard.price.toFixed(2)}`,
         imageUrl: detailCard.imageUrl,
         tags: detailCard.tags,
         summaryTags: detailCard.tags,
@@ -641,7 +667,22 @@ export class ProductsService {
         timeline: [
           { key: 'published', label: '发布时间', value: product.createdAt.toISOString() },
           { key: 'updated', label: '最近变更', value: product.updatedAt.toISOString() }
-        ]
+        ],
+        tradeState: activeOrder
+          ? {
+              orderId: activeOrder.id,
+              orderStatus: activeOrder.status,
+              isBuyer: userId ? activeOrder.buyerId === userId : false,
+              isSeller: userId ? activeOrder.sellerId === userId : false,
+              canOpenOrderDetail: Boolean(userId && (activeOrder.buyerId === userId || activeOrder.sellerId === userId))
+            }
+          : {
+              orderId: null,
+              orderStatus: null,
+              isBuyer: false,
+              isSeller: false,
+              canOpenOrderDetail: false
+            }
       }
     };
   }
@@ -741,6 +782,29 @@ export class ProductsService {
       throw new BadRequestException('请至少上传 1 张商品图片');
     }
 
+    const moderationResult = moderateProductPayload(payload, prohibitedKeywords);
+    if (!moderationResult.passed) {
+      throw new BadRequestException(
+        `商品${moderationResult.fieldLabel}包含疑似违规内容“${moderationResult.matchedTerm}”，请修改后再发布`
+      );
+    }
+
+    const llmReview = await this.publishingReviewService?.reviewProduct({
+      title: payload.title,
+      description: payload.description,
+      price: payload.price,
+      category: payload.category,
+      condition: payload.condition,
+      tags: payload.tags ?? [],
+      imageUrls: normalizedImageUrls
+    }) ?? null;
+
+    if (llmReview?.shouldBlock) {
+      throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
+    }
+
+    const selectedCategory = llmReview?.selectedCategory ?? payload.category;
+
     const seller = await this.prisma.user.findUnique({
       where: { id: sellerUser.id },
       select: { id: true, accountStatus: true }
@@ -760,7 +824,7 @@ export class ProductsService {
         title: payload.title,
         description: payload.description,
         price: payload.price,
-        category: payload.category,
+        category: selectedCategory,
         condition: payload.condition,
         tags: normalizedTags,
         status: ProductStatus.ON_SALE,
@@ -789,7 +853,8 @@ export class ProductsService {
     return {
       id: syncedProduct.id,
       title: syncedProduct.title,
-      status: syncedProduct.status
+      status: syncedProduct.status,
+      review: llmReview
     };
   }
 }

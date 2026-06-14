@@ -4,7 +4,9 @@ export class UpdateProfileDto {
   email?: string;
   realName?: string;
   college?: string;
+  graduationYear?: number;
   phone?: string;
   avatarUrl?: string;
   avatarFrame?: string;
+  studentCardPhotoUrl?: string;
 }

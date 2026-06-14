@@ -33,6 +33,7 @@ import { AcceptCampusServiceDto } from './dto/accept-campus-service.dto';
 import { CancelCampusServiceDto } from './dto/cancel-campus-service.dto';
 import { CompleteCampusServiceDto } from './dto/complete-campus-service.dto';
 import { CreateCampusServiceDto } from './dto/create-campus-service.dto';
+import { PublishingReviewService } from '../moderation/publishing-review.service';
 import {
   EXCELLENT_CREDIT_SCORE,
   GOOD_CREDIT_SCORE,
@@ -114,6 +115,22 @@ const campusServiceContactPreferenceLabelMap: Record<CampusServiceContactPrefere
   PHONE_AFTER_MATCH: '确认后电话',
   FLEXIBLE: '均可'
 };
+
+function normalizeCampusServiceCategoryFilters(
+  value: SearchCampusServicesDto['categories'] | string | null | undefined
+): CampusServiceCategory[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const values = Array.isArray(value) ? value : [value];
+  const normalized = values
+    .flatMap((item) => String(item).split(','))
+    .map((item) => item.trim())
+    .filter((item): item is CampusServiceCategory => item in campusServiceCategoryLabelMap);
+
+  return normalized.length ? normalized : undefined;
+}
 
 type CampusServiceViewerRole = 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'PARTICIPANT' | 'OTHER';
 
@@ -268,7 +285,9 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(PublishingReviewService)
+    private readonly publishingReviewService?: PublishingReviewService
   ) {}
 
   onModuleInit() {
@@ -714,7 +733,38 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
   private async loadListingContext(listings: ListingRecord[], currentUserId?: number | null) {
     const listingIds = listings.map((item) => item.id);
+    if (!listingIds.length) {
+      return {
+        userMap: new Map(),
+        latestOrderMap: new Map(),
+        ordersByListingMap: new Map(),
+        activeOrderCountMap: new Map(),
+        pendingOrderCountMap: new Map(),
+        waitingCompleteOrderCountMap: new Map(),
+        endedOrderCountMap: new Map(),
+        totalOrderCountMap: new Map(),
+        conversationMap: new Map(),
+        orderConversationMap: new Map(),
+        imageMap: new Map(),
+        favoriteCountMap: new Map(),
+        reportCountMap: new Map(),
+        viewCountMap: new Map(),
+        favoritedListingIds: new Set(),
+        unlockedUserIds: new Set()
+      } satisfies ListingContext;
+    }
+
     const statsClient = this.prisma as PrismaService & {
+      creditRedeemOrder?: {
+        findMany: (args: {
+          where: {
+            userId: { in: number[] };
+            rewardCode: string;
+            status: 'FULFILLED';
+          };
+          select: { userId: true };
+        }) => Promise<Array<{ userId: number }>>;
+      };
       campusServiceFavorite?: {
         groupBy: (args: {
           by: ['listingId'];
@@ -862,14 +912,16 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     }, new Map<number, number>());
     const viewCountMap = new Map<number, number>(viewGroups.map((item) => [item.listingId, item._count._all]));
     const unlockedUserIds = new Set<number>(
-      (await this.prisma.creditRedeemOrder.findMany({
-        where: {
-          userId: { in: allUsers.map((user) => user.id) },
-          rewardCode: AVATAR_FRAME_REWARD_CODE,
-          status: 'FULFILLED'
-        },
-        select: { userId: true }
-      })).map((item) => item.userId)
+      (statsClient.creditRedeemOrder
+        ? await statsClient.creditRedeemOrder.findMany({
+            where: {
+              userId: { in: allUsers.map((user) => user.id) },
+              rewardCode: AVATAR_FRAME_REWARD_CODE,
+              status: 'FULFILLED'
+            },
+            select: { userId: true }
+          })
+        : []).map((item) => item.userId)
     );
 
     orders.forEach((order) => {
@@ -1231,6 +1283,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
 
     const requestedPage = Math.max(1, filters.page ?? 1);
     const pageSize = Math.max(1, Math.min(filters.pageSize ?? 24, 60));
+    const normalizedCategories = normalizeCampusServiceCategoryFilters(filters.categories);
     const keyword = filters.keyword?.trim();
     const minReward = typeof filters.minReward === 'number' ? filters.minReward : undefined;
     const maxReward = typeof filters.maxReward === 'number' ? filters.maxReward : undefined;
@@ -1289,7 +1342,11 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     const where: Prisma.CampusServiceListingWhereInput = {
       ...(filters.ownerId !== undefined ? { ownerId: Number(filters.ownerId) } : {}),
       ...(filters.intent ? { intent: filters.intent } : {}),
-      ...(filters.category ? { category: filters.category } : {}),
+      ...(normalizedCategories?.length
+        ? { category: { in: normalizedCategories } }
+        : filters.category
+          ? { category: filters.category }
+          : {}),
       ...(filters.status ? { status: filters.status } : (filters.ownerId ? {} : { status: CampusServiceListingStatus.OPEN })),
       ...(keyword
         ? {
@@ -1320,6 +1377,10 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           }
         : {})
     };
+
+    if (filters.ownerId === undefined && currentUser?.id) {
+      where.ownerId = { not: currentUser.id };
+    }
 
     const orderBy = filters.sort === 'price_asc'
       ? [{ amount: 'asc' as const }, { updatedAt: 'desc' as const }]
@@ -1655,6 +1716,30 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('同时进行中上限不能高于总名额上限');
     }
 
+    const llmReview = await this.publishingReviewService?.reviewCampusService({
+      intent,
+      pattern,
+      title: payload.title.trim(),
+      category: payload.category,
+      description: payload.description.trim(),
+      amount: amountValue ?? undefined,
+      priceMode,
+      locationMode: payload.locationMode ?? CampusServiceLocationMode.FLEXIBLE,
+      locationNote: payload.locationNote?.trim() || null,
+      estimatedMinutes: payload.estimatedMinutes,
+      urgency: payload.urgency ?? CampusServiceUrgency.NORMAL,
+      fulfillmentMode: payload.fulfillmentMode ?? CampusServiceFulfillmentMode.FLEXIBLE,
+      itemCount: payload.itemCount ?? 1,
+      maxTotalOrders,
+      maxConcurrentOrders,
+      trustNote: payload.trustNote?.trim() || null,
+      imageUrls: normalizedImageUrls
+    }) ?? null;
+
+    if (llmReview?.shouldBlock) {
+      throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
+    }
+
     const listing = await this.prisma.campusServiceListing.create({
       data: {
         ownerId: authUser.id,
@@ -1671,14 +1756,14 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
             : amountValue ?? null,
         locationMode: payload.locationMode ?? CampusServiceLocationMode.FLEXIBLE,
         locationNote: payload.locationNote?.trim() || null,
-        routeFrom: payload.locationFrom?.trim() || null,
-        routeTo: payload.locationTo?.trim() || null,
+        routeFrom: null,
+        routeTo: null,
         validFromAt,
         validUntilAt,
         estimatedMinutes: payload.estimatedMinutes,
         urgency: payload.urgency ?? CampusServiceUrgency.NORMAL,
         fulfillmentMode: payload.fulfillmentMode ?? CampusServiceFulfillmentMode.FLEXIBLE,
-        contactPreference: payload.contactPreference ?? CampusServiceContactPreference.CHAT_ONLY,
+        contactPreference: CampusServiceContactPreference.CHAT_ONLY,
         itemCount: payload.itemCount ?? 1,
         trustNote: payload.trustNote?.trim() || null,
         maxTotalOrders,
@@ -1697,7 +1782,10 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     const [detail] = await this.mapListingDetails([listing as ListingRecord], authUser.id);
-    return detail;
+    return {
+      ...detail,
+      review: llmReview
+    } as typeof detail & { review: typeof llmReview };
   }
 
   async updateCampusService(id: number, payload: UpdateCampusServiceDto, currentUser: AuthenticatedUser) {

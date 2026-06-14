@@ -96,6 +96,7 @@ services:
   backend:
     build:
       context: ./backend
+      target: runner
     restart: unless-stopped
     environment:
       NODE_ENV: development
@@ -135,6 +136,7 @@ services:
     profiles: ["init"]
     build:
       context: ./backend
+      target: builder
     environment:
       DATABASE_URL: mysql://swapcampus:swapcampus@mysql:3306/swapcampus
       API_DOMAIN: ${API_DOMAIN:-http://127.0.0.1:3001}

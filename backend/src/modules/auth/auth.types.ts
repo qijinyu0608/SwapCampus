@@ -9,6 +9,7 @@ export type AuthenticatedUser = {
   avatarUrl?: string | null;
   avatarFrame?: string | null;
   avatarFrameUnlocked?: boolean;
+  trustedBadgeUnlocked?: boolean;
   role: UserRole;
   authSource?: 'supertokens' | 'dev-fallback';
 };

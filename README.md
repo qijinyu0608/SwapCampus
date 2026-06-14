@@ -31,6 +31,9 @@
 - 后台治理
   - 支持商品审核、举报处理、用户封禁/解封、操作留痕
   - 管理后台可查看待审核、待处理举报和治理摘要
+- 发布前 LLM 审核
+  - 商品和校园服务发布前会先走本地规则，再走 DeepSeek 二次审核与分类建议
+  - 通过环境变量配置 `DEEPSEEK_API_KEY`，未配置时自动跳过 LLM 审核
 - Docker 化部署与 CI
   - 提供 `docker-compose.yml`、前后端 Dockerfile、Makefile
   - 提供 GitHub Actions 基础 CI：后端 Jest 测试、前端构建检查
@@ -193,6 +196,12 @@ make start
 docker compose down -v
 make init
 make start
+```
+
+如果只想重建演示数据而不重建容器：
+
+```bash
+cd backend && npm run db:reset-and-seed-demo
 ```
 
 ### 基本验证命令

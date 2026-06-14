@@ -2,9 +2,11 @@ import {
   CampusServiceCategory,
   CampusServiceIntent,
   CampusServiceListingStatus,
-  CampusServiceOrderStatus
+  CampusServiceOrderStatus,
+  MessageType
 } from '@prisma/client';
 import { MessagesService } from './messages.service';
+import { resetProductModerationCacheForTests } from '../products/product-moderation';
 
 describe('MessagesService', () => {
   function createGateway() {
@@ -12,6 +14,10 @@ describe('MessagesService', () => {
       emitNewMessage: jest.fn()
     } as any;
   }
+
+  beforeEach(() => {
+    resetProductModerationCacheForTests();
+  });
 
   it('should create a draft product conversation without sending a message', async () => {
     const prisma = {
@@ -62,6 +68,95 @@ describe('MessagesService', () => {
         initiatorId: 1001
       }
     });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject prohibited initial message when creating conversation', async () => {
+    const prisma = {
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 301,
+          sellerId: 9
+        })
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1001,
+          accountStatus: 'ACTIVE'
+        })
+      },
+      conversation: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn()
+      },
+      message: {
+        create: jest.fn()
+      }
+    } as any;
+
+    const service = new MessagesService(prisma, createGateway());
+
+    await expect(service.createConversation(
+      { productId: 301, initialMessage: '可以代写作业吗' },
+      {
+        id: 1001,
+        studentId: '2026001001',
+        email: 'buyer@example.com',
+        role: 'USER'
+      } as any
+    )).rejects.toThrow('消息包含疑似违规内容“代写”，请修改后再发送');
+
+    expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject prohibited text message before persisting', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1001,
+          accountStatus: 'ACTIVE',
+          displayName: '买家甲',
+          avatarUrl: null,
+          avatarFrame: null
+        })
+      },
+      conversation: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 88,
+          initiatorId: 1001,
+          productId: 301,
+          orderId: null,
+          messages: [],
+          order: null,
+          campusServiceOrder: null
+        })
+      },
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 301,
+          sellerId: 9
+        })
+      },
+      message: {
+        create: jest.fn()
+      }
+    } as any;
+
+    const service = new MessagesService(prisma, createGateway());
+
+    await expect(service.sendMessage(
+      88,
+      { content: '支持账号交易吗', type: MessageType.TEXT },
+      {
+        id: 1001,
+        studentId: '2026001001',
+        email: 'buyer@example.com',
+        role: 'USER'
+      } as any
+    )).rejects.toThrow(/消息包含疑似违规内容“账号(交易)?”，请修改后再发送/);
+
     expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
@@ -187,6 +282,9 @@ describe('MessagesService', () => {
             }
           }
         ])
+      },
+      creditRedeemOrder: {
+        findFirst: jest.fn().mockResolvedValue(null)
       }
     } as any;
 
@@ -240,8 +338,10 @@ describe('MessagesService', () => {
       id: 22,
       displayName: '陈远',
       avatarUrl: null,
+      avatarFrame: null,
       college: '计算机学院',
-      isSeller: false
+      isSeller: false,
+      trustedBadgeUnlocked: false
     });
     expect(result.preview).toBe('我现在过去');
   });
@@ -317,6 +417,9 @@ describe('MessagesService', () => {
             }
           }
         ])
+      },
+      creditRedeemOrder: {
+        findFirst: jest.fn().mockResolvedValue(null)
       }
     } as any;
 
@@ -362,8 +465,10 @@ describe('MessagesService', () => {
       id: 44,
       displayName: '林澈',
       avatarUrl: null,
+      avatarFrame: null,
       college: '商学院',
-      isSeller: false
+      isSeller: false,
+      trustedBadgeUnlocked: false
     });
     expect(result.preview).toBe('到楼下给我发消息');
   });

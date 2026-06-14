@@ -8,6 +8,7 @@ import {
   fetchCampusServiceOrders,
   getApiErrorMessage
 } from '../../services/api';
+import { UserNameWithBadge } from '../user/UserNameWithBadge';
 import { getUserPresentation } from '../../utils/userPresentation';
 
 export type PublisherOrderGroupKey = 'PENDING' | 'ACTIVE' | 'WAITING_COMPLETE' | 'ENDED';
@@ -150,7 +151,11 @@ export function CampusServicePublisherOrderWorkbench({
                     <div className="service-detail-order-user">
                       <span>{counterpartPresentation.initial}</span>
                       <div>
-                        <strong>{counterpartPresentation.displayName}</strong>
+                        <UserNameWithBadge
+                          as="strong"
+                          name={counterpartPresentation.displayName}
+                          trustedBadgeUnlocked={counterpartPresentation.trustedBadgeUnlocked}
+                        />
                         <em>{order.roleLabel} · {order.intentLabel}</em>
                       </div>
                     </div>

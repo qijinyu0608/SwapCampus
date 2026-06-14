@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './load-env';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import SuperTokens from 'supertokens-node';

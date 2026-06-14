@@ -10,6 +10,7 @@ import {
   ListingDetailMetaPanel,
   ListingDetailTagPanel
 } from '../components/listing';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import {
   acceptCampusServiceListing,
@@ -622,14 +623,25 @@ export function CampusServiceDetailPage() {
           />
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
-              <strong>{listing.publisher.displayName}</strong>
+              <UserNameWithBadge
+                as="strong"
+                name={listing.publisher.displayName}
+                trustedBadgeUnlocked={publisherPresentation?.trustedBadgeUnlocked}
+              />
               {publisherPresentation ? (
                 <div className={`ui-credit-badge is-${publisherPresentation.creditBadge.tone}`}>
                   <span className="ui-credit-badge-label">{publisherPresentation.creditBadge.label}</span>
                 </div>
               ) : null}
             </div>
-            <MetaList items={sellerStats} className="detail-seller-strip-meta" />
+            <div className="ui-meta-list detail-seller-strip-meta">
+              {sellerStats.map((item, index) => (
+                <span key={`${String(item)}-${index}`}>
+                  {item}
+                  {index < sellerStats.length - 1 ? <i /> : null}
+                </span>
+              ))}
+            </div>
           </div>
         </Link>
         {currentUser?.id !== listing.publisher.id && (

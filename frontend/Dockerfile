@@ -9,7 +9,7 @@ ENV VITE_API_DOMAIN=$VITE_API_DOMAIN
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 ENV VITE_WEBSITE_DOMAIN=$VITE_WEBSITE_DOMAIN
 COPY package*.json ./
-RUN npm install
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

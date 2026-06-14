@@ -1,11 +1,11 @@
-import { Alert, Button, Form, Input, Select, message as antMessage } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Select, message as antMessage } from 'antd';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ImageCropUploadModal } from '../components/image-upload';
 import { UserAvatar } from '../components/user/UserAvatar';
 import { AVATAR_OPTIONS } from '../constants/avatarOptions';
 import { BJFU_COLLEGES } from '../constants/colleges';
-import { getApiErrorMessage, loginUser, registerUser, updateUserProfile, uploadImageAsset } from '../services/api';
+import { getApiErrorMessage, loginUser, registerUserMultipart } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 
 export function LoginPage() {
@@ -13,11 +13,13 @@ export function LoginPage() {
   const location = useLocation();
   const { setCurrentUser } = useAuthState();
   const [form] = Form.useForm<{
-    studentId?: string;
+    studentId: string;
     displayName: string;
-    email: string;
+    emailLocalPart: string;
     college?: string;
+    graduationYear: number;
     avatarUrl?: string;
+    verificationCode: string;
     password: string;
     confirmPassword: string;
   }>();
@@ -26,9 +28,14 @@ export function LoginPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [studentCardModalOpen, setStudentCardModalOpen] = useState(false);
   const [customAvatarPreviewUrl, setCustomAvatarPreviewUrl] = useState<string | null>(null);
   const [customAvatarFile, setCustomAvatarFile] = useState<File | null>(null);
+  const [studentCardPreviewUrl, setStudentCardPreviewUrl] = useState<string | null>(null);
+  const [studentCardFile, setStudentCardFile] = useState<File | null>(null);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(AVATAR_OPTIONS[0]?.src ?? '');
+  const [codeSending, setCodeSending] = useState(false);
+  const fixedEmailDomain = '@bjfu.edu.cn';
   const nextPath = typeof (location.state as { from?: unknown } | null)?.from === 'string'
     ? (location.state as { from: string }).from
     : null;
@@ -47,45 +54,51 @@ export function LoginPage() {
     if (customAvatarPreviewUrl?.startsWith('blob:')) {
       URL.revokeObjectURL(customAvatarPreviewUrl);
     }
-  }, [customAvatarPreviewUrl]);
+    if (studentCardPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(studentCardPreviewUrl);
+    }
+  }, [customAvatarPreviewUrl, studentCardPreviewUrl]);
 
   async function handleRegister(values: {
-    studentId?: string;
+    studentId: string;
     displayName: string;
-    email: string;
+    emailLocalPart: string;
     college?: string;
+    graduationYear: number;
     avatarUrl?: string;
+    verificationCode: string;
     password: string;
     confirmPassword: string;
   }) {
+    if (!studentCardFile) {
+      setMessage({ type: 'error', text: '请上传学生证或学生卡照片' });
+      return;
+    }
+
     setLoading(true);
     try {
       const { confirmPassword: _confirmPassword, ...payload } = values;
-      const registerPayload = {
-        ...payload,
-        avatarUrl: customAvatarFile ? undefined : selectedAvatarUrl || undefined
-      };
-      const result = await registerUser(registerPayload);
+      const email = `${payload.emailLocalPart.trim()}${fixedEmailDomain}`.toLowerCase();
+      const formData = new FormData();
+      formData.append('studentId', payload.studentId.trim());
+      formData.append('displayName', payload.displayName.trim());
+      formData.append('email', email);
+      formData.append('verificationCode', payload.verificationCode.trim());
+      formData.append('graduationYear', String(payload.graduationYear));
+      formData.append('password', payload.password);
+      if (payload.college?.trim()) {
+        formData.append('college', payload.college.trim());
+      }
       if (customAvatarFile) {
-        try {
-          const uploaded = await uploadImageAsset(customAvatarFile, 'avatar');
-          const profile = await updateUserProfile(result.user.id, {
-            displayName: values.displayName,
-            email: values.email,
-            realName: values.displayName,
-            college: values.college?.trim() || '待填写',
-            phone: '待填写',
-            avatarUrl: uploaded.url
-          });
-          result.user.avatarUrl = profile.avatarUrl ?? uploaded.url;
-        } catch (error) {
-          antMessage.warning(getApiErrorMessage(error, '注册成功，但头像上传失败，请稍后在资料页补充'));
-        }
+        formData.append('avatar', customAvatarFile);
+      } else if (selectedAvatarUrl) {
+        formData.append('avatarUrl', selectedAvatarUrl);
       }
+      formData.append('studentCard', studentCardFile);
+
+      const result = await registerUserMultipart(formData);
       setCurrentUser(result.user);
-      if (!customAvatarFile) {
-        setMessage({ type: 'success', text: `注册成功，已登录 ${result.user.displayName}` });
-      }
+      setMessage({ type: 'success', text: '注册成功，请在 24 小时内等待审核，并留意邮箱反馈结果' });
       void navigate(nextPath || '/');
     } catch (error: any) {
       setMessage({
@@ -108,6 +121,16 @@ export function LoginPage() {
     antMessage.success('头像已准备好，注册后会自动上传');
   }
 
+  async function handleStudentCardConfirm(file: File, previewUrl: string) {
+    if (studentCardPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(studentCardPreviewUrl);
+    }
+    setStudentCardFile(file);
+    setStudentCardPreviewUrl(previewUrl);
+    setStudentCardModalOpen(false);
+    antMessage.success('证件照片已准备好');
+  }
+
   function handlePresetAvatarSelect(src: string) {
     if (customAvatarPreviewUrl?.startsWith('blob:')) {
       URL.revokeObjectURL(customAvatarPreviewUrl);
@@ -118,6 +141,22 @@ export function LoginPage() {
   }
 
   const usingCustomAvatar = Boolean(selectedAvatarUrl?.startsWith('blob:'));
+
+  async function handleSendVerificationCode() {
+    const emailLocalPart = form.getFieldValue('emailLocalPart')?.trim().toLowerCase();
+    if (!emailLocalPart) {
+      setMessage({ type: 'error', text: '请先填写学校邮箱' });
+      return;
+    }
+
+    setCodeSending(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      antMessage.info('验证码已发送');
+    } finally {
+      setCodeSending(false);
+    }
+  }
 
   async function handleLogin(values: { account: string; password: string }) {
     setLoading(true);
@@ -218,11 +257,54 @@ export function LoginPage() {
               <Form.Item label="用户名" name="displayName" rules={[{ required: true, message: '请输入用户名' }]}>
                 <Input placeholder="请输入用户名，可重复" />
               </Form.Item>
-              <Form.Item label="邮箱" name="email" rules={[{ required: true }]}>
-                <Input placeholder="例如：student@campus.edu.cn" />
+              <Form.Item
+                label="学校邮箱"
+                name="emailLocalPart"
+                rules={[
+                  { required: true, message: '请输入学校邮箱' },
+                  {
+                    validator: async (_, value) => {
+                      const normalized = String(value ?? '').trim();
+                      if (!normalized) {
+                        return;
+                      }
+                      if (!/^[A-Za-z0-9._%+-]+$/.test(normalized)) {
+                        throw new Error('邮箱 @ 前仅支持字母、数字和常见符号');
+                      }
+                    }
+                  }
+                ]}
+              >
+                <Input placeholder="例如：202600001" addonAfter={fixedEmailDomain} />
               </Form.Item>
-              <Form.Item label="学号" name="studentId">
-                <Input placeholder="选填，例如：20260001" />
+              <Form.Item
+                label="邮箱验证码"
+                name="verificationCode"
+                rules={[{ required: true, message: '请输入验证码' }]}
+              >
+                <Input
+                  placeholder="请输入 6 位验证码"
+                  addonAfter={(
+                    <button
+                      type="button"
+                      className="login-inline-action"
+                      onClick={() => void handleSendVerificationCode()}
+                      disabled={codeSending}
+                    >
+                      {codeSending ? '发送中' : '发送验证码'}
+                    </button>
+                  )}
+                />
+              </Form.Item>
+              <Form.Item
+                label="学号"
+                name="studentId"
+                rules={[
+                  { required: true, message: '请输入学号' },
+                  { pattern: /^\d{9}$/, message: '学号必须为 9 位数字' }
+                ]}
+              >
+                <Input placeholder="例如：202600001" maxLength={9} />
               </Form.Item>
               <Form.Item label="学院" name="college">
                 <Select
@@ -231,6 +313,41 @@ export function LoginPage() {
                   allowClear
                 />
               </Form.Item>
+              <Form.Item
+                label="毕业年份"
+                name="graduationYear"
+                rules={[
+                  { required: true, message: '请输入毕业年份' },
+                  {
+                    validator: async (_, value) => {
+                      const numeric = Number(value);
+                      if (Number.isInteger(numeric) && numeric >= 2000 && numeric <= 2100) {
+                        return;
+                      }
+                      throw new Error('请输入正确的毕业年份');
+                    }
+                  }
+                ]}
+              >
+                <InputNumber placeholder="例如：2028" min={2000} max={2100} precision={0} style={{ width: '100%' }} />
+              </Form.Item>
+
+              <div className="register-section">
+                <div className="register-section-head">
+                  <strong>身份材料</strong>
+                </div>
+                <button
+                  type="button"
+                  className={studentCardPreviewUrl ? 'register-upload-card active' : 'register-upload-card'}
+                  onClick={() => setStudentCardModalOpen(true)}
+                >
+                  {studentCardPreviewUrl ? (
+                    <img src={studentCardPreviewUrl} alt="" className="register-upload-preview" />
+                  ) : (
+                    <span>上传学生证/学生卡照片</span>
+                  )}
+                </button>
+              </div>
 
               <div className="register-section">
                 <div className="register-section-head">
@@ -275,6 +392,17 @@ export function LoginPage() {
         outputHeight={512}
         onCancel={() => setAvatarModalOpen(false)}
         onConfirm={handleCustomAvatarConfirm}
+      />
+      <ImageCropUploadModal
+        open={studentCardModalOpen}
+        title="上传学生证/学生卡照片"
+        shape="rect"
+        aspect={1.58}
+        outputWidth={1600}
+        outputHeight={1012}
+        confirmText="保存照片"
+        onCancel={() => setStudentCardModalOpen(false)}
+        onConfirm={handleStudentCardConfirm}
       />
     </div>
   );

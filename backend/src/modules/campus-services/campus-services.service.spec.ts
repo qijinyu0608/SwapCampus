@@ -21,6 +21,17 @@ describe('CampusServicesService', () => {
     email: 'user11@example.com',
     role: 'USER'
   } as any;
+  const publishingReviewService = {
+    reviewCampusService: jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      status: 'disabled',
+      decision: 'APPROVED',
+      shouldBlock: false,
+      reason: 'skip',
+      issues: []
+    })
+  } as any;
 
   function createListing(overrides: Record<string, unknown> = {}) {
     return {
@@ -124,12 +135,13 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, publishingReviewService);
     const response = await service.listCampusServices({}, authUser);
     const [result] = response.items;
 
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
       where: {
+        ownerId: { not: 11 },
         status: CampusServiceListingStatus.OPEN
       }
     });
@@ -170,6 +182,50 @@ describe('CampusServicesService', () => {
     expect(result.actionLabels.accept).toBe('接单');
     expect(result.status).toBe('OPEN');
     expect(result.statusLabel).toBe('可接单');
+  });
+
+  it('should exclude current user listings from discover search', async () => {
+    const listing = createListing({ ownerId: 11 });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([listing])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma, publishingReviewService);
+
+    await service.listCampusServices({}, authUser);
+
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN,
+        ownerId: { not: 11 }
+      }
+    });
   });
 
   it('should combine selected credit filters with OR when listing campus services', async () => {
@@ -223,6 +279,7 @@ describe('CampusServicesService', () => {
 
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
       where: {
+        ownerId: { not: 11 },
         status: CampusServiceListingStatus.OPEN,
         owner: {
           is: {
@@ -241,6 +298,134 @@ describe('CampusServicesService', () => {
             ]
           }
         }
+      }
+    });
+  });
+
+  it('should filter campus services by multiple categories when categories are provided', async () => {
+    const listing = createListing();
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([listing])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+
+    await service.listCampusServices({
+      categories: [CampusServiceCategory.EVENT, CampusServiceCategory.MOVING]
+    }, authUser);
+
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN,
+        ownerId: { not: 11 },
+        category: {
+          in: [CampusServiceCategory.EVENT, CampusServiceCategory.MOVING]
+        }
+      }
+    });
+  });
+
+  it('should normalize category filters when query categories arrive as a comma separated string', async () => {
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+
+    await service.listCampusServices({
+      categories: 'MOVING,EVENT' as any
+    }, authUser);
+
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN,
+        ownerId: { not: 11 },
+        category: {
+          in: [CampusServiceCategory.MOVING, CampusServiceCategory.EVENT]
+        }
+      }
+    });
+  });
+
+  it('should return empty result safely when category filter matches no listings', async () => {
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const response = await service.listCampusServices({
+      categories: [CampusServiceCategory.MOVING]
+    }, authUser);
+
+    expect(response).toEqual({
+      items: [],
+      pagination: {
+        page: 1,
+        pageSize: 24,
+        total: 0,
+        totalPages: 1
       }
     });
   });

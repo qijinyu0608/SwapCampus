@@ -12,6 +12,7 @@ import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from
 import { useLocation, useNavigate } from 'react-router-dom';
 import { io, type Socket } from 'socket.io-client';
 import { CAMPUS_SERVICE_CATEGORY_LABEL } from '../constants/campusServiceCategories';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import Session from 'supertokens-auth-react/recipe/session';
@@ -41,7 +42,7 @@ type MessageChannel = 'trade' | 'service';
 type DraftConversation = {
   productId: number;
   product: { id: number; title: string; price: number; imageUrl: string | null };
-  participant: { id: number | null; displayName: string; college: string | null };
+  participant: { id: number | null; displayName: string; college: string | null; trustedBadgeUnlocked?: boolean };
 };
 
 function parseDraftConversation(value: unknown): DraftConversation | null {
@@ -65,7 +66,8 @@ function parseDraftConversation(value: unknown): DraftConversation | null {
     participant: {
       id: typeof candidate.participant?.id === 'number' ? candidate.participant.id : null,
       displayName: String(candidate.participant?.displayName ?? '卖家'),
-      college: candidate.participant?.college ?? null
+      college: candidate.participant?.college ?? null,
+      trustedBadgeUnlocked: Boolean(candidate.participant?.trustedBadgeUnlocked)
     }
   };
 }
@@ -268,6 +270,16 @@ export function MessagesPage() {
     () => conversations.find((item) => item.id === activeId) ?? null,
     [conversations, activeId]
   );
+
+  const tradeProductAction = activeConversation?.product
+    ? activeConversation.product.orderStatus === 'COMPLETED'
+      ? { label: '商品已成交', href: `/orders/${activeConversation.product.orderId ?? activeConversation.product.id}` }
+      : activeConversation.product.isBuyer
+        ? { label: '确定收货', href: `/orders/${activeConversation.product.orderId ?? activeConversation.product.id}` }
+        : activeConversation.product.isSeller
+          ? { label: '商品已售出', href: `/orders/${activeConversation.product.orderId ?? activeConversation.product.id}` }
+          : { label: '立即下单', href: `/orders/checkout?type=product&productId=${activeConversation.product.id}` }
+    : null;
 
   async function refreshConversations(preferredId?: number | null, options?: { keepPending?: boolean }) {
     if (!currentUser?.id) {
@@ -829,7 +841,11 @@ export function MessagesPage() {
                     />
                     <div className="trade-chat-session-copy">
                       <div className="trade-chat-session-top">
-                        <strong>{session.participant.displayName}</strong>
+                        <UserNameWithBadge
+                          as="strong"
+                          name={session.participant.displayName}
+                          trustedBadgeUnlocked={session.participant.trustedBadgeUnlocked}
+                        />
                         <span>{formatSessionTime(session.updatedAt)}</span>
                       </div>
                       <div className="trade-chat-session-preview">{session.preview}</div>
@@ -862,18 +878,11 @@ export function MessagesPage() {
                 <div className="trade-chat-main-head">
                   <div className="trade-chat-main-user">
                     <div className="trade-chat-main-title-row">
-                      <strong>{activeConversation.participant.displayName}</strong>
-                      <span className="trade-chat-role-tag">
-                        {isCampusServiceConversation(activeConversation)
-                          ? activeConversation.selfRole === 'seller'
-                            ? '发布方'
-                            : activeServiceTask?.intent === 'REQUEST'
-                              ? '承接方'
-                              : activeServiceTask?.intent === 'OFFER'
-                                ? '预约方'
-                                : '协作方'
-                          : activeConversation.participant.isSeller ? '卖家' : '同校用户'}
-                      </span>
+                      <UserNameWithBadge
+                        as="strong"
+                        name={activeConversation.participant.displayName}
+                        trustedBadgeUnlocked={activeConversation.participant.trustedBadgeUnlocked}
+                      />
                     </div>
                     {headerSubtitleParts.length ? <span>{headerSubtitleParts.join(' · ')}</span> : null}
                   </div>
@@ -898,16 +907,16 @@ export function MessagesPage() {
                         <button
                           type="button"
                           className="trade-chat-buy-button secondary"
-                          onClick={() => navigate(`/products/${activeConversation.product?.id}`)}
+                          onClick={() => navigate(`/orders/${activeConversation.product?.orderId ?? activeConversation.product?.id}`)}
                         >
-                          商品详情
+                          订单详情
                         </button>
                         <button
                           type="button"
                           className="trade-chat-buy-button"
-                          onClick={() => navigate(`/orders/checkout?type=product&productId=${activeConversation.product?.id}`)}
+                          onClick={() => tradeProductAction ? navigate(tradeProductAction.href) : undefined}
                         >
-                          立即下单
+                          {tradeProductAction?.label ?? '立即下单'}
                         </button>
                       </div>
                     </div>
@@ -942,6 +951,7 @@ export function MessagesPage() {
                     const avatarSrc = isSelf ? currentUser?.avatarUrl : entry.senderAvatarUrl;
                     const avatarFrame = isSelf ? currentUser?.avatarFrame : entry.senderAvatarFrame;
                     const avatarName = isSelf ? currentUser?.displayName ?? '我' : entry.senderName;
+                    const avatarTrustedBadgeUnlocked = isSelf ? currentUser?.trustedBadgeUnlocked : entry.senderTrustedBadgeUnlocked;
                     const showDivider = index === 0 || !isSameDay(messages[index - 1].createdAt, entry.createdAt);
 
                     return (
@@ -1005,6 +1015,12 @@ export function MessagesPage() {
                               )}
                             </div>
                             <div className={isSelf ? 'trade-chat-bubble-meta self' : 'trade-chat-bubble-meta'}>
+                              {!isSelf ? (
+                                <UserNameWithBadge
+                                  name={avatarName}
+                                  trustedBadgeUnlocked={avatarTrustedBadgeUnlocked}
+                                />
+                              ) : null}
                               <span>{formatBubbleTime(entry.createdAt)}</span>
                             </div>
                           </div>
@@ -1033,8 +1049,11 @@ export function MessagesPage() {
                 <div className="trade-chat-main-head">
                   <div className="trade-chat-main-user">
                     <div className="trade-chat-main-title-row">
-                      <strong>{pendingDraft.participant.displayName}</strong>
-                      <span className="trade-chat-role-tag">卖家</span>
+                      <UserNameWithBadge
+                        as="strong"
+                        name={pendingDraft.participant.displayName}
+                        trustedBadgeUnlocked={pendingDraft.participant.trustedBadgeUnlocked}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1063,15 +1082,15 @@ export function MessagesPage() {
                       >
                         商品详情
                       </button>
-                      <button
-                        type="button"
-                        className="trade-chat-buy-button"
-                        onClick={() => navigate(`/orders/checkout?type=product&productId=${pendingDraft.product.id}`)}
-                      >
-                        立即下单
-                      </button>
+                        <button
+                          type="button"
+                          className="trade-chat-buy-button"
+                          onClick={() => navigate(`/orders/checkout?type=product&productId=${pendingDraft.product.id}`)}
+                        >
+                          立即下单
+                        </button>
+                      </div>
                     </div>
-                  </div>
                 </div>
 
                 <div className="trade-chat-thread">

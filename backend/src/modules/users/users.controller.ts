@@ -54,6 +54,11 @@ export class UsersController {
       .then((user) => this.usersService.getTrustSummary(id, user));
   }
 
+  @Get(':id/reviews')
+  getReceivedReviews(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.getReceivedReviews(id);
+  }
+
   @Get(':id/profile')
   getProfile(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.getProfile(id);

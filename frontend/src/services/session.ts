@@ -42,6 +42,7 @@ function normalizeUser(user: Partial<SessionUser>): SessionUser | null {
     avatarUrl: user.avatarUrl ?? null,
     avatarFrame: user.avatarFrame ?? null,
     avatarFrameUnlocked: user.avatarFrameUnlocked ?? false,
+    trustedBadgeUnlocked: user.trustedBadgeUnlocked ?? false,
     role: normalizeRole(user.role),
     creditScore: user.creditScore,
     verificationStatus: user.verificationStatus,

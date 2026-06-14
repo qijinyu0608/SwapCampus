@@ -1,20 +1,23 @@
-import { Skeleton, message } from 'antd';
+import { Rate, Skeleton, Tabs, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
 import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { SectionCard } from '../components/ui';
 import { useAuthState } from '../services/auth-state';
 import {
   fetchProducts,
+  fetchUserReceivedReviews,
   followUser,
   fetchUserTrustSummary,
   getApiErrorMessage,
   ProductSummary,
   unfollowUser,
+  UserReceivedReviewItem,
   UserTrustSummary
 } from '../services/api';
 import { hasTradingAccess, isGuestUser } from '../services/session';
@@ -31,9 +34,11 @@ export function PublicUserPage() {
   const userId = Number(id);
   const [user, setUser] = useState<UserTrustSummary | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [reviews, setReviews] = useState<UserReceivedReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [followPending, setFollowPending] = useState(false);
+  const [activeTab, setActiveTab] = useState<'items' | 'reviews'>('items');
 
   useEffect(() => {
     async function loadUserHome() {
@@ -45,12 +50,14 @@ export function PublicUserPage() {
 
       setLoading(true);
       try {
-        const [summary, productList] = await Promise.all([
+        const [summary, productList, reviewList] = await Promise.all([
           fetchUserTrustSummary(userId),
-          fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 })
+          fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 }),
+          fetchUserReceivedReviews(userId)
         ]);
         setUser(summary);
         setProducts(productList.items);
+        setReviews(reviewList.items);
         setError('');
       } catch (err) {
         setError(getApiErrorMessage(err, '用户主页加载失败'));
@@ -136,6 +143,32 @@ export function PublicUserPage() {
     user.averageRating === null ? '暂无评分' : `评分 ${user.averageRating.toFixed(1)}`
   ];
   const userPresentation = getUserPresentation(user);
+  const reviewSummaryText = user.averageRating === null ? '暂无用户评价' : `综合评分 ${user.averageRating.toFixed(1)}`;
+
+  function renderReviewList() {
+    if (!reviews.length) {
+      return <EmptyState title="暂无收到的评价" />;
+    }
+
+    return (
+      <div className="order-detail-review-list profile-user-review-list">
+        {reviews.map((review) => (
+          <article key={review.id} className="order-detail-review-card">
+            <div className="order-detail-review-top">
+              <UserNameWithBadge
+                as="strong"
+                name={review.reviewerName}
+                trustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
+              />
+              <span>{new Date(review.createdAt).toLocaleString()}</span>
+            </div>
+            <Rate disabled value={review.rating} />
+            <p>{review.content}</p>
+          </article>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="page-grid public-user-page">
@@ -152,7 +185,11 @@ export function PublicUserPage() {
           </div>
           <div className="profile-hero-meta">
             <div className="profile-hero-title-row">
-              <h1>{userPresentation.displayName}</h1>
+              <UserNameWithBadge
+                as="h1"
+                name={userPresentation.displayName}
+                trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
+              />
               <div className="profile-hero-badges">
                 <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
                   <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
@@ -174,25 +211,49 @@ export function PublicUserPage() {
         ) : null}
       </section>
 
-      <SectionCard className="profile-content-panel">
-        <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="is-prominent is-spacious" />
-        <ProductGrid
-          items={publishedProducts}
-          className="fish-feed-grid"
-          emptyState={<EmptyState title="这个同学暂时没有在售闲置" />}
-          renderItem={(item, index) => {
-            const status = getListingStatusPresentation(item.status);
-            return (
-              <ProductSummaryCard
-                key={item.id}
-                className={index % 3 === 2 ? 'offset' : ''}
-                item={item}
-                imageSrc={getProductImage(item, index)}
-                priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.wantCount ?? 0} 人想要`}
-                onOpen={() => navigate(`/products/${item.id}`)}
-              />
-            );
-          }}
+      <SectionCard className="profile-content-panel credit-center-tabs-panel">
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as 'items' | 'reviews')}
+          items={[
+            {
+              key: 'items',
+              label: `在售商品 ${publishedProducts.length}`,
+              children: (
+                <>
+                  <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="is-prominent is-spacious" />
+                  <ProductGrid
+                    items={publishedProducts}
+                    className="fish-feed-grid"
+                    emptyState={<EmptyState title="这个同学暂时没有在售闲置" />}
+                    renderItem={(item, index) => {
+                      const status = getListingStatusPresentation(item.status);
+                      return (
+                        <ProductSummaryCard
+                          key={item.id}
+                          className={index % 3 === 2 ? 'offset' : ''}
+                          item={item}
+                          imageSrc={getProductImage(item, index)}
+                          priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.wantCount ?? 0} 人想要`}
+                          onOpen={() => navigate(`/products/${item.id}`)}
+                        />
+                      );
+                    }}
+                  />
+                </>
+              )
+            },
+            {
+              key: 'reviews',
+              label: `收到的评价 ${reviews.length}`,
+              children: (
+                <>
+                  <SectionHeader title="收到的评价" description={reviewSummaryText} className="is-prominent is-spacious" />
+                  {renderReviewList()}
+                </>
+              )
+            }
+          ]}
         />
       </SectionCard>
     </div>

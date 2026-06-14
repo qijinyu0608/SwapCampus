@@ -12,7 +12,7 @@ import {
   ShoppingOutlined,
   StarOutlined
 } from '@ant-design/icons';
-import { Button, Empty, Form, Input, Modal, Select, Skeleton, Tag, message } from 'antd';
+import { Button, Empty, Form, Input, InputNumber, Modal, Rate, Select, Skeleton, Tag, message } from 'antd';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AVATAR_FRAMES, type AvatarFrameKey } from '../components/user/UserAvatar';
@@ -36,6 +36,7 @@ import {
   fetchOrders,
   fetchProducts,
   fetchUserProfile,
+  fetchUserReceivedReviews,
   fetchUserTrustSummary,
   getApiErrorMessage,
   rejectCampusServiceOrder,
@@ -49,18 +50,21 @@ import {
   uploadImageAsset,
   updateUserProfile,
   type UserProfile,
+  type UserReceivedReviewItem,
   type UserTrustSummary
 } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 import { hasTradingAccess, isGuestUser } from '../services/session';
 import { UserAvatar } from '../components/user/UserAvatar';
+import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage, resolvePrimaryProductImage } from '../utils/productCover';
 import { getUserPresentation } from '../utils/userPresentation';
 import type { PublisherOrderGroupKey } from '../components/listing/CampusServicePublisherOrderWorkbench';
 
-type ProfileSection = 'items' | 'orders-buying' | 'orders-selling' | 'favorites' | 'history' | 'following' | 'profile';
+type ProfileSection = 'items' | 'orders-buying' | 'orders-selling' | 'favorites' | 'history' | 'following' | 'reviews' | 'profile';
 type PublishedScope = 'products' | 'campus-services-request' | 'campus-services-offer' | 'campus-services-provider' | 'campus-services-booking';
+type OrderProgressScope = 'active' | 'ended';
 
 type HistoryGroup = {
   key: string;
@@ -83,6 +87,10 @@ type RouteState = {
 const PRESET_AVATAR_URLS = new Set<string>(AVATAR_OPTIONS.map((item) => item.src));
 const AVATAR_FRAME_KEYS = new Set<AvatarFrameKey | 'none'>(['none', ...AVATAR_FRAMES.map((item) => item.key)]);
 
+function isPresetAvatarUrl(url?: string | null) {
+  return Boolean(url?.trim()) && PRESET_AVATAR_URLS.has(url!.trim());
+}
+
 const orderStatusMap: Record<string, string> = {
   PENDING: '待约定',
   IN_PROGRESS: '待面交',
@@ -90,6 +98,8 @@ const orderStatusMap: Record<string, string> = {
   COMPLETED: '已完成',
   CANCELED: '已取消'
 };
+
+const activeOrderStatuses = new Set(['PENDING', 'IN_PROGRESS', 'WAITING_REVIEW']);
 
 function getOrderStatusColor(status: string) {
   if (status === 'COMPLETED') {
@@ -102,6 +112,10 @@ function getOrderStatusColor(status: string) {
     return 'default';
   }
   return 'orange';
+}
+
+function matchesOrderProgressScope(status: string, scope: OrderProgressScope) {
+  return scope === 'active' ? activeOrderStatuses.has(status) : !activeOrderStatuses.has(status);
 }
 
 function getCampusServiceOrderStatusColor(status: CampusServiceOrderListItem['orderStatus']) {
@@ -324,21 +338,26 @@ export function ProfilePage() {
   const [favoriteItems, setFavoriteItems] = useState<FavoriteItem[]>([]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([]);
+  const [receivedReviews, setReceivedReviews] = useState<UserReceivedReviewItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [publishedScope, setPublishedScope] = useState<PublishedScope>('products');
+  const [buyingOrderScope, setBuyingOrderScope] = useState<OrderProgressScope>('active');
+  const [sellingOrderScope, setSellingOrderScope] = useState<OrderProgressScope>('active');
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingCampusServices, setLoadingCampusServices] = useState(true);
   const [loadingParticipatedCampusServices, setLoadingParticipatedCampusServices] = useState(true);
   const [loadingFavorites, setLoadingFavorites] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [loadingFollowing, setLoadingFollowing] = useState(true);
+  const [loadingReviews, setLoadingReviews] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [trustSummary, setTrustSummary] = useState<UserTrustSummary | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
-  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null>(null);
+  const [customAvatarPreviewUrl, setCustomAvatarPreviewUrl] = useState<string | null>(null);
+  const [customAvatarValueUrl, setCustomAvatarValueUrl] = useState<string | null>(null);
   const [actingCampusOrderId, setActingCampusOrderId] = useState<number | null>(null);
   const [publisherOrderWorkbenchListing, setPublisherOrderWorkbenchListing] = useState<CampusServiceListItem | null>(null);
   const [publisherOrderWorkbenchGroup, setPublisherOrderWorkbenchGroup] = useState<PublisherOrderGroupKey>('PENDING');
@@ -347,13 +366,29 @@ export function ProfilePage() {
   const [publisherOrderDialogReason, setPublisherOrderDialogReason] = useState('');
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(AVATAR_OPTIONS[0]?.src ?? '');
   const [selectedAvatarFrame, setSelectedAvatarFrame] = useState<AvatarFrameKey | 'none'>('none');
-  const [form] = Form.useForm<UserProfile & { studentId?: string; phone: string; realName: string; avatarFrame?: string }>();
+  const [form] = Form.useForm<UserProfile & { studentId?: string; phone: string; realName: string; graduationYear?: number | null; avatarFrame?: string }>();
 
   useEffect(() => () => {
-    if (pendingAvatarUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(pendingAvatarUrl);
+    if (customAvatarPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(customAvatarPreviewUrl);
     }
-  }, [pendingAvatarUrl]);
+  }, [customAvatarPreviewUrl]);
+
+  function syncAvatarSelection(avatarUrl?: string | null) {
+    const normalizedAvatarUrl = avatarUrl?.trim() ?? '';
+    const fallbackAvatarUrl = AVATAR_OPTIONS[0]?.src ?? '';
+
+    if (normalizedAvatarUrl && !isPresetAvatarUrl(normalizedAvatarUrl)) {
+      setCustomAvatarPreviewUrl(normalizedAvatarUrl);
+      setCustomAvatarValueUrl(normalizedAvatarUrl);
+      setSelectedAvatarUrl(normalizedAvatarUrl);
+      return;
+    }
+
+    setCustomAvatarPreviewUrl(null);
+    setCustomAvatarValueUrl(null);
+    setSelectedAvatarUrl(normalizedAvatarUrl || fallbackAvatarUrl);
+  }
 
   useEffect(() => {
     if (!hasTradingAccess(currentUser) || !currentUser) {
@@ -362,6 +397,7 @@ export function ProfilePage() {
       setFavoriteItems([]);
       setHistoryItems([]);
       setFollowingUsers([]);
+      setReceivedReviews([]);
       setOrders([]);
       setParticipatedCampusServices([]);
       setLoadingProducts(false);
@@ -370,6 +406,7 @@ export function ProfilePage() {
       setLoadingFavorites(false);
       setLoadingHistory(false);
       setLoadingFollowing(false);
+      setLoadingReviews(false);
       setLoadingOrders(false);
       setLoadingProfile(false);
       setProfile(null);
@@ -385,6 +422,7 @@ export function ProfilePage() {
     setLoadingFavorites(true);
     setLoadingHistory(true);
     setLoadingFollowing(true);
+    setLoadingReviews(true);
     setLoadingOrders(true);
 
     fetchProducts({ sellerId: currentUser.id, status: 'ALL', page: 1, pageSize: 60 })
@@ -489,6 +527,23 @@ export function ProfilePage() {
         }
       });
 
+    fetchUserReceivedReviews(currentUser.id)
+      .then((result) => {
+        if (!cancelled) {
+          setReceivedReviews(result.items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setReceivedReviews([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingReviews(false);
+        }
+      });
+
     fetchOrders({ page: 1, pageSize: 50 })
       .then((result) => {
         if (!cancelled) {
@@ -514,8 +569,7 @@ export function ProfilePage() {
         if (!cancelled) {
           setProfile(profileResult);
           setTrustSummary(trustResult);
-          setPendingAvatarUrl(null);
-          setSelectedAvatarUrl(profileResult.avatarUrl ?? AVATAR_OPTIONS[0]?.src ?? '');
+          syncAvatarSelection(profileResult.avatarUrl);
           setSelectedAvatarFrame(
             profileResult.avatarFrame && AVATAR_FRAME_KEYS.has(profileResult.avatarFrame as AvatarFrameKey | 'none')
               ? (profileResult.avatarFrame as AvatarFrameKey | 'none')
@@ -527,6 +581,7 @@ export function ProfilePage() {
             email: profileResult.email,
             realName: profileResult.realName,
             college: profileResult.college,
+            graduationYear: profileResult.graduationYear ?? undefined,
             phone: profileResult.phone,
             avatarUrl: profileResult.avatarUrl ?? '',
             avatarFrame: profileResult.avatarFrame ?? 'none'
@@ -610,6 +665,26 @@ export function ProfilePage() {
     [currentUser, orders]
   );
 
+  const buyingActiveOrders = useMemo(
+    () => buyingOrders.filter((item) => matchesOrderProgressScope(item.status, 'active')),
+    [buyingOrders]
+  );
+
+  const buyingEndedOrders = useMemo(
+    () => buyingOrders.filter((item) => matchesOrderProgressScope(item.status, 'ended')),
+    [buyingOrders]
+  );
+
+  const sellingActiveOrders = useMemo(
+    () => sellingOrders.filter((item) => matchesOrderProgressScope(item.status, 'active')),
+    [sellingOrders]
+  );
+
+  const sellingEndedOrders = useMemo(
+    () => sellingOrders.filter((item) => matchesOrderProgressScope(item.status, 'ended')),
+    [sellingOrders]
+  );
+
   const sidebarItems: SidebarItem[] = [
     {
       key: 'items',
@@ -621,7 +696,8 @@ export function ProfilePage() {
     { key: 'orders-selling', icon: <ShopOutlined />, label: '我卖出的', count: sellingOrders.length },
     { key: 'favorites', icon: <StarOutlined />, label: '我的收藏', count: favoriteItems.length },
     { key: 'history', icon: <EyeOutlined />, label: '历史浏览', count: historyItems.length },
-    { key: 'following', icon: <HeartOutlined />, label: '我的关注', count: followingUsers.length }
+    { key: 'following', icon: <HeartOutlined />, label: '我的关注', count: followingUsers.length },
+    { key: 'reviews', icon: <MessageOutlined />, label: '收到的评价', count: receivedReviews.length }
   ];
 
   function openProfileEditor() {
@@ -1200,6 +1276,7 @@ export function ProfilePage() {
     email: string;
     realName: string;
     college: string;
+    graduationYear: number;
     phone: string;
     avatarUrl?: string;
     avatarFrame?: string;
@@ -1212,13 +1289,9 @@ export function ProfilePage() {
     try {
       const result = await updateUserProfile(currentUser.id, values);
       const trustResult = await fetchUserTrustSummary(currentUser.id);
-      if (pendingAvatarUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(pendingAvatarUrl);
-      }
       setProfile(result);
       setTrustSummary(trustResult);
-      setPendingAvatarUrl(null);
-      setSelectedAvatarUrl(result.avatarUrl ?? AVATAR_OPTIONS[0]?.src ?? '');
+      syncAvatarSelection(result.avatarUrl);
       setSelectedAvatarFrame(
         result.avatarFrame && AVATAR_FRAME_KEYS.has(result.avatarFrame as AvatarFrameKey | 'none')
           ? (result.avatarFrame as AvatarFrameKey | 'none')
@@ -1246,10 +1319,8 @@ export function ProfilePage() {
 
     try {
       const uploaded = await uploadImageAsset(file, 'avatar');
-      if (pendingAvatarUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(pendingAvatarUrl);
-      }
-      setPendingAvatarUrl(previewUrl);
+      setCustomAvatarPreviewUrl(previewUrl);
+      setCustomAvatarValueUrl(uploaded.url);
       form.setFieldValue('avatarUrl', uploaded.url);
       setSelectedAvatarUrl(previewUrl);
       setAvatarModalOpen(false);
@@ -1261,12 +1332,18 @@ export function ProfilePage() {
   }
 
   function handlePresetAvatarSelect(src: string) {
-    if (pendingAvatarUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(pendingAvatarUrl);
-    }
-    setPendingAvatarUrl(null);
     setSelectedAvatarUrl(src);
     form.setFieldValue('avatarUrl', src);
+  }
+
+  function handleCustomAvatarSelect() {
+    if (customAvatarPreviewUrl && customAvatarValueUrl && selectedAvatarUrl !== customAvatarPreviewUrl) {
+      setSelectedAvatarUrl(customAvatarPreviewUrl);
+      form.setFieldValue('avatarUrl', customAvatarValueUrl);
+      return;
+    }
+
+    setAvatarModalOpen(true);
   }
 
   function handleAvatarFrameSelect(frame: AvatarFrameKey | 'none') {
@@ -1284,7 +1361,8 @@ export function ProfilePage() {
       return renderSectionPanel('资料编辑', <Skeleton active paragraph={{ rows: 8 }} />);
     }
 
-    const isCustomAvatarSelected = Boolean(selectedAvatarUrl) && !PRESET_AVATAR_URLS.has(selectedAvatarUrl);
+    const hasCustomAvatarOption = Boolean(customAvatarPreviewUrl && customAvatarValueUrl);
+    const isCustomAvatarSelected = hasCustomAvatarOption && selectedAvatarUrl === customAvatarPreviewUrl;
     const avatarFrameUnlocked = Boolean(profile?.avatarFrameUnlocked);
 
     return renderSectionPanel(
@@ -1299,6 +1377,7 @@ export function ProfilePage() {
           email: string;
           realName: string;
           college: string;
+          graduationYear: number;
           phone: string;
           avatarUrl?: string;
           avatarFrame?: string;
@@ -1326,12 +1405,16 @@ export function ProfilePage() {
             <button
               type="button"
               className={isCustomAvatarSelected ? 'register-avatar-option active custom' : 'register-avatar-option custom'}
-              onClick={() => setAvatarModalOpen(true)}
+              onClick={handleCustomAvatarSelect}
               aria-pressed={isCustomAvatarSelected}
-              aria-label="上传自定义头像"
+              aria-label={
+                hasCustomAvatarOption
+                  ? (isCustomAvatarSelected ? '更换自定义头像' : '选择已上传头像')
+                  : '上传自定义头像'
+              }
             >
-              {isCustomAvatarSelected ? (
-                <UserAvatar src={selectedAvatarUrl} alt="" fallbackLabel="" frame={selectedAvatarFrame} />
+              {hasCustomAvatarOption ? (
+                <UserAvatar src={customAvatarPreviewUrl} alt="" fallbackLabel="" frame={selectedAvatarFrame} />
               ) : (
                 <span className="register-avatar-upload-placeholder" aria-hidden="true">+</span>
               )}
@@ -1341,7 +1424,7 @@ export function ProfilePage() {
         <div className="register-section">
           <div className="register-section-head">
             <strong>头像框</strong>
-            <span>{avatarFrameUnlocked ? '已激活' : '需先在信用中心兑换后才能选择'}</span>
+            {avatarFrameUnlocked ? <span>已激活</span> : null}
           </div>
           {avatarFrameUnlocked ? (
             <div className="register-avatar-grid profile-avatar-frame-grid" role="radiogroup" aria-label="选择头像框">
@@ -1408,8 +1491,8 @@ export function ProfilePage() {
           <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入正确邮箱' }]}>
             <Input placeholder="例如：student@campus.edu.cn" />
           </Form.Item>
-          <Form.Item label="学号" name="studentId">
-            <Input placeholder="选填，例如：20260001" />
+          <Form.Item label="学号" name="studentId" rules={[{ pattern: /^\d{9}$/, message: '学号必须为 9 位数字' }]}>
+            <Input placeholder="选填，例如：202600001" maxLength={9} />
           </Form.Item>
           <Form.Item label="真实姓名" name="realName" rules={[{ required: true, message: '请输入真实姓名' }]}>
             <Input placeholder="例如：王小明" />
@@ -1420,6 +1503,24 @@ export function ProfilePage() {
               options={BJFU_COLLEGES.map((item) => ({ value: item, label: item }))}
               allowClear
             />
+          </Form.Item>
+          <Form.Item
+            label="毕业年份"
+            name="graduationYear"
+            rules={[
+              { required: true, message: '请输入毕业年份' },
+              {
+                validator: async (_, value) => {
+                  const numeric = Number(value);
+                  if (Number.isInteger(numeric) && numeric >= 2000 && numeric <= 2100) {
+                    return;
+                  }
+                  throw new Error('请输入正确的毕业年份');
+                }
+              }
+            ]}
+          >
+            <InputNumber placeholder="例如：2028" min={2000} max={2100} precision={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="手机号" name="phone" rules={[{ required: true, message: '请输入手机号' }]}>
             <Input placeholder="请输入手机号" />
@@ -1433,7 +1534,15 @@ export function ProfilePage() {
     );
   }
 
-  function renderOrderList(items: OrderItem[], loading: boolean, title: string, emptyDescription: string) {
+  function renderOrderList(
+    items: OrderItem[],
+    loading: boolean,
+    title: string,
+    emptyDescription: string,
+    scope: OrderProgressScope,
+    onScopeChange: (scope: OrderProgressScope) => void,
+    scopeCounts: Record<OrderProgressScope, number>
+  ) {
     let content: ReactNode;
 
     if (loading) {
@@ -1447,64 +1556,80 @@ export function ProfilePage() {
             const counterpartAvatarUrl = isBuyerView ? item.sellerAvatarUrl : item.buyerAvatarUrl;
             const counterpartAvatarFrame = isBuyerView ? item.sellerAvatarFrame : item.buyerAvatarFrame;
             const counterpartCreditScore = isBuyerView ? item.sellerCreditScore : item.buyerCreditScore;
-            const counterpartVerified = isBuyerView ? item.sellerVerified : item.buyerVerified;
-            const counterpartRoleLabel = isBuyerView ? '卖家' : '买家';
-            const counterpartMeta = [
-              counterpartRoleLabel,
-              counterpartCreditScore === null ? null : `信用 ${counterpartCreditScore}`,
-              counterpartVerified ? '已认证' : null
-            ].filter(Boolean).join(' · ');
-
+            const counterpartPresentation = getUserPresentation({
+              creditScore: counterpartCreditScore ?? undefined
+            });
             return (
-              <article key={item.id} className="profile-order-card">
-                <div className="profile-order-top">
-                  <div className="profile-order-user">
-                    <UserAvatar
-                      src={counterpartAvatarUrl}
-                      alt={`${counterpartName}的头像`}
-                      fallbackLabel={counterpartName.slice(0, 1)}
-                      className="profile-order-avatar"
-                      frame={(counterpartAvatarFrame as AvatarFrameKey | null) ?? undefined}
-                    />
-                    <div className="profile-order-user-copy">
-                      <span className="profile-order-user-label">{counterpartRoleLabel}</span>
-                      <strong>{counterpartName}</strong>
-                      <em>{counterpartMeta}</em>
+              <article key={item.id} className="profile-order-card profile-order-card-list">
+                <div className="checkout-shop-card">
+                  <div className="checkout-shop-info" aria-label="订单对象信息">
+                    <div className="checkout-shop-copy is-inline profile-order-shop-copy">
+                      <UserAvatar
+                        src={counterpartAvatarUrl}
+                        alt={`${counterpartName}的头像`}
+                        fallbackLabel={counterpartName.slice(0, 1)}
+                        className="profile-order-avatar"
+                        frame={(counterpartAvatarFrame as AvatarFrameKey | null) ?? undefined}
+                      />
+                      <div className="profile-order-user-copy">
+                        <strong>{counterpartName}</strong>
+                        <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
+                      </div>
+                    </div>
+                    <div className="checkout-shop-actions profile-order-shop-actions">
+                      {item.conversationId ? (
+                        <Button
+                          className="checkout-chat-button is-icon-only"
+                          onClick={() => navigate(`/messages?conversationId=${item.conversationId}`)}
+                          aria-label="查看聊天"
+                          icon={<MessageOutlined />}
+                        />
+                      ) : null}
+                      <div className={`ui-credit-badge is-${counterpartPresentation.creditBadge.tone}`}>
+                        <span className="ui-credit-badge-label">{counterpartPresentation.creditBadge.label}</span>
+                      </div>
                     </div>
                   </div>
-                  <Tag color={getOrderStatusColor(item.status)}>{orderStatusMap[item.status] ?? item.status}</Tag>
-                </div>
-                <div className="profile-order-product">
-                  <img
-                    src={item.productImageUrl || getProductImage({
-                      id: item.productId,
-                      title: item.productTitle,
-                      description: '',
-                      price: item.productPrice ?? 0,
-                      category: item.productCategory ?? '其他',
-                      condition: item.productCondition ?? '线下面交',
-                      sellerName: item.sellerName,
-                      status: item.productStatus ?? 'ON_SALE',
-                      tags: []
-                    } as ProductSummary, index)}
-                    alt={item.productTitle}
-                  />
-                    <div className="profile-order-product-copy">
-                      <div className="profile-order-product-head">
+
+                  <div className="checkout-order-item profile-order-list-item">
+                    <div className="checkout-item-main">
+                      <img
+                        src={item.productImageUrl || getProductImage({
+                          id: item.productId,
+                          title: item.productTitle,
+                          description: '',
+                          price: item.productPrice ?? 0,
+                          category: item.productCategory ?? '其他',
+                          condition: item.productCondition ?? '线下面交',
+                          sellerName: item.sellerName,
+                          status: item.productStatus ?? 'ON_SALE',
+                          tags: []
+                        } as ProductSummary, index)}
+                        alt={item.productTitle}
+                      />
+                      <div className="checkout-item-copy profile-order-item-copy">
                         <h3>{item.productTitle}</h3>
                         <span className="profile-order-product-category">{item.productCategory ?? '校园闲置'}</span>
                       </div>
-                      <p>{item.productCondition ?? '线下面交'}</p>
-                      <strong>{item.productPrice === null ? '价格待确认' : `¥${item.productPrice.toFixed(2)}`}</strong>
+                    </div>
+
+                    <div className="checkout-item-attrs profile-order-item-attrs">
+                      <span>成色：{item.productCondition ?? '线下面交'}</span>
                       <span>{item.meetupLocation || '待双方约定线下面交时间地点'}</span>
                       <span>订单编号：{item.orderCode}</span>
                     </div>
-                    <div className="profile-order-actions">
+
+                    <div className="checkout-item-price profile-order-item-price">
+                      <strong>{item.productPrice === null ? '价格待确认' : `¥${item.productPrice.toFixed(2)}`}</strong>
+                    </div>
+
+                    <div className="profile-order-actions profile-order-list-actions">
                       <Button type="link" onClick={() => navigate(`/orders/${item.id}`)}>查看详情</Button>
                     </div>
                   </div>
-                </article>
-              );
+                </div>
+              </article>
+            );
           })}
         </div>
       );
@@ -1514,7 +1639,25 @@ export function ProfilePage() {
 
     return renderSectionPanel(
       title,
-      content,
+      <div className="profile-order-panel">
+        <div className="profile-order-scope" role="tablist" aria-label={`${title}订单进度筛选`}>
+          <button
+            type="button"
+            className={scope === 'active' ? 'active' : undefined}
+            onClick={() => onScopeChange('active')}
+          >
+            进行中 ({scopeCounts.active})
+          </button>
+          <button
+            type="button"
+            className={scope === 'ended' ? 'active' : undefined}
+            onClick={() => onScopeChange('ended')}
+          >
+            已结束 ({scopeCounts.ended})
+          </button>
+        </div>
+        {content}
+      </div>,
       items.length || loading ? 'profile-order-board' : 'profile-order-board is-empty'
     );
   }
@@ -1555,7 +1698,11 @@ export function ProfilePage() {
               />
               <div className="profile-following-copy">
                 <div className="profile-following-head">
-                  <strong>{presentation.displayName}</strong>
+                  <UserNameWithBadge
+                    as="strong"
+                    name={presentation.displayName}
+                    trustedBadgeUnlocked={presentation.trustedBadgeUnlocked}
+                  />
                   <span>{presentation.creditBadge.label}</span>
                 </div>
                 <p>{presentation.collegeLabel}</p>
@@ -1564,6 +1711,40 @@ export function ProfilePage() {
             </button>
           );
         })}
+      </div>
+    );
+  }
+
+  function renderReceivedReviewList(items: UserReceivedReviewItem[], loading: boolean) {
+    if (loading) {
+      return renderSectionPanel('收到的评价', <Skeleton active paragraph={{ rows: 8 }} />);
+    }
+
+    if (!items.length) {
+      return renderSectionPanel(
+        '收到的评价',
+        <EmptyState className="is-shell" title="暂无收到的评价" />,
+        'is-empty'
+      );
+    }
+
+    return renderSectionPanel(
+      '收到的评价',
+      <div className="order-detail-review-list profile-user-review-list">
+        {items.map((review) => (
+          <article key={review.id} className="order-detail-review-card">
+            <div className="order-detail-review-top">
+              <UserNameWithBadge
+                as="strong"
+                name={review.reviewerName}
+                trustedBadgeUnlocked={review.reviewerTrustedBadgeUnlocked}
+              />
+              <span>{new Date(review.createdAt).toLocaleString()}</span>
+            </div>
+            <Rate disabled value={review.rating} className="profile-review-rate" />
+            <p>{review.content}</p>
+          </article>
+        ))}
       </div>
     );
   }
@@ -1608,19 +1789,31 @@ export function ProfilePage() {
 
     if (activeSection === 'orders-buying') {
       return renderOrderList(
-        buyingOrders,
+        buyingOrderScope === 'active' ? buyingActiveOrders : buyingEndedOrders,
         loadingOrders,
         '我买到的',
-        ''
+        buyingOrderScope === 'active' ? '当前没有进行中的买入订单。' : '还没有已结束的买入订单。',
+        buyingOrderScope,
+        setBuyingOrderScope,
+        {
+          active: buyingActiveOrders.length,
+          ended: buyingEndedOrders.length
+        }
       );
     }
 
     if (activeSection === 'orders-selling') {
       return renderOrderList(
-        sellingOrders,
+        sellingOrderScope === 'active' ? sellingActiveOrders : sellingEndedOrders,
         loadingOrders,
         '我卖出的',
-        '有人购买你发布的商品后会显示进度。'
+        sellingOrderScope === 'active' ? '当前没有进行中的卖出订单。' : '还没有已结束的卖出订单。',
+        sellingOrderScope,
+        setSellingOrderScope,
+        {
+          active: sellingActiveOrders.length,
+          ended: sellingEndedOrders.length
+        }
       );
     }
 
@@ -1634,6 +1827,10 @@ export function ProfilePage() {
 
     if (activeSection === 'following') {
       return renderFollowingList(followingUsers, loadingFollowing);
+    }
+
+    if (activeSection === 'reviews') {
+      return renderReceivedReviewList(receivedReviews, loadingReviews);
     }
 
     return renderProfileEditor();
@@ -1693,7 +1890,11 @@ export function ProfilePage() {
               </button>
               <div className="profile-hero-meta">
                 <div className="profile-hero-title-row">
-                  <h1>{userPresentation.displayName}</h1>
+                  <UserNameWithBadge
+                    as="h1"
+                    name={userPresentation.displayName}
+                    trustedBadgeUnlocked={userPresentation.trustedBadgeUnlocked}
+                  />
                   <div className="profile-hero-badges">
                     <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
                       <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
