@@ -1,11 +1,16 @@
 import {
+  AccountStatus,
   CampusServiceCategory,
   CampusServiceContactPreference,
   CampusServiceFulfillmentMode,
-  CampusServiceStatus,
+  CampusServiceIntent,
+  CampusServiceListingStatus,
+  CampusServiceLocationMode,
+  CampusServiceOrderStatus,
+  CampusServicePattern,
+  CampusServicePriceMode,
   CampusServiceUrgency,
-  VerificationStatus,
-  AccountStatus
+  VerificationStatus
 } from '@prisma/client';
 import { CampusServicesService } from './campus-services.service';
 
@@ -17,38 +22,75 @@ describe('CampusServicesService', () => {
     role: 'USER'
   } as any;
 
-  it('should map service card fields and viewer context for discover tasks', async () => {
+  function createListing(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 18,
+      ownerId: 21,
+      intent: CampusServiceIntent.REQUEST,
+      pattern: CampusServicePattern.ONE_TIME,
+      category: CampusServiceCategory.ERRAND,
+      title: '东门快递代取到 13 号公寓',
+      description: '一件小快递',
+      priceMode: CampusServicePriceMode.FIXED,
+      amount: 6,
+      locationMode: CampusServiceLocationMode.FLEXIBLE,
+      locationNote: null,
+      routeFrom: '东门',
+      routeTo: '13号公寓',
+      validFromAt: new Date('2026-06-07T10:00:00Z'),
+      validUntilAt: new Date('2026-06-07T11:30:00Z'),
+      estimatedMinutes: 18,
+      urgency: CampusServiceUrgency.TODAY,
+      fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+      contactPreference: CampusServiceContactPreference.CHAT_ONLY,
+      itemCount: 1,
+      trustNote: '小件快递',
+      maxTotalOrders: 1,
+      maxConcurrentOrders: 1,
+      autoConfirm: false,
+      status: CampusServiceListingStatus.OPEN,
+      endReason: null,
+      endedAt: null,
+      createdAt: new Date('2026-06-07T10:00:00Z'),
+      updatedAt: new Date('2026-06-07T10:10:00Z'),
+      ...overrides
+    };
+  }
+
+  function createOrder(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 401,
+      listingId: 18,
+      requesterId: 21,
+      providerId: 32,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      applyMessage: '我来接',
+      finalAmount: 6,
+      confirmedAt: new Date('2026-06-07T10:12:00Z'),
+      completedAt: null,
+      canceledAt: null,
+      cancelReason: null,
+      expiredAt: null,
+      completionRequestedById: null,
+      completionRequestedAt: null,
+      createdAt: new Date('2026-06-07T10:11:00Z'),
+      updatedAt: new Date('2026-06-07T10:12:00Z'),
+      ...overrides
+    };
+  }
+
+  it('should map listing list items and viewer context for discover users', async () => {
+    const listing = createListing();
     const prisma = {
-      campusServiceTask: {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         count: jest.fn().mockResolvedValue(1),
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 18,
-            title: '东门快递代取到 13 号公寓',
-            category: CampusServiceCategory.ERRAND,
-            description: '一件小快递',
-            reward: 6,
-            locationFrom: '东门',
-            locationTo: '13号公寓',
-            deadlineLabel: '今晚 19:30 前',
-            estimatedMinutes: 18,
-            urgency: CampusServiceUrgency.TODAY,
-            fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
-            contactPreference: CampusServiceContactPreference.CHAT_ONLY,
-            itemCount: 1,
-            trustNote: '小件快递',
-            matchedAt: null,
-            completedAt: null,
-            canceledAt: null,
-            canceledById: null,
-            cancelReason: null,
-            publisherId: 21,
-            accepterId: null,
-            status: CampusServiceStatus.OPEN,
-            createdAt: new Date('2026-06-07T10:00:00Z'),
-            updatedAt: new Date('2026-06-07T10:10:00Z')
-          }
-        ])
+        findMany: jest.fn().mockResolvedValue([listing])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
@@ -63,6 +105,22 @@ describe('CampusServicesService', () => {
       },
       conversation: {
         findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-cover.jpg',
+            sortOrder: 0
+          },
+          {
+            id: 2,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-extra.jpg',
+            sortOrder: 1
+          }
+        ])
       }
     } as any;
 
@@ -70,6 +128,13 @@ describe('CampusServicesService', () => {
     const response = await service.listCampusServices({}, authUser);
     const [result] = response.items;
 
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN
+      }
+    });
+    expect(result.intent).toBe('REQUEST');
+    expect(result.intentLabel).toBe('找人帮我');
     expect(result.serviceType).toEqual({
       key: 'ERRAND',
       label: '跑腿'
@@ -80,63 +145,223 @@ describe('CampusServicesService', () => {
       label: '东门 -> 13号公寓'
     });
     expect(result.schedule).toEqual({
-      deadlineLabel: '今晚 19:30 前',
+      deadlineLabel: '2026-06-07 11:30',
       estimatedMinutes: 18,
       urgency: 'TODAY',
       urgencyLabel: '今日内',
-      summary: '今日内 · 今晚 19:30 前 · 约 18 分钟'
+      summary: '找人帮我 · 2026-06-07 11:30 · 约 18 分钟'
     });
     expect(result.participantSummary).toEqual({
       publisherLabel: '发布 何栖',
-      accepterLabel: null
+      participantLabel: null
     });
     expect(result.viewerContext).toEqual({
       role: 'DISCOVER',
       canAccept: true,
+      canConfirm: false,
+      canReject: false,
       canComplete: false,
+      canPause: false,
+      canReopen: false,
+      canEnd: false,
       canCancel: false,
       canOpenConversation: false
     });
-    expect(result.actionState.canAccept).toBe(true);
     expect(result.actionLabels.accept).toBe('接单');
-    expect(result.actionLabels.cancel).toBeNull();
-    expect('preview' in result).toBe(false);
-    expect('timeline' in result).toBe(false);
-    expect('fulfillment' in result).toBe(false);
+    expect(result.status).toBe('OPEN');
+    expect(result.statusLabel).toBe('可接单');
   });
 
-  it('should map publisher and accepter permissions for matched tasks', async () => {
-    const baseTask = {
-      id: 19,
-      title: '图书馆资料带到学研中心 A 座',
-      category: CampusServiceCategory.AGENCY,
-      description: '服务台拿资料',
-      reward: 8,
-      locationFrom: '图书馆',
-      locationTo: '学研中心A座',
-      deadlineLabel: '今天 17:00 前',
-      estimatedMinutes: 22,
-      urgency: CampusServiceUrgency.TODAY,
-      fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
-      contactPreference: CampusServiceContactPreference.CHAT_ONLY,
-      itemCount: 1,
-      trustNote: '资料袋',
-      matchedAt: new Date('2026-06-07T10:05:00Z'),
-      completedAt: null,
-      canceledAt: null,
-      canceledById: null,
-      cancelReason: null,
-      publisherId: 11,
-      accepterId: 32,
-      status: CampusServiceStatus.MATCHED,
-      createdAt: new Date('2026-06-07T10:00:00Z'),
-      updatedAt: new Date('2026-06-07T10:10:00Z')
-    };
-
+  it('should combine selected credit filters with OR when listing campus services', async () => {
+    const listing = createListing();
     const prisma = {
-      campusServiceTask: {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         count: jest.fn().mockResolvedValue(1),
-        findMany: jest.fn().mockResolvedValue([baseTask])
+        findMany: jest.fn().mockResolvedValue([listing])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-cover.jpg',
+            sortOrder: 0
+          },
+          {
+            id: 2,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-extra.jpg',
+            sortOrder: 1
+          }
+        ])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+
+    await service.listCampusServices({ credit: ['OUTSTANDING', 'GOOD'] }, authUser);
+
+    expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
+      where: {
+        status: CampusServiceListingStatus.OPEN,
+        owner: {
+          is: {
+            OR: [
+              {
+                creditScore: {
+                  gte: 90
+                }
+              },
+              {
+                creditScore: {
+                  gte: 70,
+                  lt: 80
+                }
+              }
+            ]
+          }
+        }
+      }
+    });
+  });
+
+  it('should map detail view for listing owner', async () => {
+    const listing = createListing({
+      id: 27,
+      ownerId: 11,
+      category: CampusServiceCategory.HELP,
+      title: '南门资料代送到实验楼',
+      description: '帮忙送一份实验记录本',
+      amount: 10,
+      routeFrom: '南门',
+      routeTo: '实验楼',
+      urgency: CampusServiceUrgency.URGENT,
+      fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+      contactPreference: CampusServiceContactPreference.FLEXIBLE,
+      trustNote: null,
+      validUntilAt: new Date('2026-06-07T15:30:00Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceImage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-cover.jpg',
+            sortOrder: 0
+          },
+          {
+            id: 2,
+            listingId: 27,
+            imageUrl: 'https://cdn.example.com/service-extra.jpg',
+            sortOrder: 1
+          }
+        ])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.getCampusServiceDetail(27, authUser);
+
+    expect(prisma.campusServiceListing.findUnique).toHaveBeenCalledWith({
+      where: { id: 27 }
+    });
+    expect(result.id).toBe(27);
+    expect(result.viewerContext.role).toBe('PUBLISHER');
+    expect(result.actionState.canAccept).toBe(false);
+    expect(result.detailBase.status).toBe('OPEN');
+    expect(result.detailBase.statusLabel).toBe('可接单');
+    expect(result.imageUrl).toBe('https://cdn.example.com/service-cover.jpg');
+    expect(result.images).toEqual([
+      'https://cdn.example.com/service-cover.jpg',
+      'https://cdn.example.com/service-extra.jpg'
+    ]);
+    expect(result.detailBase.imageUrl).toBe('https://cdn.example.com/service-cover.jpg');
+    expect(result.detailBase.images).toEqual([
+      'https://cdn.example.com/service-cover.jpg',
+      'https://cdn.example.com/service-extra.jpg'
+    ]);
+    expect(result.detailBase.metaItems).toEqual(expect.arrayContaining([
+      { key: 'intent', label: '方向', value: '找人帮我' },
+      { key: 'route', label: '地点', value: '南门 -> 实验楼' }
+    ]));
+    expect(result.fulfillment).toMatchObject({
+      intent: 'REQUEST',
+      intentLabel: '找人帮我',
+      pattern: 'ONE_TIME',
+      validUntilAt: '2026-06-07T15:30:00.000Z',
+      maxTotalOrders: 1,
+      maxConcurrentOrders: 1
+    });
+  });
+
+  it('should expose confirm and reject actions for publisher when latest order is pending confirmation', async () => {
+    const listing = createListing({
+      id: 66,
+      ownerId: 11
+    });
+    const pendingOrder = createOrder({
+      id: 706,
+      listingId: 66,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([pendingOrder]),
+        count: jest.fn().mockResolvedValue(0)
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
@@ -149,7 +374,98 @@ describe('CampusServicesService', () => {
           },
           {
             id: 32,
-            displayName: '林舟',
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.getCampusServiceDetail(66, authUser);
+
+    expect(result.latestOrderId).toBe(706);
+    expect(result.actionState.canConfirm).toBe(true);
+    expect(result.actionState.canReject).toBe(true);
+    expect(result.actionLabels.confirm).toBe('确认接单');
+    expect(result.actionLabels.reject).toBe('拒绝申请');
+    expect(result.actionLabels.cancel).toBe('取消当前服务单');
+    expect(result.pendingOrderCount).toBe(1);
+    expect(result.activeOrderCount).toBe(0);
+    expect(result.waitingCompleteOrderCount).toBe(0);
+    expect(result.endedOrderCount).toBe(0);
+  });
+
+  it('should expose listing order counters for publisher cards', async () => {
+    const listing = createListing({
+      id: 69,
+      ownerId: 11
+    });
+    const pendingOrder = createOrder({
+      id: 709,
+      listingId: 69,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const waitingOrder = createOrder({
+      id: 710,
+      listingId: 69,
+      requesterId: 11,
+      providerId: 33,
+      status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+    });
+    const completedOrder = createOrder({
+      id: 711,
+      listingId: 69,
+      requesterId: 11,
+      providerId: 34,
+      status: CampusServiceOrderStatus.COMPLETED,
+      completedAt: new Date('2026-06-07T10:40:00Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([listing])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([pendingOrder, waitingOrder, completedOrder]),
+        count: jest.fn()
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 33,
+            displayName: '同学乙',
+            creditScore: 80,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 34,
+            displayName: '同学丙',
             creditScore: 79,
             verificationStatus: VerificationStatus.APPROVED,
             accountStatus: AccountStatus.ACTIVE
@@ -157,72 +473,955 @@ describe('CampusServicesService', () => {
         ])
       },
       conversation: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: 601, campusServiceTaskId: 19 }
-        ])
+        findMany: jest.fn().mockResolvedValue([])
       }
     } as any;
 
     const service = new CampusServicesService(prisma);
-    const publisherResponse = await service.listCampusServices({}, authUser);
-    const accepterResponse = await service.listCampusServices({}, { ...authUser, id: 32 });
-    const [publisherView] = publisherResponse.items;
-    const [accepterView] = accepterResponse.items;
+    const result = await service.listCampusServices({ ownerId: 11 }, authUser);
 
-    expect(publisherView.viewerContext).toEqual({
-      role: 'PUBLISHER',
-      canAccept: false,
-      canComplete: true,
-      canCancel: true,
-      canOpenConversation: true
+    expect(result.items[0]).toMatchObject({
+      activeOrderCount: 1,
+      pendingOrderCount: 1,
+      waitingCompleteOrderCount: 1,
+      endedOrderCount: 1,
+      totalOrderCount: 3
     });
-    expect(accepterView.viewerContext).toEqual({
-      role: 'ACCEPTER',
-      canAccept: false,
-      canComplete: true,
-      canCancel: true,
-      canOpenConversation: true
-    });
-    expect(publisherView.participantSummary).toEqual({
-      publisherLabel: '发布 QJinyu',
-      accepterLabel: '接单 林舟'
-    });
-    expect(publisherView.conversationId).toBe(601);
-    expect(publisherView.actionLabels.complete).toBe('确认完成');
-    expect(accepterView.actionLabels.cancel).toBe('退出接单');
   });
 
-  it('should return single task detail by id', async () => {
-    const task = {
-      id: 27,
-      title: '南门资料代送到实验楼',
-      category: CampusServiceCategory.HELP,
-      description: '帮忙送一份实验记录本',
-      reward: 10,
-      locationFrom: '南门',
-      locationTo: '实验楼',
-      deadlineLabel: '今天 15:30 前',
-      estimatedMinutes: 25,
-      urgency: CampusServiceUrgency.URGENT,
-      fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
-      contactPreference: CampusServiceContactPreference.FLEXIBLE,
-      itemCount: 1,
-      trustNote: null,
-      matchedAt: null,
-      completedAt: null,
-      canceledAt: null,
-      canceledById: null,
-      cancelReason: null,
-      publisherId: 21,
-      accepterId: null,
-      status: CampusServiceStatus.OPEN,
-      createdAt: new Date('2026-06-07T09:00:00Z'),
-      updatedAt: new Date('2026-06-07T09:05:00Z')
-    };
-
+  it('should expose pause action for publisher when listing is open without active order', async () => {
+    const listing = createListing({
+      id: 67,
+      ownerId: 11
+    });
     const prisma = {
-      campusServiceTask: {
-        findUnique: jest.fn().mockResolvedValue(task)
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.getCampusServiceDetail(67, authUser);
+
+    expect(result.actionState.canPause).toBe(true);
+    expect(result.actionLabels.pause).toBe('暂停接新单');
+    expect(result.actionState.canEnd).toBe(true);
+    expect(result.actionLabels.end).toBe('结束发布');
+  });
+
+  it('should expose reopen action for paused listing owner', async () => {
+    const listing = createListing({
+      id: 68,
+      ownerId: 11,
+      status: CampusServiceListingStatus.PAUSED
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.getCampusServiceDetail(68, authUser);
+
+    expect(result.actionState.canPause).toBe(false);
+    expect(result.actionState.canReopen).toBe(true);
+    expect(result.actionLabels.reopen).toBe('重新开放');
+  });
+
+  it('should create listing with new defaults for offer listings', async () => {
+    const createdListing = createListing({
+      id: 88,
+      ownerId: 11,
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE,
+      category: CampusServiceCategory.AGENCY,
+      title: '代取图书馆预约资料',
+      description: '工作日中午可顺路代取',
+      amount: 12,
+      routeFrom: null,
+      routeTo: null,
+      locationNote: '图书馆服务台',
+      validFromAt: new Date('2026-06-11T08:00:00.000Z'),
+      validUntilAt: new Date('2026-06-12T08:00:00.000Z'),
+      autoConfirm: true,
+      maxTotalOrders: null,
+      maxConcurrentOrders: 1
+    });
+    const prisma = {
+      campusServiceListing: {
+        create: jest.fn().mockResolvedValue(createdListing)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      campusServiceOrder: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.createCampusService({
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE,
+      title: ' 代取图书馆预约资料 ',
+      category: CampusServiceCategory.AGENCY,
+      description: ' 工作日中午可顺路代取 ',
+      amount: 12,
+      locationNote: ' 图书馆服务台 ',
+      estimatedMinutes: 15,
+      validFromAt: '2026-06-11T08:00:00.000Z',
+      validUntilAt: '2026-06-12T08:00:00.000Z',
+      imageUrls: [
+        ' https://cdn.example.com/cover.jpg ',
+        'https://cdn.example.com/cover.jpg',
+        'https://cdn.example.com/extra.jpg'
+      ]
+    }, authUser);
+
+    expect(prisma.campusServiceListing.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ownerId: 11,
+        intent: CampusServiceIntent.OFFER,
+        pattern: CampusServicePattern.REUSABLE,
+        title: '代取图书馆预约资料',
+        description: '工作日中午可顺路代取',
+        locationNote: '图书馆服务台',
+        autoConfirm: true,
+        maxTotalOrders: null,
+        maxConcurrentOrders: 1,
+        status: CampusServiceListingStatus.OPEN,
+        images: {
+          create: [
+            {
+              imageUrl: 'https://cdn.example.com/cover.jpg',
+              sortOrder: 0
+            },
+            {
+              imageUrl: 'https://cdn.example.com/extra.jpg',
+              sortOrder: 1
+            }
+          ]
+        }
+      })
+    });
+    expect(result.id).toBe(88);
+    expect(result.intent).toBe('OFFER');
+    expect(result.intentLabel).toBe('我来提供');
+  });
+
+  it('should update campus service listing fields for publisher', async () => {
+    const listing = createListing({
+      id: 89,
+      ownerId: 11,
+      title: '旧标题',
+      description: '旧描述',
+      validFromAt: new Date('2026-06-11T08:00:00.000Z'),
+      validUntilAt: new Date('2026-06-12T08:00:00.000Z')
+    });
+    const updatedListing = createListing({
+      ...listing,
+      title: '新标题',
+      description: '新描述',
+      category: CampusServiceCategory.SKILL,
+      amount: 18,
+      validUntilAt: new Date('2026-06-12T12:00:00.000Z'),
+      urgency: CampusServiceUrgency.URGENT,
+      trustNote: '带电脑'
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(updatedListing)
+          .mockResolvedValueOnce(updatedListing),
+        update: jest.fn().mockResolvedValue(updatedListing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.updateCampusService(89, {
+      title: ' 新标题 ',
+      description: ' 新描述 ',
+      category: CampusServiceCategory.SKILL,
+      amount: 18,
+      validUntilAt: '2026-06-12T12:00:00.000Z',
+      urgency: CampusServiceUrgency.URGENT,
+      trustNote: ' 带电脑 '
+    }, authUser);
+
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 89 },
+      data: expect.objectContaining({
+        title: '新标题',
+        description: '新描述',
+        category: CampusServiceCategory.SKILL,
+        amount: 18,
+        urgency: CampusServiceUrgency.URGENT,
+        trustNote: '带电脑'
+      })
+    });
+    expect(result.title).toBe('新标题');
+    expect(result.urgency).toBe(CampusServiceUrgency.URGENT);
+  });
+
+  it('should reopen manual-ended listing when publisher extends validity through update', async () => {
+    const endedListing = createListing({
+      id: 90,
+      ownerId: 11,
+      status: CampusServiceListingStatus.ENDED,
+      endReason: 'MANUAL_END' as any,
+      endedAt: new Date('2026-06-20T08:00:00.000Z'),
+      validUntilAt: new Date('2026-06-20T08:00:00.000Z')
+    });
+    const reopenedListing = createListing({
+      ...endedListing,
+      status: CampusServiceListingStatus.OPEN,
+      endReason: null,
+      endedAt: null,
+      validUntilAt: new Date('2026-06-21T08:00:00.000Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(endedListing)
+          .mockResolvedValueOnce(reopenedListing)
+          .mockResolvedValueOnce(reopenedListing),
+        update: jest.fn().mockResolvedValue(reopenedListing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.updateCampusService(90, {
+      validUntilAt: '2026-06-21T08:00:00.000Z'
+    }, authUser);
+
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 90 },
+      data: expect.objectContaining({
+        validUntilAt: new Date('2026-06-21T08:00:00.000Z'),
+        status: CampusServiceListingStatus.OPEN,
+        endReason: null,
+        endedAt: null
+      })
+    });
+    expect(result.status).toBe(CampusServiceListingStatus.OPEN);
+  });
+
+  it('should accept request listing by creating order and conversation', async () => {
+    const listing = createListing({
+      id: 55,
+      ownerId: 21,
+      autoConfirm: true
+    });
+    const createdOrder = createOrder({
+      id: 702,
+      listingId: 55,
+      requesterId: 21,
+      providerId: 11,
+      confirmedAt: new Date('2026-06-11T10:00:00.000Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue(createdOrder),
+        findMany: jest.fn().mockResolvedValue([createdOrder]),
+        count: jest.fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(1)
+      },
+      conversation: {
+        create: jest.fn().mockResolvedValue({ id: 901, campusServiceOrderId: 702 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 901,
+            campusServiceOrder: {
+              listingId: 55
+            }
+          }
+        ])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.acceptCampusService(55, {
+      initialMessage: '我来接'
+    }, authUser);
+
+    expect(prisma.campusServiceOrder.create).toHaveBeenCalledWith({
+      data: {
+        listingId: 55,
+        requesterId: 21,
+        providerId: 11,
+        status: CampusServiceOrderStatus.CONFIRMED,
+        applyMessage: '我来接',
+        finalAmount: 6,
+        confirmedAt: expect.any(Date)
+      }
+    });
+    expect(prisma.conversation.create).toHaveBeenCalledWith({
+      data: {
+        campusServiceOrderId: 702
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 901,
+        senderId: 11,
+        content: '我来接'
+      }
+    });
+    expect(result.conversationId).toBe(901);
+    expect(result.actionState.canOpenConversation).toBe(true);
+    expect(result.participantSummary.participantLabel).toBe('接单 QJinyu');
+  });
+
+  it('should pause listing for publisher when no active order exists', async () => {
+    const pausedListing = createListing({
+      id: 57,
+      ownerId: 11,
+      status: CampusServiceListingStatus.PAUSED
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(createListing({
+            id: 57,
+            ownerId: 11
+          }))
+          .mockResolvedValueOnce(pausedListing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.pauseCampusService(57, authUser);
+
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 57 },
+      data: {
+        status: CampusServiceListingStatus.PAUSED,
+        endReason: null,
+        endedAt: null
+      }
+    });
+    expect(result.status).toBe(CampusServiceListingStatus.PAUSED);
+  });
+
+  it('should reopen paused listing for publisher', async () => {
+    const openListing = createListing({
+      id: 58,
+      ownerId: 11,
+      status: CampusServiceListingStatus.OPEN
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(createListing({
+            id: 58,
+            ownerId: 11,
+            status: CampusServiceListingStatus.PAUSED,
+            validUntilAt: new Date('2026-06-21T08:00:00.000Z')
+          }))
+          .mockResolvedValueOnce(openListing)
+          .mockResolvedValueOnce(openListing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.reopenCampusService(58, authUser);
+
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 58 },
+      data: {
+        status: CampusServiceListingStatus.OPEN,
+        endReason: null,
+        endedAt: null
+      }
+    });
+    expect(result.status).toBe(CampusServiceListingStatus.OPEN);
+  });
+
+  it('should end listing and cancel all pending orders for publisher', async () => {
+    const listing = createListing({
+      id: 59,
+      ownerId: 11
+    });
+    const pendingOrder = createOrder({
+      id: 709,
+      listingId: 59,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const anotherPendingOrder = createOrder({
+      id: 710,
+      listingId: 59,
+      requesterId: 11,
+      providerId: 33,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null,
+      createdAt: new Date('2026-06-12T10:29:00.000Z'),
+      updatedAt: new Date('2026-06-12T10:29:00.000Z')
+    });
+    const endedListing = createListing({
+      id: 59,
+      ownerId: 11,
+      status: CampusServiceListingStatus.ENDED,
+      endReason: null,
+      endedAt: new Date('2026-06-12T10:30:00.000Z')
+    });
+    const canceledPendingOrder = {
+      ...pendingOrder,
+      status: CampusServiceOrderStatus.CANCELED,
+      cancelReason: '暂时不需要了',
+      canceledAt: new Date('2026-06-12T10:30:00.000Z')
+    };
+    const canceledAnotherPendingOrder = {
+      ...anotherPendingOrder,
+      status: CampusServiceOrderStatus.CANCELED,
+      cancelReason: '暂时不需要了',
+      canceledAt: new Date('2026-06-12T10:30:00.000Z')
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(endedListing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValueOnce(null),
+        update: jest.fn()
+          .mockResolvedValueOnce(canceledPendingOrder)
+          .mockResolvedValueOnce(canceledAnotherPendingOrder),
+        findMany: jest.fn()
+          .mockResolvedValueOnce([anotherPendingOrder, pendingOrder])
+          .mockResolvedValueOnce([canceledAnotherPendingOrder, canceledPendingOrder]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn()
+          .mockResolvedValueOnce([
+            { id: 993, campusServiceOrderId: 709 },
+            { id: 994, campusServiceOrderId: 710 }
+          ])
+          .mockResolvedValueOnce([]),
+        update: jest.fn().mockResolvedValue(undefined),
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.endCampusService(59, {
+      reason: '暂时不需要了'
+    }, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 710 },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: expect.any(Date),
+        cancelReason: '暂时不需要了'
+      }
+    });
+    expect(prisma.campusServiceOrder.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 709 },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: expect.any(Date),
+        cancelReason: '暂时不需要了'
+      }
+    });
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 59 },
+      data: {
+        status: CampusServiceListingStatus.ENDED,
+        endReason: 'MANUAL_END',
+        endedAt: expect.any(Date)
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 993,
+        senderId: 11,
+        content: '发布已结束，本次申请随之关闭：暂时不需要了'
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 994,
+        senderId: 11,
+        content: '发布已结束，本次申请随之关闭：暂时不需要了'
+      }
+    });
+    expect(result.status).toBe(CampusServiceListingStatus.ENDED);
+  });
+
+  it('should reject duplicate active participation for same listing', async () => {
+    const listing = createListing({
+      id: 79,
+      ownerId: 21,
+      autoConfirm: true
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        })
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findFirst: jest.fn().mockResolvedValue({ id: 9001 })
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+
+    await expect(
+      service.acceptCampusService(79, {
+        initialMessage: '我来接'
+      }, authUser)
+    ).rejects.toThrow('你已经参与了这条服务，请勿重复操作');
+  });
+
+  it('should confirm pending campus service order for publisher', async () => {
+    const listing = createListing({
+      id: 77,
+      ownerId: 11
+    });
+    const pendingOrder = createOrder({
+      id: 807,
+      listingId: 77,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const confirmedOrder = {
+      ...pendingOrder,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      confirmedAt: new Date('2026-06-11T11:00:00.000Z')
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...pendingOrder,
+          listing
+        }),
+        update: jest.fn().mockResolvedValue(confirmedOrder),
+        findMany: jest.fn().mockResolvedValue([confirmedOrder]),
+        count: jest.fn()
+          .mockResolvedValueOnce(1)
+          .mockResolvedValueOnce(1)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 991 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 991,
+            campusServiceOrder: {
+              listingId: 77
+            }
+          }
+        ])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.confirmCampusServiceOrder(807, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 807 },
+      data: {
+        status: CampusServiceOrderStatus.CONFIRMED,
+        confirmedAt: expect.any(Date),
+        cancelReason: null,
+        canceledAt: null,
+        expiredAt: null
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 991,
+        senderId: 11,
+        content: 'QJinyu 已确认当前服务单，进入履约阶段。'
+      }
+    });
+    expect(result.latestOrderId).toBe(807);
+    expect(result.actionState.canOpenConversation).toBe(true);
+  });
+
+  it('should reject pending campus service order for publisher', async () => {
+    const listing = createListing({
+      id: 78,
+      ownerId: 11
+    });
+    const pendingOrder = createOrder({
+      id: 808,
+      listingId: 78,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const rejectedOrder = {
+      ...pendingOrder,
+      status: CampusServiceOrderStatus.REJECTED,
+      cancelReason: '时间不合适'
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...pendingOrder,
+          listing
+        }),
+        update: jest.fn().mockResolvedValue(rejectedOrder),
+        findMany: jest.fn().mockResolvedValue([rejectedOrder]),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 992 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.rejectCampusServiceOrder(808, {
+      reason: '时间不合适'
+    }, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 808 },
+      data: {
+        status: CampusServiceOrderStatus.REJECTED,
+        cancelReason: '时间不合适',
+        canceledAt: expect.any(Date)
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 992,
+        senderId: 11,
+        content: '服务单已拒绝：时间不合适'
+      }
+    });
+    expect(result.latestOrderId).toBe(808);
+  });
+
+  it('should list campus service orders as order-level items for current user', async () => {
+    const listing = createListing({
+      id: 91,
+      ownerId: 21,
+      intent: CampusServiceIntent.REQUEST
+    });
+    const order = createOrder({
+      id: 901,
+      listingId: 91,
+      requesterId: 21,
+      providerId: 11,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      createdAt: new Date('2026-06-12T09:00:00.000Z'),
+      updatedAt: new Date('2026-06-12T09:30:00.000Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 })
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...order,
+            listing
+          }
+        ])
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
@@ -232,117 +1431,103 @@ describe('CampusServicesService', () => {
             creditScore: 83,
             verificationStatus: VerificationStatus.APPROVED,
             accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
           }
         ])
       },
       conversation: {
-        findMany: jest.fn().mockResolvedValue([])
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 3001,
+            campusServiceOrderId: 901
+          }
+        ])
       }
     } as any;
 
     const service = new CampusServicesService(prisma);
-    const result = await service.getCampusServiceDetail(27, authUser);
+    const result = await service.listCampusServiceOrders({}, authUser);
 
-    expect(prisma.campusServiceTask.findUnique).toHaveBeenCalledWith({
-      where: { id: 27 }
+    expect(prisma.campusServiceOrder.count).toHaveBeenCalledWith({
+      where: {
+        OR: [{ requesterId: 11 }, { providerId: 11 }]
+      }
     });
-    expect(result.id).toBe(27);
-    expect(result.title).toBe('南门资料代送到实验楼');
-    expect(result.viewerContext.role).toBe('DISCOVER');
-    expect(result.actionState.canAccept).toBe(true);
-    expect(result.detailBase).toEqual({
-      id: 27,
-      type: 'CAMPUS_SERVICE',
-      title: '南门资料代送到实验楼',
-      description: '帮忙送一份实验记录本',
-      price: 10,
-      amountLabel: '¥10.00',
-      imageUrl: '',
-      tags: ['临时帮忙', '加急', '今天 15:30 前', '25 分钟', '当面交付'],
-      summaryTags: ['临时帮忙', '加急', '今天 15:30 前', '25 分钟', '当面交付'],
-      status: 'OPEN',
-      statusLabel: '待接单',
-      publisher: {
-        id: 21,
-        displayName: '何栖',
-        creditScore: 83,
-        verificationStatus: 'APPROVED',
-        accountStatus: 'ACTIVE'
-      },
-      metaItems: [
-        { key: 'route', label: '路线', value: '南门 -> 实验楼' },
-        { key: 'deadline', label: '时间', value: '今天 15:30 前' },
-        { key: 'fulfillment', label: '要求', value: '加急 · 1 件 · 当面交付' },
-        { key: 'contact', label: '联系', value: '均可' },
-        { key: 'publisher', label: '发布者', value: '何栖 · 信用 83' }
-      ],
-      timeline: [
-        { key: 'created', label: '发布时间', value: '2026-06-07T09:00:00.000Z' },
-        { key: 'updated', label: '最近变更', value: '2026-06-07T09:05:00.000Z' }
-      ]
+    expect(result.items[0]).toMatchObject({
+      id: 901,
+      listingId: 91,
+      role: 'PROVIDER',
+      roleLabel: '我接的单',
+      status: CampusServiceOrderStatus.CONFIRMED,
+      statusLabel: '进行中',
+      listingStatus: CampusServiceListingStatus.OPEN,
+      intent: CampusServiceIntent.REQUEST,
+      category: CampusServiceCategory.ERRAND,
+      conversationId: 3001
     });
-    expect(result.preview.metrics).toEqual([
-      { label: '酬谢', value: '¥10.00' },
-      { label: '预计', value: '25 分钟' },
-      { label: '件数', value: '1 件' }
-    ]);
-    expect(result.fulfillment).toEqual({
-      routeLabel: '南门 -> 实验楼',
-      deadlineLabel: '今天 15:30 前',
-      estimatedMinutes: 25,
-      rewardLabel: '¥10.00',
-      mode: 'FACE_TO_FACE',
-      modeLabel: '当面交付',
-      contactPreference: 'FLEXIBLE',
-      contactPreferenceLabel: '均可',
-      itemCount: 1,
-      trustNote: null,
-      cancelReason: null,
-      canceledById: null
+    expect(result.items[0].actionState).toEqual({
+      canComplete: true,
+      canCancel: true,
+      canOpenConversation: true,
+      canConfirm: false,
+      canReject: false
+    });
+    expect(result.items[0].actionLabels).toEqual({
+      confirm: '确认接单',
+      reject: '拒绝申请',
+      complete: '提交完成',
+      cancel: '退出接单',
+      conversation: '看消息'
     });
   });
 
-  it('should return paginated campus services with server-side filters metadata', async () => {
-    const tasks = [
-      {
-        id: 31,
-        title: '西门奶茶代拿',
-        category: CampusServiceCategory.ERRAND,
-        description: '顺路带一杯',
-        reward: 4,
-        locationFrom: '西门',
-        locationTo: '教学楼',
-        deadlineLabel: '今天 13:00 前',
-        estimatedMinutes: 12,
-        urgency: CampusServiceUrgency.NORMAL,
-        fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
-        contactPreference: CampusServiceContactPreference.CHAT_ONLY,
-        itemCount: 1,
-        trustNote: null,
-        matchedAt: null,
-        completedAt: null,
-        canceledAt: null,
-        canceledById: null,
-        cancelReason: null,
-        publisherId: 21,
-        accepterId: null,
-        status: CampusServiceStatus.OPEN,
-        createdAt: new Date('2026-06-07T08:00:00Z'),
-        updatedAt: new Date('2026-06-07T08:10:00Z')
-      }
-    ];
-
+  it('should expose confirm-complete action only for the other participant on waiting-complete orders', async () => {
+    const listing = createListing({
+      id: 92,
+      ownerId: 21,
+      intent: CampusServiceIntent.REQUEST
+    });
+    const waitingOrder = createOrder({
+      id: 902,
+      listingId: 92,
+      requesterId: 21,
+      providerId: 11,
+      status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+      completionRequestedById: 21
+    });
     const prisma = {
-      campusServiceTask: {
-        count: jest.fn().mockResolvedValue(13),
-        findMany: jest.fn().mockResolvedValue(tasks)
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 })
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...waitingOrder,
+            listing
+          }
+        ])
       },
       user: {
         findMany: jest.fn().mockResolvedValue([
           {
             id: 21,
             displayName: '何栖',
-            creditScore: 90,
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
             verificationStatus: VerificationStatus.APPROVED,
             accountStatus: AccountStatus.ACTIVE
           }
@@ -354,68 +1539,661 @@ describe('CampusServicesService', () => {
     } as any;
 
     const service = new CampusServicesService(prisma);
-    const result = await service.listCampusServices({
-      category: CampusServiceCategory.ERRAND,
-      keyword: '奶茶',
-      sort: 'price_desc',
-      minReward: 3,
-      maxReward: 8,
-      credit: 'VERIFIED',
-      page: 2,
-      pageSize: 5
-    }, authUser);
+    const result = await service.listCampusServiceOrders({}, authUser);
 
-    expect(prisma.campusServiceTask.count).toHaveBeenCalledWith({
-      where: {
-        category: CampusServiceCategory.ERRAND,
-        status: CampusServiceStatus.OPEN,
-        OR: [
-          { title: { contains: '奶茶' } },
-          { description: { contains: '奶茶' } },
-          { locationFrom: { contains: '奶茶' } },
-          { locationTo: { contains: '奶茶' } }
-        ],
-        reward: {
-          gte: 3,
-          lte: 8
-        },
-        publisher: {
-          is: {
-            verificationStatus: VerificationStatus.APPROVED
+    expect(result.items[0].actionState).toEqual({
+      canComplete: true,
+      canCancel: true,
+      canOpenConversation: false,
+      canConfirm: false,
+      canReject: false
+    });
+    expect(result.items[0].actionLabels.complete).toBe('确认完成');
+  });
+
+  it('should bind participant actions to the viewer order instead of the latest order on reusable listings', async () => {
+    const listing = createListing({
+      id: 95,
+      ownerId: 21,
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE
+    });
+    const latestOtherOrder = createOrder({
+      id: 905,
+      listingId: 95,
+      requesterId: 32,
+      providerId: 21,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null,
+      createdAt: new Date('2026-06-12T12:20:00.000Z'),
+      updatedAt: new Date('2026-06-12T12:20:00.000Z')
+    });
+    const viewerOrder = createOrder({
+      id: 904,
+      listingId: 95,
+      requesterId: 11,
+      providerId: 21,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      createdAt: new Date('2026-06-12T12:10:00.000Z'),
+      updatedAt: new Date('2026-06-12T12:15:00.000Z')
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([latestOtherOrder, viewerOrder]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
           }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 3005,
+            campusServiceOrderId: 904,
+            campusServiceOrder: {
+              listingId: 95
+            }
+          }
+        ])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.getCampusServiceDetail(95, authUser);
+
+    expect(result.latestOrderId).toBe(905);
+    expect(result.actionOrderId).toBe(904);
+    expect(result.actionState.canConfirm).toBe(false);
+    expect(result.actionState.canComplete).toBe(true);
+    expect(result.actionState.canCancel).toBe(true);
+    expect(result.conversationId).toBe(3005);
+    expect(result.participantSummary.participantLabel).toBe('预约 QJinyu');
+  });
+
+  it('should list listing orders for publisher with confirm and reject actions', async () => {
+    const listing = createListing({
+      id: 96,
+      ownerId: 11,
+      intent: CampusServiceIntent.REQUEST
+    });
+    const pendingOrder = createOrder({
+      id: 906,
+      listingId: 96,
+      requesterId: 11,
+      providerId: 32,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 })
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...pendingOrder,
+            listing
+          }
+        ])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 3006,
+            campusServiceOrderId: 906
+          }
+        ])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.listCampusServiceOrders({ listingId: 96 }, authUser);
+
+    expect(prisma.campusServiceOrder.count).toHaveBeenCalledWith({
+      where: {
+        listingId: 96,
+        listing: {
+          ownerId: 11
         }
       }
     });
-    expect(prisma.campusServiceTask.findMany).toHaveBeenCalledWith({
-      where: {
-        category: CampusServiceCategory.ERRAND,
-        status: CampusServiceStatus.OPEN,
-        OR: [
-          { title: { contains: '奶茶' } },
-          { description: { contains: '奶茶' } },
-          { locationFrom: { contains: '奶茶' } },
-          { locationTo: { contains: '奶茶' } }
-        ],
-        reward: {
-          gte: 3,
-          lte: 8
-        },
-        publisher: {
-          is: {
-            verificationStatus: VerificationStatus.APPROVED
-          }
-        }
+    expect(result.items[0].actionState).toEqual({
+      canComplete: false,
+      canCancel: false,
+      canOpenConversation: true,
+      canConfirm: true,
+      canReject: true
+    });
+    expect(result.items[0].actionLabels).toEqual({
+      confirm: '确认接单',
+      reject: '拒绝申请',
+      complete: '提交完成',
+      cancel: '取消当前服务单',
+      conversation: '看消息'
+    });
+  });
+
+  it('should filter listing orders by group for publisher order workbench', async () => {
+    const listing = createListing({
+      id: 97,
+      ownerId: 11,
+      intent: CampusServiceIntent.OFFER
+    });
+    const waitingOrder = createOrder({
+      id: 907,
+      listingId: 97,
+      requesterId: 32,
+      providerId: 11,
+      status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+    });
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 })
       },
-      orderBy: [{ reward: 'desc' }, { updatedAt: 'desc' }],
-      skip: 5,
-      take: 5
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            ...waitingOrder,
+            listing
+          }
+        ])
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.listCampusServiceOrders({
+      listingId: 97,
+      group: 'WAITING_COMPLETE'
+    }, authUser);
+
+    expect(prisma.campusServiceOrder.count).toHaveBeenCalledWith({
+      where: {
+        listingId: 97,
+        listing: {
+          ownerId: 11
+        },
+        status: {
+          in: [CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM]
+        }
+      }
     });
     expect(result.items).toHaveLength(1);
-    expect(result.pagination).toEqual({
-      page: 2,
-      pageSize: 5,
-      total: 13,
-      totalPages: 3
+    expect(result.items[0].orderStatus).toBe(CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM);
+  });
+
+  it('should cancel campus service order by order id for participant', async () => {
+    const listing = createListing({
+      id: 93,
+      ownerId: 21
     });
+    const order = createOrder({
+      id: 903,
+      listingId: 93,
+      requesterId: 21,
+      providerId: 11,
+      status: CampusServiceOrderStatus.CONFIRMED
+    });
+    const canceledOrder = {
+      ...order,
+      status: CampusServiceOrderStatus.CANCELED,
+      canceledAt: new Date('2026-06-12T12:30:00.000Z'),
+      cancelReason: null
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...order,
+          listing
+        }),
+        update: jest.fn().mockResolvedValue(canceledOrder),
+        findMany: jest.fn().mockResolvedValue([canceledOrder]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 3003 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.cancelCampusServiceOrder(903, {}, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 903 },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: expect.any(Date),
+        cancelReason: null
+      }
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 3003,
+        senderId: 11,
+        content: 'QJinyu 取消了当前服务协作。'
+      }
+    });
+    expect(result.id).toBe(93);
+  });
+
+  it('should complete campus service order by order id for participant', async () => {
+    const listing = createListing({
+      id: 94,
+      ownerId: 21
+    });
+    const order = createOrder({
+      id: 904,
+      listingId: 94,
+      requesterId: 21,
+      providerId: 11,
+      status: CampusServiceOrderStatus.CONFIRMED
+    });
+    const waitingOrder = {
+      ...order,
+      status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+      completionRequestedById: 11,
+      completionRequestedAt: new Date('2026-06-12T12:40:00.000Z')
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn().mockResolvedValue(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...order,
+          listing
+        }),
+        findFirst: jest.fn().mockResolvedValue(order),
+        update: jest.fn().mockResolvedValue(waitingOrder),
+        findMany: jest.fn().mockResolvedValue([waitingOrder]),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(1)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 3004 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.completeCampusServiceOrder(904, {}, authUser);
+
+    expect(prisma.campusServiceOrder.findUnique).toHaveBeenCalledWith({
+      where: { id: 904 },
+      include: {
+        listing: true
+      }
+    });
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 904 },
+      data: {
+        status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+        completionRequestedById: 11,
+        completionRequestedAt: expect.any(Date)
+      }
+    });
+    expect(result.id).toBe(94);
+  });
+
+  it('should cancel campus service by listing id against viewer order instead of latest foreign order', async () => {
+    const listing = createListing({
+      id: 98,
+      ownerId: 21,
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE
+    });
+    const latestOtherOrder = createOrder({
+      id: 980,
+      listingId: 98,
+      requesterId: 32,
+      providerId: 21,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null,
+      createdAt: new Date('2026-06-12T13:00:00.000Z'),
+      updatedAt: new Date('2026-06-12T13:00:00.000Z')
+    });
+    const viewerOrder = createOrder({
+      id: 981,
+      listingId: 98,
+      requesterId: 11,
+      providerId: 21,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      createdAt: new Date('2026-06-12T12:50:00.000Z'),
+      updatedAt: new Date('2026-06-12T12:55:00.000Z')
+    });
+    const canceledViewerOrder = {
+      ...viewerOrder,
+      status: CampusServiceOrderStatus.CANCELED,
+      canceledAt: new Date('2026-06-12T13:05:00.000Z')
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn()
+          .mockResolvedValueOnce([viewerOrder])
+          .mockResolvedValueOnce([latestOtherOrder, canceledViewerOrder]),
+        update: jest.fn().mockResolvedValue(canceledViewerOrder),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 3098 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 3098,
+            campusServiceOrderId: 981,
+            campusServiceOrder: {
+              listingId: 98
+            }
+          }
+        ])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.cancelCampusService(98, {}, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 981 },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: expect.any(Date),
+        cancelReason: null
+      }
+    });
+    expect(result.actionOrderId).toBe(981);
+    expect(result.latestOrderId).toBe(980);
+  });
+
+  it('should complete campus service by listing id against viewer order instead of latest foreign order', async () => {
+    const listing = createListing({
+      id: 99,
+      ownerId: 21,
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE
+    });
+    const latestOtherOrder = createOrder({
+      id: 990,
+      listingId: 99,
+      requesterId: 32,
+      providerId: 21,
+      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      confirmedAt: null,
+      createdAt: new Date('2026-06-12T13:10:00.000Z'),
+      updatedAt: new Date('2026-06-12T13:10:00.000Z')
+    });
+    const viewerOrder = createOrder({
+      id: 991,
+      listingId: 99,
+      requesterId: 11,
+      providerId: 21,
+      status: CampusServiceOrderStatus.CONFIRMED,
+      createdAt: new Date('2026-06-12T13:00:00.000Z'),
+      updatedAt: new Date('2026-06-12T13:01:00.000Z')
+    });
+    const waitingViewerOrder = {
+      ...viewerOrder,
+      status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+      completionRequestedById: 11,
+      completionRequestedAt: new Date('2026-06-12T13:15:00.000Z')
+    };
+    const prisma = {
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+          .mockResolvedValueOnce(listing)
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn()
+          .mockResolvedValueOnce([viewerOrder])
+          .mockResolvedValueOnce([latestOtherOrder, waitingViewerOrder]),
+        update: jest.fn().mockResolvedValue(waitingViewerOrder),
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(1)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          displayName: 'QJinyu',
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            displayName: '何栖',
+            creditScore: 83,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          },
+          {
+            id: 32,
+            displayName: '同学甲',
+            creditScore: 74,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      conversation: {
+        findFirst: jest.fn().mockResolvedValue({ id: 3099 }),
+        update: jest.fn().mockResolvedValue(undefined),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 3099,
+            campusServiceOrderId: 991,
+            campusServiceOrder: {
+              listingId: 99
+            }
+          }
+        ])
+      },
+      message: {
+        create: jest.fn().mockResolvedValue(undefined)
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma);
+    const result = await service.completeCampusService(99, {}, authUser);
+
+    expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
+      where: { id: 991 },
+      data: {
+        status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+        completionRequestedById: 11,
+        completionRequestedAt: expect.any(Date)
+      }
+    });
+    expect(result.actionOrderId).toBe(991);
+    expect(result.latestOrderId).toBe(990);
   });
 });

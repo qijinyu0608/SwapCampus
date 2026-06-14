@@ -1,8 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AccountStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
+import { Segment, useDefault } from 'segmentit';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const PRODUCT_INDEX_UID = 'products';
+const MIN_SEARCH_TOKEN_LENGTH = 2;
+const segmentit = useDefault(new Segment());
 
 let MeiliSearchCtor: any | null | undefined;
 
@@ -27,6 +30,7 @@ type SearchableProductDocument = {
   id: number;
   title: string;
   description: string;
+  searchTerms: string[];
   category: string;
   condition: string;
   tags: string[];
@@ -63,6 +67,63 @@ function detectDormPickup(content: string, tags: string[]) {
 
 function detectAvailableToday(content: string, tags: string[]) {
   return /今天|今晚|急出|可取|当天/.test(content) || tags.some((tag) => /今天|今晚|急出|可取|当天/.test(tag));
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function tokenizeSearchTerms(value: string) {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const segmentedTerms = segmentit
+    .doSegment(normalized, { simple: true })
+    .map((term: unknown) => normalizeSearchText(String(term)))
+    .filter(Boolean);
+  const rawFallbackTerms = normalized
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  const fallbackTerms = rawFallbackTerms.filter((term) => {
+    if (segmentedTerms.includes(term)) {
+      return true;
+    }
+
+    const includedSegments = segmentedTerms.filter((segment) => segment !== term && term.includes(segment));
+    return includedSegments.length < 2;
+  });
+
+  return Array.from(new Set([...segmentedTerms, ...fallbackTerms]))
+    .filter((term) => {
+      if (/^[a-z0-9]+$/i.test(term)) {
+        return term.length >= MIN_SEARCH_TOKEN_LENGTH;
+      }
+
+      if (/[\u3400-\u9fff]/.test(term)) {
+        return term.length >= MIN_SEARCH_TOKEN_LENGTH;
+      }
+
+      return false;
+    });
+}
+
+function buildSearchableTermSet(parts: string[]) {
+  return Array.from(new Set(parts.flatMap((part) => tokenizeSearchTerms(part))));
+}
+
+export function buildSearchQuery(query: string) {
+  const tokens = tokenizeSearchTerms(query);
+  if (!tokens.length) {
+    return normalizeSearchText(query);
+  }
+
+  return tokens.map((token) => `"${token}"`).join(' ');
 }
 
 @Injectable()
@@ -120,6 +181,7 @@ export class SearchService implements OnModuleInit {
         await this.client.createIndex(PRODUCT_INDEX_UID, { primaryKey: 'id' }).catch(() => undefined);
         const settingsTask = await this.productsIndex.updateSettings({
           searchableAttributes: [
+            'searchTerms',
             'title',
             'description',
             'category',
@@ -127,7 +189,16 @@ export class SearchService implements OnModuleInit {
             'tags',
             'sellerName'
           ],
-          displayedAttributes: ['id'],
+          displayedAttributes: [
+            'id',
+            'title',
+            'description',
+            'searchTerms',
+            'category',
+            'condition',
+            'tags',
+            'sellerName'
+          ],
           filterableAttributes: [
             'id',
             'status',
@@ -269,6 +340,8 @@ export class SearchService implements OnModuleInit {
 
     const page = Math.max(1, Math.trunc(toFiniteNumber(params.page, 1)));
     const pageSize = Math.max(1, Math.trunc(toFiniteNumber(params.pageSize, 24)));
+    const normalizedQuery = params.q?.trim() || '';
+    const searchQuery = buildSearchQuery(normalizedQuery);
     const filters: string[] = [];
 
     if (params.status?.trim()) {
@@ -323,11 +396,12 @@ export class SearchService implements OnModuleInit {
           ? ['price:desc', 'createdAt:desc']
           : undefined;
 
-    return this.productsIndex.search(params.q?.trim() || '', {
+    return this.productsIndex.search(searchQuery, {
       filter: filters.length ? filters : undefined,
       sort,
       page,
-      hitsPerPage: pageSize
+      hitsPerPage: pageSize,
+      matchingStrategy: normalizedQuery ? 'all' : undefined
     });
   }
 
@@ -356,11 +430,20 @@ export class SearchService implements OnModuleInit {
 
     const normalizedTags = normalizeTags(product.tags);
     const combinedText = `${product.title} ${product.description} ${normalizedTags.join(' ')}`;
+    const searchTerms = buildSearchableTermSet([
+      product.title,
+      product.description,
+      product.category,
+      product.condition,
+      ...normalizedTags,
+      product.seller.displayName
+    ]);
 
     return {
       id: product.id,
       title: product.title,
       description: product.description,
+      searchTerms,
       category: product.category,
       condition: product.condition,
       tags: normalizedTags,

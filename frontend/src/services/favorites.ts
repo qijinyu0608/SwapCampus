@@ -1,4 +1,4 @@
-import { addFavorite, fetchFavoriteList, removeFavorite, type FavoriteItem } from './api';
+import { addFavorite, fetchFavoriteList, fetchProducts, removeFavorite, type FavoriteItem } from './api';
 import type { SessionUser } from './session';
 
 const FAVORITES_KEY = 'swapcampus-favorites';
@@ -29,6 +29,11 @@ function writeFavoriteMap(nextMap: FavoriteMap, scope: string) {
   window.dispatchEvent(new CustomEvent(FAVORITES_EVENT, { detail: { scope } }));
 }
 
+function getScopedFavoriteIdsByScope(scope: string) {
+  const map = readFavoriteMap();
+  return map[scope] ?? [];
+}
+
 function setScopedFavoriteIds(ids: number[], user?: SessionUser | null) {
   const scope = resolveScope(user);
   const map = readFavoriteMap();
@@ -43,8 +48,41 @@ function setScopedFavoriteIds(ids: number[], user?: SessionUser | null) {
 }
 
 function getGuestFavoriteIds(user?: SessionUser | null) {
+  return getScopedFavoriteIdsByScope(resolveScope(user));
+}
+
+function clearScopedFavoriteIds(scope: string) {
   const map = readFavoriteMap();
-  return map[resolveScope(user)] ?? [];
+  if (!(scope in map)) {
+    return;
+  }
+
+  const nextMap = { ...map };
+  delete nextMap[scope];
+  writeFavoriteMap(nextMap, scope);
+}
+
+async function buildFallbackFavoriteItems(ids: number[]) {
+  if (!ids.length) {
+    return [] as FavoriteItem[];
+  }
+
+  const orderMap = new Map(ids.map((id, index) => [id, index]));
+  const result = await fetchProducts({
+    ids,
+    status: 'ALL',
+    page: 1,
+    pageSize: ids.length
+  });
+
+  return result.items
+    .sort((left, right) => (orderMap.get(left.id) ?? 0) - (orderMap.get(right.id) ?? 0))
+    .map((item) => ({
+      ...item,
+      favoritedAt: item.favoritedAt ?? '',
+      favoriteCount: item.favoriteCount ?? 0,
+      isFavorited: true as const
+    }));
 }
 
 export function getFavoriteIds(user?: SessionUser | null) {
@@ -71,10 +109,42 @@ export function hydrateFavorites(ids: number[], user?: SessionUser | null) {
 
 export async function loadFavorites(user?: SessionUser | null) {
   if (user?.role === 'USER') {
-    const result = await fetchFavoriteList();
-    const ids = result.items.map((item) => item.id);
+    const userScope = resolveScope(user);
+    const localIds = Array.from(
+      new Set([
+        ...getScopedFavoriteIdsByScope('guest'),
+        ...getScopedFavoriteIdsByScope(userScope)
+      ])
+    );
+
+    let result = await fetchFavoriteList();
+    let serverItems = result.items;
+    let serverIds = new Set(serverItems.map((item) => item.id));
+    const missingLocalIds = localIds.filter((id) => !serverIds.has(id));
+
+    if (missingLocalIds.length) {
+      const syncResults = await Promise.allSettled(missingLocalIds.map((id) => addFavorite(id)));
+      const syncedCount = syncResults.filter((item) => item.status === 'fulfilled').length;
+
+      if (syncedCount > 0) {
+        result = await fetchFavoriteList();
+        serverItems = result.items;
+        serverIds = new Set(serverItems.map((item) => item.id));
+      }
+    }
+
+    const unresolvedLocalIds = localIds.filter((id) => !serverIds.has(id));
+    const fallbackItems = await buildFallbackFavoriteItems(unresolvedLocalIds);
+    const items = [...serverItems, ...fallbackItems];
+    const ids = items.map((item) => item.id);
+
     setScopedFavoriteIds(ids, user);
-    return result;
+    clearScopedFavoriteIds('guest');
+
+    return {
+      items,
+      total: items.length
+    };
   }
 
   const ids = getGuestFavoriteIds(user);

@@ -1,23 +1,24 @@
-import { Button, Skeleton, message } from 'antd';
+import { Skeleton, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
 import { EmptyState } from '../components/feedback';
-import { PageHeader, SectionHeader } from '../components/layout';
+import { SectionHeader } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
 import { UserAvatar } from '../components/user/UserAvatar';
 import { SectionCard } from '../components/ui';
+import { useAuthState } from '../services/auth-state';
 import {
   fetchProducts,
   followUser,
-  unfollowUser,
   fetchUserTrustSummary,
   getApiErrorMessage,
   ProductSummary,
+  unfollowUser,
   UserTrustSummary
 } from '../services/api';
-import { useAuthState } from '../services/auth-state';
-import { hasTradingAccess } from '../services/session';
+import { hasTradingAccess, isGuestUser } from '../services/session';
+import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
 import {
   getUserPresentation
@@ -32,8 +33,7 @@ export function PublicUserPage() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [following, setFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
 
   useEffect(() => {
     async function loadUserHome() {
@@ -50,7 +50,6 @@ export function PublicUserPage() {
           fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 })
         ]);
         setUser(summary);
-        setFollowing(summary.isFollowing);
         setProducts(productList.items);
         setError('');
       } catch (err) {
@@ -63,14 +62,58 @@ export function PublicUserPage() {
     void loadUserHome();
   }, [userId]);
 
-  useEffect(() => {
-    setFollowing(user?.isFollowing ?? false);
-  }, [user?.id, user?.isFollowing]);
-
   const publishedProducts = useMemo(
     () => products.filter((item) => item.sellerId === userId && item.status === 'ON_SALE'),
     [products, userId]
   );
+
+  function ensureTradingAccess(actionLabel: string) {
+    if (!currentUser) {
+      message.error(`请先登录后再${actionLabel}`);
+      void navigate('/login');
+      return false;
+    }
+
+    if (isGuestUser(currentUser)) {
+      message.error(`浏览账号不可${actionLabel}`);
+      void navigate('/login');
+      return false;
+    }
+
+    if (!hasTradingAccess(currentUser)) {
+      message.error(`当前账号不可${actionLabel}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleToggleFollow() {
+    if (!user || currentUser?.id === user.id) {
+      return;
+    }
+
+    if (!ensureTradingAccess('关注该同学')) {
+      return;
+    }
+
+    setFollowPending(true);
+    try {
+      const result = user.isFollowing
+        ? await unfollowUser(user.id)
+        : await followUser(user.id);
+      setUser((current) => current ? {
+        ...current,
+        isFollowing: result.isFollowing,
+        followerCount: result.followerCount
+      } : current);
+      message.success(result.isFollowing ? '已关注' : '已取消关注');
+    } catch (err) {
+      message.error(getApiErrorMessage(err, '关注操作失败'));
+    } finally {
+      setFollowPending(false);
+    }
+  }
 
   if (loading) {
     return <Skeleton active paragraph={{ rows: 12 }} />;
@@ -82,7 +125,6 @@ export function PublicUserPage() {
         <EmptyState
           className="is-shell"
           title={error || '用户主页不存在'}
-          description="可以返回商品详情页重新打开。"
         />
       </div>
     );
@@ -90,61 +132,13 @@ export function PublicUserPage() {
 
   const profileStats = [
     `${user.college}`,
-    `${user.responseRate}% 回复率`,
     `完成 ${user.completedOrders} 单`,
-    `评分 ${user.averageRating.toFixed(1)}`
+    user.averageRating === null ? '暂无评分' : `评分 ${user.averageRating.toFixed(1)}`
   ];
   const userPresentation = getUserPresentation(user);
-  const currentUserId = currentUser?.id ?? null;
-  const targetUserId = user.id;
-  const canFollow = hasTradingAccess(currentUser) && currentUserId !== targetUserId;
-
-  async function handleToggleFollow() {
-    if (!canFollow) {
-      if (!currentUser) {
-        void navigate('/login', { state: { from: `/users/${targetUserId}` } });
-      }
-      return;
-    }
-
-    setFollowLoading(true);
-    try {
-      if (following) {
-        await unfollowUser(targetUserId);
-        setFollowing(false);
-        message.success('已取消关注');
-      } else {
-        await followUser(targetUserId);
-        setFollowing(true);
-        message.success('已关注');
-      }
-    } catch (err) {
-      message.error(getApiErrorMessage(err, following ? '取消关注失败' : '关注失败'));
-    } finally {
-      setFollowLoading(false);
-    }
-  }
 
   return (
     <div className="page-grid public-user-page">
-      <PageHeader
-        title={user.displayName}
-        subtitle="公开校园主页"
-        meta={(
-          <div className="public-user-page-meta">
-            <span>{`${publishedProducts.length} 件在售闲置`}</span>
-            <Button
-              type={following ? 'default' : 'primary'}
-              size="small"
-              onClick={() => void handleToggleFollow()}
-              loading={followLoading}
-              disabled={!canFollow && Boolean(currentUser)}
-            >
-              {following ? '已关注' : '关注'}
-            </Button>
-          </div>
-        )}
-      />
       <section className="profile-hero-card public-user-hero">
         <div className="profile-hero-copy">
           <div className="profile-avatar-badge">
@@ -159,36 +153,45 @@ export function PublicUserPage() {
             <div className="profile-hero-title-row">
               <h1>{userPresentation.displayName}</h1>
               <div className="profile-hero-badges">
-                <span>{userPresentation.publicIdentityLabel}</span>
                 <div className={`ui-credit-badge is-${userPresentation.creditBadge.tone}`}>
                   <span className="ui-credit-badge-label">{userPresentation.creditBadge.label}</span>
                 </div>
               </div>
             </div>
             <MetaList items={profileStats} className="profile-hero-stats" />
-            <p>公开校园主页，仅展示交易信用和在售闲置。</p>
           </div>
         </div>
+        {currentUser?.id !== user.id ? (
+          <button
+            type="button"
+            className={`detail-seller-follow public-user-follow${user.isFollowing ? ' is-following' : ''}`}
+            onClick={() => void handleToggleFollow()}
+            disabled={followPending}
+          >
+            {user.isFollowing ? '已关注' : '关注'}
+          </button>
+        ) : null}
       </section>
 
       <SectionCard className="profile-content-panel">
         <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="is-prominent is-spacious" />
         <ProductGrid
           items={publishedProducts}
-          className="public-user-products"
+          className="fish-feed-grid"
           emptyState={<EmptyState title="这个同学暂时没有在售闲置" />}
-          renderItem={(item, index) => (
-            <ProductSummaryCard
-              key={item.id}
-              className="profile-fish-card"
-              item={item}
-              imageSrc={getProductImage(item, index)}
-              signal={`${item.category} · ${item.condition}`}
-              priceMeta="同校面交"
-              tagItems={[item.sellerName, '在售商品']}
-              onOpen={() => navigate(`/products/${item.id}`)}
-            />
-          )}
+          renderItem={(item, index) => {
+            const status = getListingStatusPresentation(item.status);
+            return (
+              <ProductSummaryCard
+                key={item.id}
+                className={index % 3 === 2 ? 'offset' : ''}
+                item={item}
+                imageSrc={getProductImage(item, index)}
+                priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.wantCount ?? 0} 人想要`}
+                onOpen={() => navigate(`/products/${item.id}`)}
+              />
+            );
+          }}
         />
       </SectionCard>
     </div>

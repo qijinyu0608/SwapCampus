@@ -6,61 +6,81 @@ import {
   Skeleton
 } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import { PeelBack, PeelBottom, PeelTop, PeelWrapper, usePeel } from 'react-peel';
 import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
 import { ProductGrid, ProductSummaryCard, ResultFilterBar } from '../components/product';
 import { useAuthState } from '../services/auth-state';
 import {
-  acceptCampusServiceTask,
-  cancelCampusServiceTask,
+  acceptCampusServiceListing,
+  cancelCampusServiceListing,
+  cancelCampusServiceOrder,
   type CampusServiceCategory,
   type CampusServiceListItem,
-  completeCampusServiceTask,
-  fetchCampusServiceTasks,
-  getApiErrorMessage
+  completeCampusServiceOrder,
+  confirmCampusServiceOrder,
+  endCampusServiceListing,
+  fetchCampusServiceListings,
+  getApiErrorMessage,
+  pauseCampusServiceListing,
+  reopenCampusServiceListing,
+  rejectCampusServiceOrder
 } from '../services/api';
 import { getListingStatusPresentation } from '../utils/listingStatus';
-
-const moduleConfig: Array<{
-  key: CampusServiceCategory;
-  title: string;
-}> = [
-  { key: 'ERRAND', title: '校园跑腿' },
-  { key: 'AGENCY', title: '代办代取' },
-  { key: 'GROUP_BUY', title: '校内拼单' },
-  { key: 'HELP', title: '临时帮忙' }
-] as const;
+import { resolvePrimaryProductImage } from '../utils/productCover';
 
 type ServiceCategoryFilter = 'ALL' | CampusServiceCategory;
 type ServiceSortKey = 'composite' | 'price_asc' | 'price_desc';
-type ServiceCreditFilter = 'ALL' | 'HIGH' | 'VERIFIED';
+type ServiceCreditFilter = 'EXCELLENT' | 'STABLE' | 'NORMAL' | 'IMPROVE';
 
-function getCancelContext(task: CampusServiceListItem | null) {
+const CREDIT_FILTER_OPTIONS: Array<{ key: ServiceCreditFilter; label: string }> = [
+  { key: 'EXCELLENT', label: '优秀' },
+  { key: 'STABLE', label: '稳定' },
+  { key: 'NORMAL', label: '普通' },
+  { key: 'IMPROVE', label: '待提升' }
+];
+
+function getCancelContext(listing: CampusServiceListItem | null) {
   const fallback = {
-    title: '取消任务',
+    title: '结束服务',
     okText: '确认取消',
     success: '已取消'
   };
 
-  if (!task) {
+  if (!listing) {
     return fallback;
   }
 
-  if (task.actionState.isAccepter && task.status === 'MATCHED') {
+  if (listing.actionState.canReject) {
     return {
-      title: '退出接单',
-      okText: '确认退出',
-      success: '已退出接单，任务已重新开放'
+      title: listing.actionLabels.reject ?? '拒绝申请',
+      okText: listing.actionLabels.reject ?? '确认拒绝',
+      success: '已拒绝'
     };
   }
 
-  if (task.actionState.isPublisher && task.status === 'OPEN') {
+  if (listing.actionState.isParticipant) {
     return {
-      title: '关闭任务',
-      okText: '确认关闭',
-      success: '已关闭'
+      title: listing.intent === 'REQUEST' ? '退出接单' : '取消预约',
+      okText: '确认退出',
+      success: listing.intent === 'REQUEST' ? '已退出接单，服务已重新开放' : '已取消预约'
+    };
+  }
+
+  if (listing.actionState.isPublisher && listing.status === 'OPEN') {
+    return {
+      title: listing.actionLabels.cancel ?? '关闭发布',
+      okText: listing.actionLabels.cancel ?? '确认关闭',
+      success: listing.actionLabels.cancel === '取消当前服务单' ? '已取消当前服务单' : '已结束发布'
+    };
+  }
+
+  if (listing.actionState.canEnd) {
+    return {
+      title: listing.actionLabels.end ?? '结束发布',
+      okText: listing.actionLabels.end ?? '确认结束',
+      success: '已结束发布'
     };
   }
 
@@ -157,22 +177,37 @@ function ServiceMarketCornerPeel() {
 export function CampusServicesPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuthState();
-  const [tasks, setTasks] = useState<CampusServiceListItem[]>([]);
+  const [listings, setListings] = useState<CampusServiceListItem[]>([]);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<ServiceCategoryFilter>('ALL');
+  const [activeIntent, setActiveIntent] = useState<'REQUEST' | 'OFFER'>('REQUEST');
   const [activeSort, setActiveSort] = useState<ServiceSortKey>('composite');
   const [minReward, setMinReward] = useState<number | null>(null);
   const [maxReward, setMaxReward] = useState<number | null>(null);
-  const [activeCreditFilter, setActiveCreditFilter] = useState<ServiceCreditFilter>('ALL');
+  const [activeCreditFilters, setActiveCreditFilters] = useState<ServiceCreditFilter[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
-  const [actingTaskId, setActingTaskId] = useState<number | null>(null);
+  const [actingListingId, setActingListingId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelTarget, setCancelTarget] = useState<CampusServiceListItem | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(12);
   const [total, setTotal] = useState(0);
+  const categoryTabs = useMemo(() => {
+    const categoryMap = new Map<CampusServiceCategory, string>();
+
+    listings.forEach((listing) => {
+      if (!categoryMap.has(listing.category)) {
+        categoryMap.set(listing.category, listing.serviceType.label);
+      }
+    });
+
+    return [
+      { key: 'ALL', label: activeIntent === 'REQUEST' ? '全部需求' : '全部服务' },
+      ...Array.from(categoryMap.entries()).map(([key, label]) => ({ key, label }))
+    ];
+  }, [activeIntent, listings]);
 
   function submitKeywordSearch(nextKeyword: string) {
     const trimmed = nextKeyword.trim();
@@ -181,26 +216,36 @@ export function CampusServicesPage() {
     setPage(1);
   }
 
-  async function loadTasks(nextPage = page) {
+  function toggleCreditFilter(key: ServiceCreditFilter) {
+    setActiveCreditFilters((current) => (
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    ));
+    setPage(1);
+  }
+
+  async function loadListings(nextPage = page) {
     setLoading(true);
     try {
-      const result = await fetchCampusServiceTasks({
+      const result = await fetchCampusServiceListings({
+        intent: activeIntent,
         category: activeCategoryFilter === 'ALL' ? undefined : activeCategoryFilter,
         status: 'OPEN',
         keyword: keyword.trim() || undefined,
         sort: activeSort,
         minReward: minReward ?? undefined,
         maxReward: maxReward ?? undefined,
-        credit: activeCreditFilter,
+        credit: activeCreditFilters.length ? activeCreditFilters : undefined,
         page: nextPage,
         pageSize
       });
-      setTasks(result.items);
+      setListings(result.items);
       setPage(result.pagination.page);
       setTotal(result.pagination.total);
       setMessage(null);
     } catch (error) {
-      setTasks([]);
+      setListings([]);
       setTotal(0);
       setMessage({
         type: 'error',
@@ -212,8 +257,8 @@ export function CampusServicesPage() {
   }
 
   useEffect(() => {
-    void loadTasks(1);
-  }, [activeCategoryFilter, activeCreditFilter, activeSort, keyword, maxReward, minReward, pageSize]);
+    void loadListings(1);
+  }, [activeCategoryFilter, activeCreditFilters, activeIntent, activeSort, keyword, maxReward, minReward, pageSize]);
 
   useEffect(() => {
     if (keywordInput === '' && keyword !== '') {
@@ -222,17 +267,32 @@ export function CampusServicesPage() {
     }
   }, [keyword, keywordInput]);
 
-  async function handleComplete(event: MouseEvent<HTMLButtonElement>, task: CampusServiceListItem) {
+  useEffect(() => {
+    if (activeCategoryFilter === 'ALL') {
+      return;
+    }
+
+    const hasActiveCategory = listings.some((listing) => listing.category === activeCategoryFilter);
+    if (!hasActiveCategory) {
+      setActiveCategoryFilter('ALL');
+      setPage(1);
+    }
+  }, [activeCategoryFilter, listings]);
+
+  async function handleComplete(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
     event.stopPropagation();
-    setActingTaskId(task.id);
+    if (!listing.actionOrderId) {
+      return;
+    }
+    setActingListingId(listing.id);
     try {
-      await completeCampusServiceTask(task.id);
-      await loadTasks();
-      setMessage({ type: 'success', text: `“${task.title}”已标记完成。` });
+      await completeCampusServiceOrder(listing.actionOrderId);
+      await loadListings();
+      setMessage({ type: 'success', text: `“${listing.title}”已标记完成。` });
     } catch (error) {
       setMessage({ type: 'error', text: getApiErrorMessage(error, '标记完成失败，请稍后重试。') });
     } finally {
-      setActingTaskId(null);
+      setActingListingId(null);
     }
   }
 
@@ -241,26 +301,100 @@ export function CampusServicesPage() {
       return;
     }
 
-    setActingTaskId(cancelTarget.id);
+    setActingListingId(cancelTarget.id);
     try {
-      await cancelCampusServiceTask(cancelTarget.id, {
-        reason: cancelReason.trim() || undefined
-      });
-      await loadTasks();
+      if (cancelTarget.actionState.isParticipant && cancelTarget.actionOrderId) {
+        await cancelCampusServiceOrder(cancelTarget.actionOrderId, {
+          reason: cancelReason.trim() || undefined
+        });
+      } else if (cancelTarget.actionState.canEnd && !cancelTarget.actionState.canCancel) {
+        await endCampusServiceListing(cancelTarget.id, {
+          reason: cancelReason.trim() || undefined
+        });
+      } else {
+        await cancelCampusServiceListing(cancelTarget.id, {
+          reason: cancelReason.trim() || undefined
+        });
+      }
+      await loadListings();
       setCancelTarget(null);
       setCancelReason('');
       setMessage({ type: 'success', text: `“${cancelTarget.title}”${getCancelContext(cancelTarget).success}。` });
     } catch (error) {
       setMessage({ type: 'error', text: getApiErrorMessage(error, '取消任务失败，请稍后重试。') });
     } finally {
-      setActingTaskId(null);
+      setActingListingId(null);
     }
   }
 
-  function jumpToConversation(event: MouseEvent<HTMLButtonElement>, task: CampusServiceListItem) {
+  async function handlePause(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
     event.stopPropagation();
-    if (task.conversationId) {
-      void navigate(`/messages?conversationId=${task.conversationId}`);
+    setActingListingId(listing.id);
+    try {
+      await pauseCampusServiceListing(listing.id);
+      await loadListings();
+      setMessage({ type: 'success', text: `“${listing.title}”已暂停接新单。` });
+    } catch (error) {
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '暂停失败，请稍后重试。') });
+    } finally {
+      setActingListingId(null);
+    }
+  }
+
+  async function handleReopen(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
+    event.stopPropagation();
+    setActingListingId(listing.id);
+    try {
+      await reopenCampusServiceListing(listing.id);
+      await loadListings();
+      setMessage({ type: 'success', text: `“${listing.title}”已重新开放。` });
+    } catch (error) {
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '重新开放失败，请稍后重试。') });
+    } finally {
+      setActingListingId(null);
+    }
+  }
+
+  async function handleConfirmOrder(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
+    event.stopPropagation();
+    if (!listing.actionOrderId) {
+      return;
+    }
+
+    setActingListingId(listing.id);
+    try {
+      await confirmCampusServiceOrder(listing.actionOrderId);
+      await loadListings();
+      setMessage({ type: 'success', text: `已确认“${listing.title}”的服务单。` });
+    } catch (error) {
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '确认服务单失败，请稍后重试。') });
+    } finally {
+      setActingListingId(null);
+    }
+  }
+
+  async function handleRejectOrder(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
+    event.stopPropagation();
+    if (!listing.actionOrderId) {
+      return;
+    }
+
+    setActingListingId(listing.id);
+    try {
+      await rejectCampusServiceOrder(listing.actionOrderId);
+      await loadListings();
+      setMessage({ type: 'success', text: `已拒绝“${listing.title}”的服务申请。` });
+    } catch (error) {
+      setMessage({ type: 'error', text: getApiErrorMessage(error, '拒绝服务单失败，请稍后重试。') });
+    } finally {
+      setActingListingId(null);
+    }
+  }
+
+  function jumpToConversation(event: MouseEvent<HTMLButtonElement>, listing: CampusServiceListItem) {
+    event.stopPropagation();
+    if (listing.conversationId) {
+      void navigate(`/messages?conversationId=${listing.conversationId}`);
     }
   }
 
@@ -300,10 +434,7 @@ export function CampusServicesPage() {
 
       <section className="service-market-main">
         <ResultFilterBar
-          tabs={[
-            { key: 'ALL', label: '全部任务' },
-            ...moduleConfig.map((item) => ({ key: item.key, label: item.title }))
-          ]}
+          tabs={categoryTabs}
           activeTab={activeCategoryFilter}
           onTabChange={(key) => {
             setActiveCategoryFilter(key as ServiceCategoryFilter);
@@ -329,85 +460,61 @@ export function CampusServicesPage() {
             setMaxReward(value);
             setPage(1);
           }}
-          creditOptions={[
-            { key: 'ALL', label: '全部信用' },
-            { key: 'HIGH', label: '高信用' },
-            { key: 'VERIFIED', label: '已认证' }
-          ]}
-          activeCredit={activeCreditFilter}
-          onCreditChange={(key) => {
-            setActiveCreditFilter(key as ServiceCreditFilter);
-            setPage(1);
-          }}
+          creditOptions={CREDIT_FILTER_OPTIONS}
+          activeCredits={activeCreditFilters}
+          onCreditToggle={(key) => toggleCreditFilter(key as ServiceCreditFilter)}
+          trailingContent={(
+            <div className="result-filter-segment" role="tablist" aria-label="服务方向">
+              <button
+                type="button"
+                className={activeIntent === 'REQUEST' ? 'result-filter-control active' : 'result-filter-control'}
+                onClick={() => {
+                  setActiveIntent('REQUEST');
+                  setPage(1);
+                }}
+              >
+                找人帮我
+              </button>
+              <button
+                type="button"
+                className={activeIntent === 'OFFER' ? 'result-filter-control active' : 'result-filter-control'}
+                onClick={() => {
+                  setActiveIntent('OFFER');
+                  setPage(1);
+                }}
+              >
+                我来提供
+              </button>
+            </div>
+          )}
         />
 
         {loading ? (
           <Skeleton active paragraph={{ rows: 8 }} />
         ) : (
           <ProductGrid
-            items={tasks}
+            items={listings}
             className="fish-feed-grid service-task-grid"
             emptyState={(
               <EmptyState
                 className="is-shell"
-                title="当前没有匹配任务"
+                title="暂无任务"
               />
             )}
-            renderItem={(task) => {
-              const statusPresentation = getListingStatusPresentation(task.status, task.statusLabel);
-
+            renderItem={(listing) => {
               return (
                 <ProductSummaryCard
-                  key={task.id}
-                  item={task}
-                  imageSrc="/images/products/demo-square.png"
+                  key={listing.id}
+                  item={listing}
+                  imageSrc={resolvePrimaryProductImage({
+                    title: listing.title,
+                    category: listing.categoryLabel,
+                    price: listing.reward,
+                    imageUrl: listing.imageUrl
+                  }, listing.id)}
                   className="profile-fish-card service-task-card"
-                  signal={task.route.label}
-                  coverMeta={(
-                    <div className="service-card-cover-stack">
-                      <span className="service-card-cover-type">{task.serviceType.label}</span>
-                      <span className="service-card-cover-deadline">{task.deadlineLabel}</span>
-                    </div>
-                  )}
-                  bodyMeta={task.participantSummary.accepterLabel
-                    ? `${task.participantSummary.publisherLabel} · ${task.participantSummary.accepterLabel}`
-                    : task.participantSummary.publisherLabel}
-                  priceValue={task.rewardLabel}
-                  priceMeta={task.schedule.summary}
-                  tagItems={task.summaryTags.slice(0, 4)}
-                  onOpen={() => navigate(`/campus-services/${task.id}`)}
-                  secondaryActions={(
-                    <>
-                      {task.status !== 'OPEN' ? <span className={`service-inline-status is-${statusPresentation.tone}`}>{statusPresentation.label}</span> : null}
-                      {task.actionState.canOpenConversation ? (
-                        <button type="button" className="fish-item-link" onClick={(event) => jumpToConversation(event, task)}>
-                          看消息
-                        </button>
-                      ) : null}
-                      {task.actionState.canComplete ? (
-                        <button
-                          type="button"
-                          className="fish-item-link active"
-                          onClick={(event) => void handleComplete(event, task)}
-                          disabled={actingTaskId === task.id}
-                        >
-                          {actingTaskId === task.id ? '处理中' : task.actionLabels.complete ?? '标记完成'}
-                        </button>
-                      ) : null}
-                      {task.actionState.canCancel ? (
-                        <button
-                          type="button"
-                          className="fish-item-link danger"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setCancelTarget(task);
-                          }}
-                        >
-                          {task.actionLabels.cancel ?? '取消'}
-                        </button>
-                      ) : null}
-                    </>
-                  )}
+                  priceValue={listing.rewardLabel}
+                  onOpen={() => navigate(`/campus-services/${listing.id}`)}
                 />
               );
             }}
@@ -424,7 +531,7 @@ export function CampusServicesPage() {
               showSizeChanger={false}
               onChange={(nextPage) => {
                 setPage(nextPage);
-                void loadTasks(nextPage);
+                void loadListings(nextPage);
               }}
             />
           </div>
@@ -440,7 +547,7 @@ export function CampusServicesPage() {
         }}
         onOk={() => void handleCancelConfirm()}
         okText={cancelContext.okText}
-        okButtonProps={{ danger: true, loading: cancelTarget ? actingTaskId === cancelTarget.id : false }}
+        okButtonProps={{ danger: true, loading: cancelTarget ? actingListingId === cancelTarget.id : false }}
       >
         <div className="service-cancel-dialog">
           <Input.TextArea

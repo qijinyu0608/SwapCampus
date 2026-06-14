@@ -1,9 +1,10 @@
-import { Alert, Button, Form, Input, message as antMessage } from 'antd';
+import { Alert, Button, Form, Input, Select, message as antMessage } from 'antd';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ImageCropUploadModal } from '../components/image-upload';
 import { UserAvatar } from '../components/user/UserAvatar';
 import { AVATAR_OPTIONS } from '../constants/avatarOptions';
+import { BJFU_COLLEGES } from '../constants/colleges';
 import { getApiErrorMessage, loginUser, registerUser, updateUserProfile, uploadImageAsset } from '../services/api';
 import { useAuthState } from '../services/auth-state';
 
@@ -174,19 +175,10 @@ export function LoginPage() {
             </Form>
           ) : (
             <Form form={form} layout="vertical" onFinish={handleRegister} className="form-shell">
-              <Form.Item label="展示名" name="displayName" rules={[{ required: true }]}>
-                <Input placeholder="例如：王同学" />
-              </Form.Item>
-              <Form.Item label="邮箱" name="email" rules={[{ required: true }]}>
-                <Input placeholder="例如：student@campus.edu.cn" />
-              </Form.Item>
-              <Form.Item label="学号" name="studentId">
-                <Input placeholder="选填，例如：20260001" />
-              </Form.Item>
-              <Form.Item label="学院" name="college">
-                <Input placeholder="选填，例如：林学院" />
-              </Form.Item>
-              <Form.Item label="头像">
+              <div className="register-section">
+                <div className="register-section-head">
+                  <strong>头像</strong>
+                </div>
                 <div className="register-avatar-grid" role="radiogroup" aria-label="选择头像">
                   {AVATAR_OPTIONS.map((item, index) => (
                     <button
@@ -216,7 +208,35 @@ export function LoginPage() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              <div className="register-section">
+                <div className="register-section-head">
+                  <strong>基础信息</strong>
+                </div>
+              </div>
+              <Form.Item label="展示名" name="displayName" rules={[{ required: true }]}>
+                <Input placeholder="例如：王同学" />
               </Form.Item>
+              <Form.Item label="邮箱" name="email" rules={[{ required: true }]}>
+                <Input placeholder="例如：student@campus.edu.cn" />
+              </Form.Item>
+              <Form.Item label="学号" name="studentId">
+                <Input placeholder="选填，例如：20260001" />
+              </Form.Item>
+              <Form.Item label="学院" name="college">
+                <Select
+                  placeholder="请选择学院"
+                  options={BJFU_COLLEGES.map((item) => ({ value: item, label: item }))}
+                  allowClear
+                />
+              </Form.Item>
+
+              <div className="register-section">
+                <div className="register-section-head">
+                  <strong>登录安全</strong>
+                </div>
+              </div>
               <Form.Item label="密码" name="password" rules={[{ required: true }]}>
                 <Input.Password placeholder="请设置登录密码" />
               </Form.Item>

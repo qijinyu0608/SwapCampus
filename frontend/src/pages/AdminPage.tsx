@@ -4,8 +4,11 @@ import { AdminEntityActions, AdminEntityItem, MetricBarChart, StatStrip } from '
 import { FoldSection } from '../components/disclosure';
 import { NoticePanel } from '../components/feedback';
 import { PageCard } from '../components/layout';
+import { BJFU_COLLEGES } from '../constants/colleges';
+import { CAMPUS_SERVICE_CATEGORY_LABEL } from '../constants/campusServiceCategories';
 import { useAuthState } from '../services/auth-state';
 import {
+  AdminCampusServiceAction,
   AdminCampusServiceItem,
   AdminOverview,
   AdminOrderItem,
@@ -28,7 +31,7 @@ import {
 import { hasAdminAccess } from '../services/session';
 
 const emptyOverview: AdminOverview = {
-  pendingProducts: 0,
+  onSaleProducts: 0,
   totalUsers: 0,
   reportCount: 0,
   activeOrders: 0,
@@ -38,7 +41,6 @@ const emptyOverview: AdminOverview = {
 };
 
 const productStatusMap: Record<string, string> = {
-  PENDING: '新上架',
   ON_SALE: '在售',
   OFFLINE: '已下架',
   SOLD: '已售'
@@ -53,39 +55,14 @@ const orderStatusMap: Record<string, string> = {
 };
 
 const campusServiceStatusMap: Record<string, string> = {
-  OPEN: '待接单',
+  OPEN: '可参与',
+  BUSY: '名额已满',
+  PAUSED: '已暂停',
+  ENDED: '已结束',
   MATCHED: '进行中',
   DONE: '已完成',
   CANCELED: '已取消'
 };
-
-const campusServiceCategoryMap: Record<string, string> = {
-  ERRAND: '跑腿',
-  AGENCY: '代办',
-  GROUP_BUY: '拼团',
-  HELP: '互助'
-};
-
-const collegeOptions = [
-  '林学院',
-  '水土保持学院',
-  '生物科学与技术学院',
-  '园林学院',
-  '经济管理学院',
-  '工学院',
-  '材料科学与技术学院',
-  '人文社会科学学院',
-  '外语学院',
-  '信息学院',
-  '理学院',
-  '生态与自然保护学院',
-  '环境科学与工程学院',
-  '艺术设计学院',
-  '马克思主义学院',
-  '草业与草原学院',
-  '继续教育学院',
-  '国际学院'
-];
 
 const userRiskMap: Record<ModerationUserItem['riskLevel'], { label: string; color: string }> = {
   LOW: { label: '低风险', color: 'green' },
@@ -134,7 +111,7 @@ export function AdminPage() {
   const watchedUsers = users.filter((item) => item.riskLevel === 'MEDIUM').length;
   const userActionSummary = `${highRiskUsers} 高风险 / ${watchedUsers} 观察`;
   const dashboardItems = [
-    { label: '待处理商品', value: overview.pendingProducts, tone: 'amber' as const },
+    { label: '在售商品', value: overview.onSaleProducts, tone: 'amber' as const },
     { label: '未结举报', value: openReports, tone: 'blue' as const },
     { label: '活跃订单', value: overview.activeOrders, tone: 'green' as const },
     { label: '服务任务', value: overview.activeCampusServices, tone: 'amber' as const },
@@ -142,7 +119,7 @@ export function AdminPage() {
     { label: '实名用户', value: verifiedUsers, tone: 'green' as const }
   ];
   const summaryItems = [
-    { key: 'pending-products', value: overview.pendingProducts, label: '待处理商品' },
+    { key: 'on-sale-products', value: overview.onSaleProducts, label: '在售商品' },
     { key: 'open-reports', value: openReports, label: '未结举报' },
     { key: 'banned-users', value: bannedUsers, label: '封禁账号' },
     { key: 'active-orders', value: overview.activeOrders, label: '活跃订单' },
@@ -266,8 +243,8 @@ export function AdminPage() {
   }
 
   async function handleCampusServiceStatus(
-    taskId: number,
-    status: 'OPEN' | 'MATCHED' | 'DONE' | 'CANCELED'
+    listingId: number,
+    action: AdminCampusServiceAction
   ) {
     if (!currentUser) {
       message.error('请先登录后再处理');
@@ -275,8 +252,8 @@ export function AdminPage() {
     }
 
     try {
-      await updateAdminCampusServiceStatus(taskId, {
-        status,
+      await updateAdminCampusServiceStatus(listingId, {
+        action,
         reason: resolutionNote
       });
       message.success('校园服务状态已更新');
@@ -347,7 +324,7 @@ export function AdminPage() {
           <span>治理</span>
         </div>
         <div className="page-topbar-tags">
-          <span>{overview.pendingProducts} 个待处理商品</span>
+          <span>{overview.onSaleProducts} 个在售商品</span>
           <span>{overview.reportCount} 条未结举报</span>
           <span>{userActionSummary}</span>
         </div>
@@ -384,7 +361,7 @@ export function AdminPage() {
       </PageCard>
 
       <PageCard>
-        <FoldSection title="商品列表" meta={`${overview.recentProducts.length} 条待审`}>
+        <FoldSection title="商品列表" meta={`${overview.recentProducts.length} 条最近在售`}>
           <div className="admin-entity-list">
             {overview.recentProducts.map((item) => (
               <AdminEntityItem
@@ -400,9 +377,6 @@ export function AdminPage() {
                   <>
                     <Tag color="orange">{productStatusMap[item.status] ?? item.status}</Tag>
                     <AdminEntityActions>
-                      <Button size="small" type="primary" onClick={() => void handleModeration(item.id, 'ON_SALE')}>
-                        恢复
-                      </Button>
                       <Button size="small" onClick={() => void handleModeration(item.id, 'OFFLINE')}>
                         下架
                       </Button>
@@ -480,25 +454,36 @@ export function AdminPage() {
                   variant="report"
                   meta={(
                     <>
-                      <span>{campusServiceCategoryMap[item.category] ?? item.category}</span>
+                      <span>{CAMPUS_SERVICE_CATEGORY_LABEL[item.category] ?? item.category}</span>
+                      <span>{item.intentLabel}</span>
                       <span>发布 {item.publisherName} #{item.publisherId}</span>
-                      {item.accepterId ? <span>接单 {item.accepterName} #{item.accepterId}</span> : null}
+                      {item.participantId ? <span>协作 {item.participantName} #{item.participantId}</span> : null}
                       <span>{item.locationFrom} 到 {item.locationTo}</span>
                     </>
                   )}
                   side={(
                     <>
-                      <Tag color={item.status === 'CANCELED' ? 'default' : item.status === 'DONE' ? 'green' : 'orange'}>
+                      <Tag color={item.status === 'CANCELED' || item.status === 'ENDED' || item.status === 'PAUSED' ? 'default' : item.status === 'DONE' ? 'green' : 'orange'}>
                         {campusServiceStatusMap[item.status] ?? item.status}
                       </Tag>
-                      {item.status === 'OPEN' || item.status === 'MATCHED' ? (
+                      {item.status === 'OPEN' || item.status === 'BUSY' || item.status === 'PAUSED' || item.status === 'MATCHED' ? (
                         <AdminEntityActions wrap>
                           {item.status === 'MATCHED' ? (
-                            <Button size="small" type="primary" onClick={() => void handleCampusServiceStatus(item.id, 'DONE')}>
+                            <Button size="small" type="primary" onClick={() => void handleCampusServiceStatus(item.id, 'FORCE_COMPLETE')}>
                               完成
                             </Button>
                           ) : null}
-                          <Button size="small" danger onClick={() => void handleCampusServiceStatus(item.id, 'CANCELED')}>
+                          {item.status === 'OPEN' ? (
+                            <Button size="small" onClick={() => void handleCampusServiceStatus(item.id, 'FORCE_MATCH')}>
+                              设为进行中
+                            </Button>
+                          ) : null}
+                          {(item.status === 'BUSY' || item.status === 'PAUSED') ? (
+                            <Button size="small" onClick={() => void handleCampusServiceStatus(item.id, 'REOPEN')}>
+                              恢复开放
+                            </Button>
+                          ) : null}
+                          <Button size="small" danger onClick={() => void handleCampusServiceStatus(item.id, 'CANCEL')}>
                             取消
                           </Button>
                         </AdminEntityActions>
@@ -611,7 +596,7 @@ export function AdminPage() {
               <strong>全部学院</strong>
               <span>{collegeStats.reduce((sum, item) => sum + item.count, 0)}</span>
             </button>
-            {collegeOptions.map((item) => (
+            {BJFU_COLLEGES.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -675,7 +660,7 @@ export function AdminPage() {
                     </div>
                     <div className="admin-user-foot">
                       <span className="meta-line">
-                        {item.email} · 待审商品 {item.pendingProductCount} · 下架记录 {item.offlineProductCount} · 取消订单 {item.canceledOrderCount}
+                        {item.email} · 在售商品 {item.activeProductCount} · 下架记录 {item.offlineProductCount} · 取消订单 {item.canceledOrderCount}
                       </span>
                       {item.isBanned ? (
                         <Button size="small" onClick={() => void handleUserBan(item, false)}>

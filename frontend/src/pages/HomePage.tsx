@@ -26,17 +26,15 @@ import {
   PRODUCT_CATEGORY_HOME_GROUPS,
   type ProductCategoryHomeGroupIcon
 } from '../constants/productCategories';
-import { getBjfuMeetupLabel } from '../constants/campus';
 import {
   fetchHomeRecommendations,
-  fetchFavoriteList,
   fetchOrders,
   getApiErrorMessage,
   OrderItem,
   ProductSummary
 } from '../services/api';
 import { useAuthState } from '../services/auth-state';
-import { subscribeFavorites, toggleFavorite } from '../services/favorites';
+import { subscribeFavorites } from '../services/favorites';
 import { useCurrentUserProfileBundle } from '../services/user-profile';
 import { UserAvatar } from '../components/user/UserAvatar';
 import { getListingStatusPresentation } from '../utils/listingStatus';
@@ -121,7 +119,6 @@ export function HomePage() {
   const [activeCampaignIndex, setActiveCampaignIndex] = useState(0);
   const [userOrders, setUserOrders] = useState<OrderItem[]>([]);
   const [userOrderScope, setUserOrderScope] = useState<UserOrderScope>('buying');
-  const [favoriteCount, setFavoriteCount] = useState(0);
   const [searchError, setSearchError] = useState('');
   const { presentation: userPresentation } = useCurrentUserProfileBundle(
     currentUser && currentUser.role !== 'GUEST' ? currentUser : null
@@ -158,7 +155,6 @@ export function HomePage() {
   useEffect(() => {
     if (!currentUser || currentUser.role === 'GUEST') {
       setUserOrders([]);
-      setFavoriteCount(0);
       return;
     }
 
@@ -168,10 +164,6 @@ export function HomePage() {
     })
       .then((result) => setUserOrders(result.items))
       .catch(() => setUserOrders([]));
-
-    fetchFavoriteList()
-      .then((result) => setFavoriteCount(result.total))
-      .catch(() => setFavoriteCount(0));
   }, [currentUser, favoriteVersion]);
 
   function submitSearch(keyword: string) {
@@ -205,6 +197,10 @@ export function HomePage() {
   function showNextCampaign(event?: MouseEvent<HTMLElement>) {
     event?.stopPropagation();
     setActiveCampaignIndex((current) => (current + 1) % campaignCount);
+  }
+
+  function showCampaignUnboundTip() {
+    message.info('尚未绑定');
   }
 
   const activeShortcutPanel = useMemo(
@@ -253,19 +249,15 @@ export function HomePage() {
     if (userOrderScope === 'selling') {
       return [
         { key: 'seller-pending', label: '待确认', value: sellingOrders.filter((item) => item.status === 'PENDING').length },
-        { key: 'seller-progress', label: '待面交', value: sellingOrders.filter((item) => item.status === 'IN_PROGRESS').length },
-        { key: 'seller-review', label: '待评价', value: sellingOrders.filter((item) => item.status === 'WAITING_REVIEW').length },
-        { key: 'seller-done', label: '已完成', value: sellingOrders.filter((item) => item.status === 'COMPLETED').length }
+        { key: 'seller-progress', label: '待面交', value: sellingOrders.filter((item) => item.status === 'IN_PROGRESS').length }
       ];
     }
 
     return [
-      { key: 'favorites', label: '收藏', value: favoriteCount },
-      { key: 'buying-pending', label: '待确认', value: buyingOrders.filter((item) => item.status === 'PENDING').length },
       { key: 'buying-receive', label: '待收货', value: buyingOrders.filter((item) => item.status === 'IN_PROGRESS').length },
       { key: 'buying-review', label: '待评价', value: buyingOrders.filter((item) => item.status === 'WAITING_REVIEW').length }
     ];
-  }, [buyingOrders, favoriteCount, sellingOrders, userOrderScope]);
+  }, [buyingOrders, sellingOrders, userOrderScope]);
   const featuredOrder = useMemo(() => {
     return activeUserOrders[0] ?? null;
   }, [activeUserOrders]);
@@ -274,14 +266,14 @@ export function HomePage() {
       label: '我买到的',
       count: buyingOrders.length,
       emptyTitle: '暂无买到的',
-      emptyDesc: '下单后会在这里显示最近进度。',
+      emptyDesc: undefined,
       stateScope: 'buying'
     },
     selling: {
       label: '我卖出的',
       count: sellingOrders.length,
       emptyTitle: '暂无卖出的',
-      emptyDesc: '有人购买你发布的商品后会显示进度。',
+      emptyDesc: undefined,
       stateScope: 'selling'
     }
   }), [buyingOrders.length, sellingOrders.length]);
@@ -300,40 +292,6 @@ export function HomePage() {
   }, []);
   const isGuestView = !currentUser || currentUser.role === 'GUEST';
   const canUseSearch = currentUser?.role === 'USER' || currentUser?.role === 'ADMIN';
-
-  function getFavoriteRestriction(item: ProductSummary) {
-    if (item.status === 'SOLD') {
-      return '商品已售出';
-    }
-    if (item.status === 'OFFLINE') {
-      return '商品已下架';
-    }
-    if (item.status === 'PENDING') {
-      return '商品审核中';
-    }
-    return null;
-  }
-
-  async function handleToggleFavorite(event: MouseEvent<HTMLButtonElement>, item: ProductSummary) {
-    event.stopPropagation();
-
-    const restriction = getFavoriteRestriction(item);
-    if (restriction) {
-      message.info(restriction);
-      return;
-    }
-
-    try {
-      const nextState = await toggleFavorite(item.id, currentUser);
-      setProducts((current) => current.map((product) => product.id === item.id ? {
-        ...product,
-        isFavorited: nextState,
-        favoriteCount: Math.max(0, (product.favoriteCount ?? 0) + (nextState ? 1 : -1))
-      } : product));
-    } catch {
-      return;
-    }
-  }
 
   return (
     <div className="fish-home">
@@ -427,10 +385,10 @@ export function HomePage() {
                       className="fish-home-campaign"
                       role="button"
                       tabIndex={0}
-                      onClick={() => applyKeywordFilter(activeCampaign.keyword)}
+                      onClick={showCampaignUnboundTip}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          applyKeywordFilter(activeCampaign.keyword);
+                          showCampaignUnboundTip();
                           return;
                         }
 
@@ -636,38 +594,16 @@ export function HomePage() {
           <ProductGrid
             items={products}
             className="fish-feed-grid"
-            emptyState={<EmptyState className="is-shell" title="暂时还没有推荐内容" description="稍后再来看看新上架和热门闲置。" />}
+            emptyState={<EmptyState className="is-shell" title="暂无推荐内容" />}
             renderItem={(item, index) => {
               const status = getListingStatusPresentation(item.status);
-              const meetupLabel = getBjfuMeetupLabel(index);
-              const coverSignal = `${item.category} · ${item.condition}`;
-              const isFavorited = Boolean(item.isFavorited);
-              const favoriteRestriction = getFavoriteRestriction(item);
               return (
                 <ProductSummaryCard
                   key={item.id}
                   className={index % 3 === 2 ? 'offset' : ''}
                   item={item}
                   imageSrc={getProductImage(item, index)}
-                  signal={coverSignal}
-                  coverActions={(
-                    <button
-                      type="button"
-                      className={isFavorited ? 'fish-item-favorite active' : 'fish-item-favorite'}
-                      onClick={(event) => void handleToggleFavorite(event, item)}
-                      aria-label={isFavorited ? '取消收藏' : '收藏商品'}
-                      disabled={Boolean(favoriteRestriction) && !isFavorited}
-                      title={favoriteRestriction ?? undefined}
-                    >
-                      {isFavorited ? '已想要' : favoriteRestriction ?? '想要'}
-                    </button>
-                  )}
-                  priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.favoriteCount ?? 0} 人想要`}
-                  tagItems={[
-                    item.sellerName,
-                    meetupLabel,
-                    '同校面交'
-                  ]}
+                  priceMeta={item.status !== 'ON_SALE' ? status.label : `${item.wantCount ?? 0} 人想要`}
                   onOpen={() => navigate(`/products/${item.id}`)}
                 />
               );

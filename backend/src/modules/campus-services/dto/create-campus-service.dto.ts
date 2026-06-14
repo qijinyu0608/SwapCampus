@@ -1,12 +1,24 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import {
   CampusServiceCategory,
   CampusServiceContactPreference,
   CampusServiceFulfillmentMode,
+  CampusServiceIntent,
+  CampusServiceLocationMode,
+  CampusServicePattern,
+  CampusServicePriceMode,
   CampusServiceUrgency
 } from '@prisma/client';
 
 export class CreateCampusServiceDto {
+  @IsEnum(CampusServiceIntent)
+  @IsOptional()
+  intent?: CampusServiceIntent;
+
+  @IsEnum(CampusServicePattern)
+  @IsOptional()
+  pattern?: CampusServicePattern;
+
   @IsString()
   @IsNotEmpty()
   title!: string;
@@ -20,19 +32,45 @@ export class CreateCampusServiceDto {
 
   @IsNumber()
   @Min(0.01)
-  reward!: number;
+  @IsOptional()
+  reward?: number;
+
+  @IsEnum(CampusServicePriceMode)
+  @IsOptional()
+  priceMode?: CampusServicePriceMode;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  amount?: number;
 
   @IsString()
-  @IsNotEmpty()
-  locationFrom!: string;
+  @IsOptional()
+  locationFrom?: string;
 
   @IsString()
-  @IsNotEmpty()
-  locationTo!: string;
+  @IsOptional()
+  locationTo?: string;
+
+  @IsEnum(CampusServiceLocationMode)
+  @IsOptional()
+  locationMode?: CampusServiceLocationMode;
 
   @IsString()
-  @IsNotEmpty()
-  deadlineLabel!: string;
+  @IsOptional()
+  locationNote?: string;
+
+  @IsString()
+  @IsOptional()
+  deadlineLabel?: string;
+
+  @IsString()
+  @IsOptional()
+  validFromAt?: string;
+
+  @IsString()
+  @IsOptional()
+  validUntilAt?: string;
 
   @IsInt()
   @Min(5)
@@ -55,7 +93,25 @@ export class CreateCampusServiceDto {
   @IsOptional()
   itemCount?: number;
 
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  maxTotalOrders?: number;
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  maxConcurrentOrders?: number;
+
+  @IsOptional()
+  autoConfirm?: boolean;
+
   @IsString()
   @IsOptional()
   trustNote?: string;
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  imageUrls?: string[];
 }

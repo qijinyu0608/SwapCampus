@@ -11,6 +11,10 @@
     "db:push": "PRISMA_CLIENT_ENGINE_TYPE=binary prisma db push",
     "db:init": "tsx prisma/init.ts",
     "db:remove-demo-data": "tsx prisma/remove-demo-data.ts",
+    "db:seed-demo-data": "tsx prisma/seed-demo-data.ts",
+    "db:reindex-products": "tsx prisma/reindex-products.ts",
+    "db:migrate-product-statuses": "tsx prisma/migrate-product-statuses.ts",
+    "db:generate-product-samples": "tsx prisma/generate-product-samples.ts",
     "db:migrate-product-categories": "tsx prisma/migrate-product-categories.ts",
     "db:clean-domain-data": "tsx prisma/clean-domain-data.ts",
     "db:verify-category-products": "tsx prisma/verify-category-products.ts"
@@ -31,6 +35,7 @@
     "passport": "^0.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "segmentit": "^2.0.3",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
     "supertokens-node": "^24.0.2"

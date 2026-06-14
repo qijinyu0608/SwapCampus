@@ -1,10 +1,27 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit
+} from '@nestjs/common';
 import {
   AccountStatus,
+  BehaviorEventType,
   CampusServiceCategory,
   CampusServiceContactPreference,
   CampusServiceFulfillmentMode,
-  CampusServiceStatus,
+  CampusServiceIntent,
+  CampusServiceListingEndReason,
+  CampusServiceListingStatus,
+  CampusServiceLocationMode,
+  Prisma,
+  CampusServiceOrderStatus,
+  CampusServicePattern,
+  CampusServicePriceMode,
   CampusServiceUrgency,
   VerificationStatus
 } from '@prisma/client';
@@ -16,24 +33,68 @@ import { CancelCampusServiceDto } from './dto/cancel-campus-service.dto';
 import { CompleteCampusServiceDto } from './dto/complete-campus-service.dto';
 import { CreateCampusServiceDto } from './dto/create-campus-service.dto';
 import {
-  HIGH_CREDIT_SCORE,
+  EXCELLENT_CREDIT_SCORE,
+  GOOD_CREDIT_SCORE,
+  OUTSTANDING_CREDIT_SCORE,
   type SearchCampusServicesDto,
-  VERIFIED_STATUS
+  STABLE_CREDIT_SCORE
 } from './dto/search-campus-services.dto';
+import { type SearchCampusServiceOrdersDto } from './dto/search-campus-service-orders.dto';
+import { UpdateCampusServiceDto } from './dto/update-campus-service.dto';
 
 const campusServiceCategoryLabelMap: Record<CampusServiceCategory, string> = {
   ERRAND: '跑腿',
   AGENCY: '代办',
   GROUP_BUY: '拼单',
+  MOVING: '搬运',
+  TUTORING: '辅导',
+  SKILL: '技能',
+  REPAIR: '维修',
+  EVENT: '活动协助',
+  OTHER: '其他',
   HELP: '临时帮忙'
 };
 
-const campusServiceStatusLabelMap: Record<CampusServiceStatus, string> = {
-  OPEN: '待接单',
-  MATCHED: '进行中',
-  DONE: '已完成',
-  CANCELED: '已取消'
+const campusServiceIntentLabelMap: Record<CampusServiceIntent, string> = {
+  REQUEST: '找人帮我',
+  OFFER: '我来提供'
 };
+
+const campusServiceListingStatusLabelMap: Record<CampusServiceListingStatus, string> = {
+  OPEN: '可接单',
+  BUSY: '名额已满',
+  PAUSED: '已暂停',
+  ENDED: '已结束',
+  CANCELED: '已关闭'
+};
+
+const campusServiceOrderStatusLabelMap: Record<CampusServiceOrderStatus, string> = {
+  PENDING_CONFIRMATION: '待确认',
+  CONFIRMED: '进行中',
+  WAITING_COMPLETE_CONFIRM: '待完成确认',
+  COMPLETED: '已完成',
+  REJECTED: '已拒绝',
+  CANCELED: '已取消',
+  EXPIRED: '已过期'
+};
+
+const cancellableCampusServiceOrderStatuses: CampusServiceOrderStatus[] = [
+  CampusServiceOrderStatus.PENDING_CONFIRMATION,
+  CampusServiceOrderStatus.CONFIRMED,
+  CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+];
+
+const campusServiceOrderGroupStatusMap = {
+  PENDING: [CampusServiceOrderStatus.PENDING_CONFIRMATION],
+  ACTIVE: [CampusServiceOrderStatus.CONFIRMED],
+  WAITING_COMPLETE: [CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM],
+  ENDED: [
+    CampusServiceOrderStatus.COMPLETED,
+    CampusServiceOrderStatus.REJECTED,
+    CampusServiceOrderStatus.CANCELED,
+    CampusServiceOrderStatus.EXPIRED
+  ]
+} as const satisfies Record<string, CampusServiceOrderStatus[]>;
 
 const campusServiceUrgencyLabelMap: Record<CampusServiceUrgency, string> = {
   NORMAL: '普通',
@@ -49,350 +110,1201 @@ const campusServiceFulfillmentModeLabelMap: Record<CampusServiceFulfillmentMode,
 
 const campusServiceContactPreferenceLabelMap: Record<CampusServiceContactPreference, string> = {
   CHAT_ONLY: '仅站内消息',
-  PHONE_AFTER_MATCH: '接单后电话',
+  PHONE_AFTER_MATCH: '确认后电话',
   FLEXIBLE: '均可'
 };
 
-type CampusServiceViewerRole = 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'ACCEPTER' | 'OTHER';
-type CampusServiceRecord = {
+type CampusServiceViewerRole = 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'PARTICIPANT' | 'OTHER';
+
+type ListingRecord = {
   id: number;
-  title: string;
+  ownerId: number;
+  intent: CampusServiceIntent;
+  pattern: CampusServicePattern;
   category: CampusServiceCategory;
+  title: string;
   description: string;
-  reward: unknown;
-  locationFrom: string;
-  locationTo: string;
-  deadlineLabel: string;
+  priceMode: CampusServicePriceMode;
+  amount: unknown;
+  locationMode: CampusServiceLocationMode;
+  locationNote: string | null;
+  routeFrom: string | null;
+  routeTo: string | null;
+  validFromAt: Date;
+  validUntilAt: Date;
   estimatedMinutes: number;
   urgency: CampusServiceUrgency;
   fulfillmentMode: CampusServiceFulfillmentMode;
   contactPreference: CampusServiceContactPreference;
   itemCount: number;
   trustNote: string | null;
-  matchedAt: Date | null;
-  completedAt: Date | null;
-  canceledAt: Date | null;
-  canceledById: number | null;
-  cancelReason: string | null;
-  publisherId: number;
-  accepterId: number | null;
-  status: CampusServiceStatus;
+  maxTotalOrders: number | null;
+  maxConcurrentOrders: number | null;
+  autoConfirm: boolean;
+  status: CampusServiceListingStatus;
+  endReason: CampusServiceListingEndReason | null;
+  endedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
+type CampusServiceImageRecord = {
+  id: number;
+  listingId: number;
+  imageUrl: string;
+  sortOrder: number;
+};
+
+type OrderRecord = {
+  id: number;
+  listingId: number;
+  requesterId: number;
+  providerId: number;
+  status: CampusServiceOrderStatus;
+  applyMessage: string | null;
+  finalAmount: unknown;
+  confirmedAt: Date | null;
+  completedAt: Date | null;
+  canceledAt: Date | null;
+  cancelReason: string | null;
+  expiredAt: Date | null;
+  completionRequestedById: number | null;
+  completionRequestedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type ListingContext = {
+  userMap: Map<number, {
+    id: number;
+    displayName: string;
+    avatarUrl: string | null;
+    creditScore: number;
+    verificationStatus: VerificationStatus;
+    accountStatus: AccountStatus;
+  }>;
+  latestOrderMap: Map<number, OrderRecord | null>;
+  ordersByListingMap: Map<number, OrderRecord[]>;
+  activeOrderCountMap: Map<number, number>;
+  pendingOrderCountMap: Map<number, number>;
+  waitingCompleteOrderCountMap: Map<number, number>;
+  endedOrderCountMap: Map<number, number>;
+  totalOrderCountMap: Map<number, number>;
+  conversationMap: Map<number, number>;
+  orderConversationMap: Map<number, number>;
+  imageMap: Map<number, string[]>;
+  favoriteCountMap: Map<number, number>;
+  reportCountMap: Map<number, number>;
+  viewCountMap: Map<number, number>;
+  favoritedListingIds: Set<number>;
+};
+
+function formatCurrency(amount: number | null | undefined) {
+  if (amount === null || amount === undefined) {
+    return '面议';
+  }
+
+  return `¥${amount.toFixed(2)}`;
+}
+
+function formatDateTimeLabel(input: Date) {
+  return input.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function safeNumber(value: unknown) {
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const next = Number(value);
+    return Number.isFinite(next) ? next : 0;
+  }
+
+  if (value && typeof value === 'object' && 'toString' in value) {
+    const next = Number(String(value));
+    return Number.isFinite(next) ? next : 0;
+  }
+
+  return 0;
+}
+
+const MIN_CAMPUS_SERVICE_VALID_MINUTES = 30;
+const MAX_CAMPUS_SERVICE_VALID_DAYS = 30;
+
+function resolveDefaultCampusServiceAutoConfirm(intent: CampusServiceIntent, pattern: CampusServicePattern) {
+  return intent === CampusServiceIntent.OFFER && pattern === CampusServicePattern.REUSABLE;
+}
+
+function resolveDefaultCampusServiceMaxTotalOrders(pattern: CampusServicePattern) {
+  return pattern === CampusServicePattern.ONE_TIME ? 1 : null;
+}
+
+function normalizeCampusServiceImageUrls(imageUrls?: string[]) {
+  return (imageUrls ?? [])
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .filter((url, index, list) => list.indexOf(url) === index)
+    .slice(0, 6);
+}
+
+function buildCampusServiceOrderMessage(payload: AcceptCampusServiceDto, fallback: string) {
+  return [
+    payload.initialMessage?.trim() || fallback,
+    payload.serviceLocation?.trim() ? `约定地点：${payload.serviceLocation.trim()}` : null,
+    payload.serviceTime?.trim() ? `约定时间：${payload.serviceTime.trim()}` : null,
+    payload.paymentIntent?.trim() ? `支付方式：${payload.paymentIntent.trim()}（示意，暂不真实支付）` : null
+  ].filter((item): item is string => Boolean(item)).join('\n');
+}
+
 @Injectable()
-export class CampusServicesService {
+export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(CampusServicesService.name);
+  private expirationSyncTimer: NodeJS.Timeout | null = null;
+
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService
   ) {}
 
-  private async loadTaskContext(
-    tasks: CampusServiceRecord[]
-  ) {
-    const userIds = [...new Set(
-      tasks
-        .flatMap((task) => [task.publisherId, task.accepterId])
-        .filter((id): id is number => typeof id === 'number')
-    )];
-    const taskIds = tasks.map((task) => task.id);
+  onModuleInit() {
+    if (!process.env.DATABASE_URL || process.env.NODE_ENV === 'test') {
+      return;
+    }
 
-    const [users, conversations] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, displayName: true, creditScore: true, verificationStatus: true, accountStatus: true }
+    const runSync = () => {
+      void this.syncExpiredListings().catch((error: unknown) => {
+        const detail = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`failed to sync expired campus services: ${detail}`);
+      });
+    };
+
+    runSync();
+    this.expirationSyncTimer = setInterval(runSync, 60 * 1000);
+    this.expirationSyncTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (!this.expirationSyncTimer) {
+      return;
+    }
+
+    clearInterval(this.expirationSyncTimer);
+    this.expirationSyncTimer = null;
+  }
+
+  private async syncExpiredListings(now = new Date()) {
+    await this.prisma.campusServiceListing.updateMany({
+      where: {
+        status: { in: [CampusServiceListingStatus.OPEN, CampusServiceListingStatus.BUSY, CampusServiceListingStatus.PAUSED] },
+        validUntilAt: { lte: now }
+      },
+      data: {
+        status: CampusServiceListingStatus.ENDED,
+        endReason: CampusServiceListingEndReason.EXPIRED,
+        endedAt: now
+      }
+    });
+
+    await this.prisma.campusServiceOrder.updateMany({
+      where: {
+        status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
+        listing: {
+          validUntilAt: { lte: now }
+        }
+      },
+      data: {
+        status: CampusServiceOrderStatus.EXPIRED,
+        expiredAt: now
+      }
+    });
+  }
+
+  private async findCampusServiceImages(listingIds: number[]) {
+    if (!listingIds.length) {
+      return [];
+    }
+
+    const client = this.prisma as PrismaService & {
+      campusServiceImage?: {
+        findMany: (args: {
+          where: { listingId: { in: number[] } };
+          orderBy: Array<{ listingId: 'asc' } | { sortOrder: 'asc' }>;
+        }) => Promise<CampusServiceImageRecord[]>;
+      };
+    };
+
+    return client.campusServiceImage?.findMany({
+      where: { listingId: { in: listingIds } },
+      orderBy: [{ listingId: 'asc' }, { sortOrder: 'asc' }]
+    }) ?? [];
+  }
+
+  private async refreshListingCapacity(listingId: number) {
+    const listing = await this.prisma.campusServiceListing.findUnique({
+      where: { id: listingId }
+    });
+
+    if (!listing) {
+      return;
+    }
+
+    if (listing.status === CampusServiceListingStatus.ENDED || listing.status === CampusServiceListingStatus.CANCELED) {
+      return;
+    }
+
+    const [totalOrders, activeOrders] = await Promise.all([
+      this.prisma.campusServiceOrder.count({
+        where: {
+          listingId,
+          status: { in: [CampusServiceOrderStatus.CONFIRMED, CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM, CampusServiceOrderStatus.COMPLETED] }
+        }
       }),
-      this.prisma.conversation.findMany({
-        where: { campusServiceTaskId: { in: taskIds } },
-        select: { id: true, campusServiceTaskId: true }
+      this.prisma.campusServiceOrder.count({
+        where: {
+          listingId,
+          status: { in: [CampusServiceOrderStatus.CONFIRMED, CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM] }
+        }
       })
     ]);
 
+    let nextStatus: CampusServiceListingStatus = listing.status;
+    let nextEndReason = listing.endReason;
+    let nextEndedAt = listing.endedAt;
+
+    if (listing.maxTotalOrders && totalOrders >= listing.maxTotalOrders) {
+      nextStatus = CampusServiceListingStatus.ENDED;
+      nextEndReason = CampusServiceListingEndReason.QUOTA_REACHED;
+      nextEndedAt = listing.endedAt ?? new Date();
+    } else if (
+      listing.maxConcurrentOrders
+      && activeOrders >= listing.maxConcurrentOrders
+      && listing.status !== CampusServiceListingStatus.PAUSED
+    ) {
+      nextStatus = CampusServiceListingStatus.BUSY;
+      nextEndReason = null;
+      nextEndedAt = null;
+    } else if (
+      listing.status === CampusServiceListingStatus.BUSY
+      && (!listing.maxConcurrentOrders || activeOrders < listing.maxConcurrentOrders)
+    ) {
+      nextStatus = CampusServiceListingStatus.OPEN;
+      nextEndReason = null;
+      nextEndedAt = null;
+    } else if (listing.status === CampusServiceListingStatus.OPEN || listing.status === CampusServiceListingStatus.PAUSED) {
+      nextEndReason = null;
+      nextEndedAt = null;
+    }
+
+    if (
+      nextStatus !== listing.status
+      || nextEndReason !== listing.endReason
+      || String(nextEndedAt) !== String(listing.endedAt)
+    ) {
+      await this.prisma.campusServiceListing.update({
+        where: { id: listingId },
+        data: {
+          status: nextStatus,
+          endReason: nextEndReason,
+          endedAt: nextEndedAt
+        }
+      });
+    }
+  }
+
+  private resolveDeadlineLabel(listing: ListingRecord) {
+    return formatDateTimeLabel(listing.validUntilAt);
+  }
+
+  private resolveRouteLabel(listing: ListingRecord) {
+    if (listing.routeFrom && listing.routeTo) {
+      return `${listing.routeFrom} -> ${listing.routeTo}`;
+    }
+
+    if (listing.locationNote) {
+      return listing.locationNote;
+    }
+
+    return listing.locationMode === CampusServiceLocationMode.ONLINE ? '线上协作' : '地点待协商';
+  }
+
+  private resolveLocationFrom(listing: ListingRecord) {
+    return listing.routeFrom ?? listing.locationNote ?? '待协商';
+  }
+
+  private resolveLocationTo(listing: ListingRecord) {
+    return listing.routeTo ?? listing.locationNote ?? '待协商';
+  }
+
+  private resolveLatestOrderParticipantLabels(listing: ListingRecord, latestOrder: OrderRecord | null, context: ListingContext) {
+    const ownerName = context.userMap.get(listing.ownerId)?.displayName ?? `用户#${listing.ownerId}`;
+    if (!latestOrder) {
+      return {
+        publisherLabel: `发布 ${ownerName}`,
+        participantLabel: null
+      };
+    }
+
+    const counterpartId = listing.intent === CampusServiceIntent.REQUEST ? latestOrder.providerId : latestOrder.requesterId;
+    const counterpartName = context.userMap.get(counterpartId)?.displayName ?? `用户#${counterpartId}`;
+    const counterpartLabel = listing.intent === CampusServiceIntent.REQUEST ? '接单' : '预约';
+
     return {
-      userMap: new Map(users.map((user) => [user.id, user])),
-      conversationMap: new Map(conversations.map((conversation) => [conversation.campusServiceTaskId ?? 0, conversation.id]))
+      publisherLabel: `发布 ${ownerName}`,
+      participantLabel: `${counterpartLabel} ${counterpartName}`
     };
   }
 
-  private buildBaseTaskView(
-    task: CampusServiceRecord,
+  private pickRelevantOrder(orders: OrderRecord[]) {
+    const orderPriority: CampusServiceOrderStatus[] = [
+      CampusServiceOrderStatus.PENDING_CONFIRMATION,
+      CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+      CampusServiceOrderStatus.CONFIRMED,
+      CampusServiceOrderStatus.COMPLETED,
+      CampusServiceOrderStatus.REJECTED,
+      CampusServiceOrderStatus.CANCELED,
+      CampusServiceOrderStatus.EXPIRED
+    ];
+
+    for (const status of orderPriority) {
+      const matched = orders.find((order) => order.status === status);
+      if (matched) {
+        return matched;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveViewerOrder(orders: OrderRecord[], currentUserId?: number | null) {
+    if (!currentUserId) {
+      return null;
+    }
+
+    return this.pickRelevantOrder(
+      orders.filter((order) => order.requesterId === currentUserId || order.providerId === currentUserId)
+    );
+  }
+
+  private resolveViewerRole(
+    listing: ListingRecord,
+    latestOrder: OrderRecord | null,
+    currentUserId?: number | null
+  ): CampusServiceViewerRole {
+    if (!currentUserId) {
+      return 'GUEST';
+    }
+
+    if (listing.ownerId === currentUserId) {
+      return 'PUBLISHER';
+    }
+
+    if (latestOrder && (latestOrder.requesterId === currentUserId || latestOrder.providerId === currentUserId)) {
+      return 'PARTICIPANT';
+    }
+
+    if (listing.status === CampusServiceListingStatus.OPEN || listing.status === CampusServiceListingStatus.BUSY) {
+      return 'DISCOVER';
+    }
+
+    return 'OTHER';
+  }
+
+  private buildActionModel(
+    listing: ListingRecord,
+    actionOrder: OrderRecord | null,
     currentUserId: number | null | undefined,
-    context: Awaited<ReturnType<CampusServicesService['loadTaskContext']>>
+    state: {
+      hasPendingOrder: boolean;
+      hasActiveOrder: boolean;
+    }
   ) {
-    const { userMap, conversationMap } = context;
-    const isPublisher = Boolean(currentUserId && task.publisherId === currentUserId);
-    const isAccepter = Boolean(currentUserId && task.accepterId === currentUserId);
-    const canAccept = Boolean(currentUserId && task.status === CampusServiceStatus.OPEN && !isPublisher);
-    const canComplete = Boolean(currentUserId && task.status === CampusServiceStatus.MATCHED && (isPublisher || isAccepter));
-    const canOpenConversation = Boolean(conversationMap.get(task.id) && currentUserId && (isPublisher || isAccepter));
+    const isPublisher = Boolean(currentUserId && listing.ownerId === currentUserId);
+    const isParticipant = Boolean(
+      currentUserId
+      && actionOrder
+      && (actionOrder.requesterId === currentUserId || actionOrder.providerId === currentUserId)
+    );
+    const isCounterparty = Boolean(currentUserId && !isPublisher && isParticipant);
+    const isClosed = listing.status === CampusServiceListingStatus.ENDED || listing.status === CampusServiceListingStatus.CANCELED;
+    const canAccept = Boolean(currentUserId && !isPublisher && !isClosed && listing.status === CampusServiceListingStatus.OPEN);
+    const canConfirm = Boolean(
+      currentUserId
+      && isPublisher
+      && actionOrder
+      && actionOrder.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
+    );
+    const canReject = canConfirm;
+    const canComplete = Boolean(
+      currentUserId
+      && actionOrder
+      && (
+        actionOrder.status === CampusServiceOrderStatus.CONFIRMED
+        || (
+          actionOrder.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          && actionOrder.completionRequestedById !== currentUserId
+        )
+      )
+      && isParticipant
+    );
+    const canPause = Boolean(
+      isPublisher
+      && !state.hasPendingOrder
+      && !state.hasActiveOrder
+      && listing.status === CampusServiceListingStatus.OPEN
+    );
+    const canReopen = Boolean(
+      isPublisher
+      && !state.hasPendingOrder
+      && !state.hasActiveOrder
+      && (
+        listing.status === CampusServiceListingStatus.PAUSED
+        || (
+          listing.status === CampusServiceListingStatus.ENDED
+          && listing.endReason === CampusServiceListingEndReason.MANUAL_END
+          && listing.validUntilAt > new Date()
+        )
+      )
+    );
+    const canEnd = Boolean(
+      isPublisher
+      && !isClosed
+      && !state.hasActiveOrder
+    );
+    const publisherCanCancel = Boolean(
+      isPublisher
+      && (
+        actionOrder
+        && (
+          actionOrder.status === CampusServiceOrderStatus.CONFIRMED
+          || actionOrder.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+        )
+      )
+    );
+    const participantCanCancel = Boolean(
+      actionOrder
+      && isParticipant
+      && (
+        actionOrder.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
+        || actionOrder.status === CampusServiceOrderStatus.CONFIRMED
+        || actionOrder.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+      )
+    );
     const canCancel = Boolean(
       currentUserId
-      && task.status !== CampusServiceStatus.DONE
-      && task.status !== CampusServiceStatus.CANCELED
-      && (isPublisher || isAccepter)
+      && (publisherCanCancel || participantCanCancel)
     );
-    const viewerRole: CampusServiceViewerRole = !currentUserId
-      ? 'GUEST'
-      : isPublisher
-        ? 'PUBLISHER'
-        : isAccepter
-          ? 'ACCEPTER'
-          : task.status === CampusServiceStatus.OPEN
-            ? 'DISCOVER'
-            : 'OTHER';
+    const canOpenConversation = Boolean(actionOrder && currentUserId && isParticipant);
 
-      return {
-        id: task.id,
-        title: task.title,
-        category: task.category,
-        categoryLabel: campusServiceCategoryLabelMap[task.category],
-      serviceType: {
-        key: task.category,
-        label: campusServiceCategoryLabelMap[task.category]
-      },
-      description: task.description,
-      price: Number(task.reward),
-      reward: Number(task.reward),
-      rewardLabel: `¥${Number(task.reward).toFixed(2)}`,
-      imageUrl: '',
-      route: {
-        from: task.locationFrom,
-        to: task.locationTo,
-        label: `${task.locationFrom} -> ${task.locationTo}`
-      },
-      deadlineLabel: task.deadlineLabel,
-      estimatedMinutes: task.estimatedMinutes,
-      urgency: task.urgency,
-      urgencyLabel: campusServiceUrgencyLabelMap[task.urgency],
-      fulfillmentMode: task.fulfillmentMode,
-      fulfillmentModeLabel: campusServiceFulfillmentModeLabelMap[task.fulfillmentMode],
-      schedule: {
-        deadlineLabel: task.deadlineLabel,
-        estimatedMinutes: task.estimatedMinutes,
-        urgency: task.urgency,
-        urgencyLabel: campusServiceUrgencyLabelMap[task.urgency],
-        summary: `${campusServiceUrgencyLabelMap[task.urgency]} · ${task.deadlineLabel} · 约 ${task.estimatedMinutes} 分钟`
-      },
-      status: task.status,
-      statusLabel: campusServiceStatusLabelMap[task.status],
-      tags: [
-        campusServiceCategoryLabelMap[task.category],
-        campusServiceUrgencyLabelMap[task.urgency],
-        task.deadlineLabel,
-        `${task.estimatedMinutes} 分钟`,
-        campusServiceFulfillmentModeLabelMap[task.fulfillmentMode]
-      ],
-      summaryTags: [
-        campusServiceCategoryLabelMap[task.category],
-        campusServiceUrgencyLabelMap[task.urgency],
-        task.deadlineLabel,
-        `${task.estimatedMinutes} 分钟`,
-        campusServiceFulfillmentModeLabelMap[task.fulfillmentMode]
-      ],
-      participantSummary: {
-        publisherLabel: `发布 ${userMap.get(task.publisherId)?.displayName ?? `用户#${task.publisherId}`}`,
-        accepterLabel: task.accepterId
-          ? `接单 ${userMap.get(task.accepterId)?.displayName ?? `用户#${task.accepterId}`}`
-          : null
-      },
-      viewerContext: {
-        role: viewerRole,
-        canAccept,
-        canComplete,
-        canCancel,
-        canOpenConversation
-      },
-      actionState: {
-        isPublisher,
-        isAccepter,
-        canAccept,
-        canComplete,
-        canCancel,
-        canOpenConversation
-      },
-      actionLabels: {
-        accept: canAccept ? '接单' : null,
-        complete: canComplete ? (isPublisher ? '确认完成' : '完成任务') : null,
-        cancel: canCancel
-          ? (isAccepter && task.status === CampusServiceStatus.MATCHED ? '退出接单' : task.status === CampusServiceStatus.OPEN ? '关闭任务' : '取消任务')
-          : null,
-        conversation: canOpenConversation ? '进入消息' : null
-      },
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt,
-      conversationId: conversationMap.get(task.id) ?? null,
-      publisher: {
-        id: task.publisherId,
-        displayName: userMap.get(task.publisherId)?.displayName ?? `用户#${task.publisherId}`,
-        creditScore: userMap.get(task.publisherId)?.creditScore ?? 60,
-        verificationStatus: userMap.get(task.publisherId)?.verificationStatus ?? VerificationStatus.PENDING,
-        accountStatus: userMap.get(task.publisherId)?.accountStatus ?? AccountStatus.ACTIVE
-      },
-      accepter: task.accepterId
-        ? {
-          id: task.accepterId,
-          displayName: userMap.get(task.accepterId)?.displayName ?? `用户#${task.accepterId}`,
-          creditScore: userMap.get(task.accepterId)?.creditScore ?? 60,
-          verificationStatus: userMap.get(task.accepterId)?.verificationStatus ?? VerificationStatus.PENDING,
-          accountStatus: userMap.get(task.accepterId)?.accountStatus ?? AccountStatus.ACTIVE
-        }
-        : null
+    return {
+      isPublisher,
+      isParticipant: isCounterparty,
+      canAccept,
+      canConfirm,
+      canReject,
+      canComplete,
+      canPause,
+      canReopen,
+      canEnd,
+      canCancel,
+      canOpenConversation,
+      acceptLabel: canAccept
+        ? (listing.intent === CampusServiceIntent.REQUEST ? '接单' : '预约')
+        : null,
+      confirmLabel: canConfirm
+        ? (listing.intent === CampusServiceIntent.REQUEST ? '确认接单' : '确认预约')
+        : null,
+      rejectLabel: canReject ? '拒绝申请' : null,
+      completeLabel: canComplete
+        ? (actionOrder?.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM ? '确认完成' : '提交完成')
+        : null,
+      pauseLabel: canPause ? '暂停接新单' : null,
+      reopenLabel: canReopen ? '重新开放' : null,
+      endLabel: canEnd ? '结束发布' : null,
+      cancelLabel: canCancel
+        ? (
+            isPublisher
+              ? '取消当前服务单'
+              : actionOrder?.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
+                ? '撤回申请'
+                : listing.intent === CampusServiceIntent.REQUEST
+                  ? '退出接单'
+                  : '取消预约'
+          )
+        : null,
+      conversationLabel: canOpenConversation ? '进入消息' : null
     };
   }
 
-  private async mapTaskListItems(
-    tasks: CampusServiceRecord[],
-    currentUserId?: number | null
-  ) {
-    const context = await this.loadTaskContext(tasks);
-    return tasks.map((task) => this.buildBaseTaskView(task, currentUserId, context));
+  private buildListingState(listing: ListingRecord, orders: OrderRecord[]) {
+    const activeOrderCount = orders.filter((order) => (
+      order.status === CampusServiceOrderStatus.CONFIRMED
+      || order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+    )).length;
+    const pendingOrderCount = orders.filter((order) => order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION).length;
+    const waitingCompleteOrderCount = orders.filter((order) => order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM).length;
+    const endedOrderCount = orders.filter((order) => (
+      order.status === CampusServiceOrderStatus.COMPLETED
+      || order.status === CampusServiceOrderStatus.REJECTED
+      || order.status === CampusServiceOrderStatus.CANCELED
+      || order.status === CampusServiceOrderStatus.EXPIRED
+    )).length;
+
+    return {
+      activeOrderCount,
+      pendingOrderCount,
+      waitingCompleteOrderCount,
+      endedOrderCount,
+      totalOrderCount: orders.length,
+      hasPendingOrder: pendingOrderCount > 0,
+      hasActiveOrder: activeOrderCount > 0
+    };
   }
 
-  private async mapTaskDetails(
-    tasks: CampusServiceRecord[],
-    currentUserId?: number | null
-  ) {
-    const context = await this.loadTaskContext(tasks);
+  private async findViewerOrderForListing(params: {
+    listingId: number;
+    userId: number;
+    statuses: CampusServiceOrderStatus[];
+  }) {
+    const orders = await this.prisma.campusServiceOrder.findMany({
+      where: {
+        listingId: params.listingId,
+        status: {
+          in: params.statuses
+        },
+        OR: [{ requesterId: params.userId }, { providerId: params.userId }]
+      },
+      orderBy: [{ createdAt: 'desc' }]
+    });
 
-    return tasks.map((task) => {
-      const baseView = this.buildBaseTaskView(task, currentUserId, context);
+    return this.pickRelevantOrder(orders as OrderRecord[]);
+  }
+
+  private resolveCampusServiceTimeWindow(params: {
+    validFromAt?: string | null;
+    validUntilAt?: string | null;
+    fallbackFromAt: Date;
+    fallbackUntilAt: Date;
+  }) {
+    const validFromAt = params.validFromAt ? new Date(params.validFromAt) : params.fallbackFromAt;
+    const validUntilAt = params.validUntilAt ? new Date(params.validUntilAt) : params.fallbackUntilAt;
+
+    if (Number.isNaN(validFromAt.getTime()) || Number.isNaN(validUntilAt.getTime()) || validUntilAt <= validFromAt) {
+      throw new BadRequestException('服务有效时间设置无效');
+    }
+
+    const validDurationMinutes = (validUntilAt.getTime() - validFromAt.getTime()) / (60 * 1000);
+    if (validDurationMinutes < MIN_CAMPUS_SERVICE_VALID_MINUTES) {
+      throw new BadRequestException(`服务有效期不能短于 ${MIN_CAMPUS_SERVICE_VALID_MINUTES} 分钟`);
+    }
+
+    if (validDurationMinutes > MAX_CAMPUS_SERVICE_VALID_DAYS * 24 * 60) {
+      throw new BadRequestException(`服务有效期不能超过 ${MAX_CAMPUS_SERVICE_VALID_DAYS} 天`);
+    }
+
+    return {
+      validFromAt,
+      validUntilAt
+    };
+  }
+
+  private async loadListingContext(listings: ListingRecord[], currentUserId?: number | null) {
+    const listingIds = listings.map((item) => item.id);
+    const statsClient = this.prisma as PrismaService & {
+      campusServiceFavorite?: {
+        groupBy: (args: {
+          by: ['listingId'];
+          where: { listingId: { in: number[] } };
+          _count: { _all: true };
+        }) => Promise<Array<{ listingId: number; _count: { _all: number } }>>;
+        findMany: (args: {
+          where: { userId: number; listingId: { in: number[] } };
+          select: { listingId: true };
+        }) => Promise<Array<{ listingId: number }>>;
+      };
+      campusServiceBehavior?: {
+        groupBy: (args: {
+          by: ['listingId'];
+          where: { listingId: { in: number[] }; eventType: BehaviorEventType };
+          _count: { _all: true };
+        }) => Promise<Array<{ listingId: number; _count: { _all: number } }>>;
+      };
+      report?: {
+        groupBy: (args: {
+          by: ['campusServiceListingId'];
+          where: { campusServiceListingId: { in: number[] } };
+          _count: { _all: true };
+        }) => Promise<Array<{ campusServiceListingId: number | null; _count: { _all: number } }>>;
+      };
+    };
+    const [users, orders, conversations, images, favoriteGroups, reportGroups, viewGroups] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          id: {
+            in: [...new Set(listings.map((item) => item.ownerId))]
+          }
+        },
+        select: {
+          id: true,
+          displayName: true,
+          avatarUrl: true,
+          creditScore: true,
+          verificationStatus: true,
+          accountStatus: true
+        }
+      }),
+      this.prisma.campusServiceOrder.findMany({
+        where: { listingId: { in: listingIds } },
+        orderBy: [{ createdAt: 'desc' }]
+      }),
+      this.prisma.conversation.findMany({
+        where: {
+          campusServiceOrder: {
+            is: {
+              listingId: { in: listingIds }
+            }
+          }
+        },
+        select: {
+          id: true,
+          campusServiceOrderId: true,
+          campusServiceOrder: {
+            select: {
+              listingId: true
+            }
+          }
+        }
+      }),
+      this.findCampusServiceImages(listingIds),
+      listingIds.length && statsClient.campusServiceFavorite
+        ? statsClient.campusServiceFavorite.groupBy({
+            by: ['listingId'],
+            where: { listingId: { in: listingIds } },
+            _count: { _all: true }
+          })
+        : Promise.resolve([]),
+      listingIds.length && statsClient.report
+        ? statsClient.report.groupBy({
+            by: ['campusServiceListingId'],
+            where: {
+              campusServiceListingId: { in: listingIds }
+            },
+            _count: { _all: true }
+          })
+        : Promise.resolve([]),
+      listingIds.length && statsClient.campusServiceBehavior
+        ? statsClient.campusServiceBehavior.groupBy({
+            by: ['listingId'],
+            where: {
+              listingId: { in: listingIds },
+              eventType: BehaviorEventType.VIEW
+            },
+            _count: { _all: true }
+          })
+        : Promise.resolve([])
+    ]);
+
+    const favoritedListingRows = currentUserId && statsClient.campusServiceFavorite
+      ? await statsClient.campusServiceFavorite.findMany({
+          where: {
+            userId: currentUserId,
+            listingId: { in: listingIds }
+          },
+          select: { listingId: true }
+        })
+      : [];
+
+    const missingUserIds = [...new Set(
+      orders
+        .flatMap((item) => [item.requesterId, item.providerId])
+        .filter((id): id is number => !users.some((user) => user.id === id))
+    )];
+
+    const extraUsers = missingUserIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: missingUserIds } },
+          select: {
+            id: true,
+            displayName: true,
+            avatarUrl: true,
+            creditScore: true,
+            verificationStatus: true,
+            accountStatus: true
+          }
+        })
+      : [];
+
+    const allUsers = [...users, ...extraUsers];
+    const latestOrderMap = new Map<number, OrderRecord | null>();
+    const ordersByListingMap = new Map<number, OrderRecord[]>();
+    const activeOrderCountMap = new Map<number, number>();
+    const pendingOrderCountMap = new Map<number, number>();
+    const waitingCompleteOrderCountMap = new Map<number, number>();
+    const endedOrderCountMap = new Map<number, number>();
+    const totalOrderCountMap = new Map<number, number>();
+    const conversationMap = new Map<number, number>();
+    const orderConversationMap = new Map<number, number>();
+    const imageMap = new Map<number, string[]>();
+    const favoriteCountMap = new Map<number, number>(favoriteGroups.map((item) => [item.listingId, item._count._all]));
+    const reportCountMap = reportGroups.reduce<Map<number, number>>((map, item) => {
+      if (item.campusServiceListingId !== null) {
+        map.set(item.campusServiceListingId, item._count._all);
+      }
+      return map;
+    }, new Map<number, number>());
+    const viewCountMap = new Map<number, number>(viewGroups.map((item) => [item.listingId, item._count._all]));
+
+    orders.forEach((order) => {
+      if (!ordersByListingMap.has(order.listingId)) {
+        ordersByListingMap.set(order.listingId, []);
+      }
+      ordersByListingMap.get(order.listingId)?.push(order as OrderRecord);
+      totalOrderCountMap.set(order.listingId, (totalOrderCountMap.get(order.listingId) ?? 0) + 1);
+      if (order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION) {
+        pendingOrderCountMap.set(order.listingId, (pendingOrderCountMap.get(order.listingId) ?? 0) + 1);
+      }
+      if (
+        order.status === CampusServiceOrderStatus.CONFIRMED
+        || order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+      ) {
+        activeOrderCountMap.set(order.listingId, (activeOrderCountMap.get(order.listingId) ?? 0) + 1);
+      }
+      if (order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM) {
+        waitingCompleteOrderCountMap.set(order.listingId, (waitingCompleteOrderCountMap.get(order.listingId) ?? 0) + 1);
+      }
+      if (
+        order.status === CampusServiceOrderStatus.COMPLETED
+        || order.status === CampusServiceOrderStatus.REJECTED
+        || order.status === CampusServiceOrderStatus.CANCELED
+        || order.status === CampusServiceOrderStatus.EXPIRED
+      ) {
+        endedOrderCountMap.set(order.listingId, (endedOrderCountMap.get(order.listingId) ?? 0) + 1);
+      }
+      if (!latestOrderMap.has(order.listingId)) {
+        latestOrderMap.set(order.listingId, order as OrderRecord);
+      }
+    });
+
+    listings.forEach((listing) => {
+      if (!latestOrderMap.has(listing.id)) {
+        latestOrderMap.set(listing.id, null);
+      }
+      if (!ordersByListingMap.has(listing.id)) {
+        ordersByListingMap.set(listing.id, []);
+      }
+    });
+
+    conversations.forEach((conversation) => {
+      const listingId = conversation.campusServiceOrder?.listingId;
+      if (listingId && !conversationMap.has(listingId)) {
+        conversationMap.set(listingId, conversation.id);
+      }
+      const orderId = (conversation as { campusServiceOrderId?: number | null }).campusServiceOrderId;
+      if (orderId && !orderConversationMap.has(orderId)) {
+        orderConversationMap.set(orderId, conversation.id);
+      }
+    });
+
+    images.forEach((image) => {
+      if (!imageMap.has(image.listingId)) {
+        imageMap.set(image.listingId, []);
+      }
+      imageMap.get(image.listingId)?.push(image.imageUrl);
+    });
+
+    return {
+      userMap: new Map(allUsers.map((user) => [user.id, user])),
+      latestOrderMap,
+      ordersByListingMap,
+      activeOrderCountMap,
+      pendingOrderCountMap,
+      waitingCompleteOrderCountMap,
+      endedOrderCountMap,
+      totalOrderCountMap,
+      conversationMap,
+      orderConversationMap,
+      imageMap,
+      favoriteCountMap,
+      reportCountMap,
+      viewCountMap,
+      favoritedListingIds: new Set(favoritedListingRows.map((item) => item.listingId))
+    } satisfies ListingContext;
+  }
+
+  private buildListingView(
+    listing: ListingRecord,
+    currentUserId: number | null | undefined,
+    context: ListingContext
+  ) {
+    const latestOrder = context.latestOrderMap.get(listing.id) ?? null;
+    const listingOrders = context.ordersByListingMap.get(listing.id) ?? [];
+    const actionOrder = this.resolveViewerOrder(listingOrders, currentUserId);
+    const displayOrder = actionOrder ?? latestOrder;
+    const listingState = this.buildListingState(listing, listingOrders);
+    const owner = context.userMap.get(listing.ownerId);
+    const ownerDisplayName = owner?.displayName ?? `用户#${listing.ownerId}`;
+    const viewerRole = this.resolveViewerRole(listing, actionOrder, currentUserId);
+    const actionModel = this.buildActionModel(listing, actionOrder, currentUserId, {
+      hasPendingOrder: listingState.hasPendingOrder,
+      hasActiveOrder: listingState.hasActiveOrder
+    });
+    const amount = listing.priceMode === CampusServicePriceMode.FREE ? 0 : safeNumber(listing.amount);
+    const rewardLabel = listing.priceMode === CampusServicePriceMode.NEGOTIABLE ? '面议' : formatCurrency(amount);
+    const deadlineLabel = this.resolveDeadlineLabel(listing);
+    const routeLabel = this.resolveRouteLabel(listing);
+    const participantSummary = this.resolveLatestOrderParticipantLabels(listing, displayOrder, context);
+    const activeOrderCount = listingState.activeOrderCount;
+    const totalOrderCount = listingState.totalOrderCount;
+    const images = context.imageMap.get(listing.id) ?? [];
+    const imageUrl = images[0] ?? '';
+    const favoriteCount = context.favoriteCountMap.get(listing.id) ?? 0;
+    const reportCount = context.reportCountMap.get(listing.id) ?? 0;
+    const viewCount = context.viewCountMap.get(listing.id) ?? 0;
+    const isFavorited = context.favoritedListingIds.has(listing.id);
+    const summaryTags = [
+      campusServiceIntentLabelMap[listing.intent],
+      campusServiceCategoryLabelMap[listing.category],
+      campusServiceUrgencyLabelMap[listing.urgency],
+      listing.pattern === CampusServicePattern.REUSABLE ? '持续可约' : '一次性',
+      `${listing.estimatedMinutes} 分钟`
+    ];
+
+    if (listing.maxConcurrentOrders) {
+      summaryTags.push(`同时 ${listing.maxConcurrentOrders} 单`);
+    }
+    if (listing.maxTotalOrders) {
+      summaryTags.push(`总计 ${listing.maxTotalOrders} 单`);
+    }
+
+    return {
+      id: listing.id,
+      title: listing.title,
+      category: listing.category,
+      categoryLabel: campusServiceCategoryLabelMap[listing.category],
+      serviceType: {
+        key: listing.category,
+        label: campusServiceCategoryLabelMap[listing.category]
+      },
+      intent: listing.intent,
+      intentLabel: campusServiceIntentLabelMap[listing.intent],
+      pattern: listing.pattern,
+      status: listing.status,
+      statusLabel: campusServiceListingStatusLabelMap[listing.status],
+      description: listing.description,
+      imageUrl,
+      images,
+      price: amount,
+      reward: amount,
+      rewardLabel,
+      stats: {
+        favoriteCount,
+        reportCount,
+        wantCount: favoriteCount,
+        viewCount
+      },
+      isFavorited,
+      route: {
+        from: this.resolveLocationFrom(listing),
+        to: this.resolveLocationTo(listing),
+        label: routeLabel
+      },
+      deadlineLabel,
+      estimatedMinutes: listing.estimatedMinutes,
+      urgency: listing.urgency,
+      urgencyLabel: campusServiceUrgencyLabelMap[listing.urgency],
+      fulfillmentMode: listing.fulfillmentMode,
+      fulfillmentModeLabel: campusServiceFulfillmentModeLabelMap[listing.fulfillmentMode],
+      schedule: {
+        deadlineLabel,
+        estimatedMinutes: listing.estimatedMinutes,
+        urgency: listing.urgency,
+        urgencyLabel: campusServiceUrgencyLabelMap[listing.urgency],
+        summary: `${campusServiceIntentLabelMap[listing.intent]} · ${deadlineLabel} · 约 ${listing.estimatedMinutes} 分钟`
+      },
+      tags: summaryTags,
+      summaryTags,
+      participantSummary,
+      viewerContext: {
+        role: viewerRole,
+        canAccept: actionModel.canAccept,
+        canConfirm: actionModel.canConfirm,
+        canReject: actionModel.canReject,
+        canComplete: actionModel.canComplete,
+        canPause: actionModel.canPause,
+        canReopen: actionModel.canReopen,
+        canEnd: actionModel.canEnd,
+        canCancel: actionModel.canCancel,
+        canOpenConversation: actionModel.canOpenConversation
+      },
+      actionState: {
+        isPublisher: actionModel.isPublisher,
+        isParticipant: actionModel.isParticipant,
+        canAccept: actionModel.canAccept,
+        canConfirm: actionModel.canConfirm,
+        canReject: actionModel.canReject,
+        canComplete: actionModel.canComplete,
+        canPause: actionModel.canPause,
+        canReopen: actionModel.canReopen,
+        canEnd: actionModel.canEnd,
+        canCancel: actionModel.canCancel,
+        canOpenConversation: actionModel.canOpenConversation
+      },
+      actionLabels: {
+        accept: actionModel.acceptLabel,
+        confirm: actionModel.confirmLabel,
+        reject: actionModel.rejectLabel,
+        complete: actionModel.completeLabel,
+        pause: actionModel.pauseLabel,
+        reopen: actionModel.reopenLabel,
+        end: actionModel.endLabel,
+        cancel: actionModel.cancelLabel,
+        conversation: actionModel.conversationLabel
+      },
+      latestOrderId: latestOrder?.id ?? null,
+      actionOrderId: actionOrder?.id ?? null,
+      activeOrderCount,
+      pendingOrderCount: listingState.pendingOrderCount,
+      waitingCompleteOrderCount: listingState.waitingCompleteOrderCount,
+      endedOrderCount: listingState.endedOrderCount,
+      totalOrderCount,
+      createdAt: listing.createdAt,
+      updatedAt: listing.updatedAt,
+      conversationId: actionOrder
+        ? (context.orderConversationMap.get(actionOrder.id) ?? context.conversationMap.get(listing.id) ?? null)
+        : context.conversationMap.get(listing.id) ?? null,
+      publisher: {
+        id: listing.ownerId,
+        displayName: ownerDisplayName,
+        avatarUrl: owner?.avatarUrl ?? null,
+        creditScore: owner?.creditScore ?? 60,
+        verificationStatus: owner?.verificationStatus ?? VerificationStatus.PENDING,
+        accountStatus: owner?.accountStatus ?? AccountStatus.ACTIVE
+      },
+      participant: displayOrder
+        ? {
+            id: listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId,
+            displayName: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.displayName ?? '同校同学',
+            avatarUrl: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.avatarUrl ?? null,
+            creditScore: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.creditScore ?? 60,
+            verificationStatus: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.verificationStatus ?? VerificationStatus.PENDING,
+            accountStatus: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.accountStatus ?? AccountStatus.ACTIVE
+          }
+        : null,
+      latestOrder
+    };
+  }
+
+  private async mapListingListItems(listings: ListingRecord[], currentUserId?: number | null) {
+    const context = await this.loadListingContext(listings, currentUserId);
+    return listings.map((listing) => this.buildListingView(listing, currentUserId, context));
+  }
+
+  private async mapListingDetails(listings: ListingRecord[], currentUserId?: number | null) {
+    const context = await this.loadListingContext(listings, currentUserId);
+
+    return listings.map((listing) => {
+      const view = this.buildListingView(listing, currentUserId, context);
+      const listingOrders = context.ordersByListingMap.get(listing.id) ?? [];
+      const detailOrder = this.resolveViewerOrder(listingOrders, currentUserId) ?? (view.latestOrder as OrderRecord | null);
+      const timeline = [
+        { key: 'created', label: '发布时间', value: listing.createdAt.toISOString() },
+        { key: 'valid-from', label: '生效时间', value: listing.validFromAt.toISOString() },
+        { key: 'valid-until', label: '截止时间', value: listing.validUntilAt.toISOString() },
+        ...(detailOrder?.confirmedAt ? [{ key: 'confirmed', label: '确认时间', value: detailOrder.confirmedAt.toISOString() }] : []),
+        ...(detailOrder?.completedAt ? [{ key: 'completed', label: '完成时间', value: detailOrder.completedAt.toISOString() }] : []),
+        ...(listing.endedAt ? [{ key: 'ended', label: '结束时间', value: listing.endedAt.toISOString() }] : []),
+        { key: 'updated', label: '最近变更', value: listing.updatedAt.toISOString() }
+      ];
 
       return {
-        ...baseView,
+        ...view,
         detailBase: {
-          id: baseView.id,
+          id: view.id,
           type: 'CAMPUS_SERVICE' as const,
-          title: baseView.title,
-          description: baseView.description,
-          price: baseView.price,
-          amountLabel: baseView.rewardLabel,
-          imageUrl: baseView.imageUrl,
-          tags: baseView.tags,
-          summaryTags: baseView.summaryTags,
-          status: baseView.status,
-          statusLabel: baseView.statusLabel,
-          publisher: baseView.publisher,
+          title: view.title,
+          description: view.description,
+          price: view.price,
+          amountLabel: view.rewardLabel,
+          imageUrl: view.imageUrl,
+          images: view.images ?? [],
+          tags: view.tags,
+          summaryTags: view.summaryTags,
+          status: view.status,
+          statusLabel: view.statusLabel,
+          publisher: view.publisher,
           metaItems: [
-            { key: 'route', label: '路线', value: baseView.route.label },
-            { key: 'deadline', label: '时间', value: baseView.deadlineLabel },
-            { key: 'fulfillment', label: '要求', value: `${baseView.urgencyLabel} · ${task.itemCount} 件 · ${baseView.fulfillmentModeLabel}` },
-            { key: 'contact', label: '联系', value: campusServiceContactPreferenceLabelMap[task.contactPreference] },
-            { key: 'publisher', label: '发布者', value: `${baseView.publisher.displayName} · 信用 ${baseView.publisher.creditScore}` },
-            ...(task.trustNote ? [{ key: 'trust-note', label: '补充', value: task.trustNote }] : [])
+            { key: 'intent', label: '方向', value: view.intentLabel },
+            { key: 'route', label: '地点', value: view.route.label },
+            { key: 'deadline', label: '有效期', value: view.deadlineLabel },
+            { key: 'fulfillment', label: '交付', value: `${view.fulfillmentModeLabel} · ${view.urgencyLabel}` },
+            { key: 'capacity', label: '容量', value: `进行中 ${view.activeOrderCount} / 总计 ${view.totalOrderCount}${listing.maxTotalOrders ? ` / 上限 ${listing.maxTotalOrders}` : ''}` },
+            { key: 'publisher', label: '发布者', value: `${view.publisher.displayName} · 信用 ${view.publisher.creditScore}` },
+            ...(listing.trustNote ? [{ key: 'trust-note', label: '补充', value: listing.trustNote }] : [])
           ],
-          timeline: [
-            { key: 'created', label: '发布时间', value: task.createdAt.toISOString() },
-            ...(task.matchedAt ? [{ key: 'matched', label: '接单时间', value: task.matchedAt.toISOString() }] : []),
-            ...(task.completedAt ? [{ key: 'completed', label: '完成时间', value: task.completedAt.toISOString() }] : []),
-            ...(task.canceledAt ? [{ key: 'canceled', label: '取消时间', value: task.canceledAt.toISOString() }] : []),
-            { key: 'updated', label: '最近变更', value: task.updatedAt.toISOString() }
-          ]
+          timeline
         },
         preview: {
-          title: task.title,
-          subtitle: `${campusServiceCategoryLabelMap[task.category]} · ${campusServiceUrgencyLabelMap[task.urgency]} · ${task.deadlineLabel}`,
+          title: listing.title,
+          subtitle: `${view.intentLabel} · ${view.categoryLabel} · ${view.deadlineLabel}`,
           metrics: [
-            { label: '酬谢', value: `¥${Number(task.reward).toFixed(2)}` },
-            { label: '预计', value: `${task.estimatedMinutes} 分钟` },
-            { label: '件数', value: `${task.itemCount} 件` }
+            { label: '金额', value: view.rewardLabel },
+            { label: '预计', value: `${listing.estimatedMinutes} 分钟` },
+            { label: '进行中', value: `${view.activeOrderCount}` }
           ]
         },
-        locationFrom: task.locationFrom,
-        locationTo: task.locationTo,
-        contactPreference: task.contactPreference,
-        contactPreferenceLabel: campusServiceContactPreferenceLabelMap[task.contactPreference],
-        itemCount: task.itemCount,
-        trustNote: task.trustNote,
-        timeline: [
-          { key: 'created', label: '发布时间', value: task.createdAt.toISOString() },
-          ...(task.matchedAt ? [{ key: 'matched', label: '接单时间', value: task.matchedAt.toISOString() }] : []),
-          ...(task.completedAt ? [{ key: 'completed', label: '完成时间', value: task.completedAt.toISOString() }] : []),
-          ...(task.canceledAt ? [{ key: 'canceled', label: '取消时间', value: task.canceledAt.toISOString() }] : []),
-          { key: 'updated', label: '最近变更', value: task.updatedAt.toISOString() }
-        ],
+        locationFrom: this.resolveLocationFrom(listing),
+        locationTo: this.resolveLocationTo(listing),
+        contactPreference: listing.contactPreference,
+        contactPreferenceLabel: campusServiceContactPreferenceLabelMap[listing.contactPreference],
+        itemCount: listing.itemCount,
+        trustNote: listing.trustNote,
+        timeline,
         fulfillment: {
-          routeLabel: `${task.locationFrom} -> ${task.locationTo}`,
-          deadlineLabel: task.deadlineLabel,
-          estimatedMinutes: task.estimatedMinutes,
-          rewardLabel: `¥${Number(task.reward).toFixed(2)}`,
-          mode: task.fulfillmentMode,
-          modeLabel: campusServiceFulfillmentModeLabelMap[task.fulfillmentMode],
-          contactPreference: task.contactPreference,
-          contactPreferenceLabel: campusServiceContactPreferenceLabelMap[task.contactPreference],
-          itemCount: task.itemCount,
-          trustNote: task.trustNote,
-          cancelReason: task.cancelReason,
-          canceledById: task.canceledById
+          routeLabel: view.route.label,
+          deadlineLabel: view.deadlineLabel,
+          estimatedMinutes: listing.estimatedMinutes,
+          rewardLabel: view.rewardLabel,
+          mode: listing.fulfillmentMode,
+          modeLabel: view.fulfillmentModeLabel,
+          contactPreference: listing.contactPreference,
+          contactPreferenceLabel: campusServiceContactPreferenceLabelMap[listing.contactPreference],
+          itemCount: listing.itemCount,
+          trustNote: listing.trustNote,
+          cancelReason: detailOrder?.cancelReason ?? null,
+          canceledById: null,
+          intent: listing.intent,
+          intentLabel: view.intentLabel,
+          pattern: listing.pattern,
+          maxTotalOrders: listing.maxTotalOrders,
+          maxConcurrentOrders: listing.maxConcurrentOrders,
+          validFromAt: listing.validFromAt.toISOString(),
+          validUntilAt: listing.validUntilAt.toISOString(),
+          totalOrderCount: view.totalOrderCount,
+          activeOrderCount: view.activeOrderCount
         }
       };
     });
   }
 
   async listCampusServices(filters: SearchCampusServicesDto = {}, currentUser?: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
     const requestedPage = Math.max(1, filters.page ?? 1);
     const pageSize = Math.max(1, Math.min(filters.pageSize ?? 24, 60));
     const keyword = filters.keyword?.trim();
     const minReward = typeof filters.minReward === 'number' ? filters.minReward : undefined;
     const maxReward = typeof filters.maxReward === 'number' ? filters.maxReward : undefined;
+    const creditFilters = filters.credit ?? [];
+    const ownerCreditClauses: Prisma.UserWhereInput[] = creditFilters.reduce<Prisma.UserWhereInput[]>((clauses, credit) => {
+      if (credit === 'OUTSTANDING') {
+        clauses.push({
+          creditScore: {
+            gte: OUTSTANDING_CREDIT_SCORE
+          }
+        });
+        return clauses;
+      }
 
-    const where = {
+      if (credit === 'EXCELLENT') {
+        clauses.push({
+          creditScore: {
+            gte: EXCELLENT_CREDIT_SCORE,
+            lt: OUTSTANDING_CREDIT_SCORE
+          }
+        });
+        return clauses;
+      }
+
+      if (credit === 'GOOD') {
+        clauses.push({
+          creditScore: {
+            gte: GOOD_CREDIT_SCORE,
+            lt: EXCELLENT_CREDIT_SCORE
+          }
+        });
+        return clauses;
+      }
+
+      if (credit === 'STABLE') {
+        clauses.push({
+          creditScore: {
+            gte: STABLE_CREDIT_SCORE,
+            lt: GOOD_CREDIT_SCORE
+          }
+        });
+        return clauses;
+      }
+
+      if (credit === 'IMPROVE') {
+        clauses.push({
+          creditScore: {
+            lt: STABLE_CREDIT_SCORE
+          }
+        });
+      }
+
+      return clauses;
+    }, []);
+
+    const where: Prisma.CampusServiceListingWhereInput = {
+      ...(filters.ownerId !== undefined ? { ownerId: Number(filters.ownerId) } : {}),
+      ...(filters.intent ? { intent: filters.intent } : {}),
       ...(filters.category ? { category: filters.category } : {}),
-      ...(filters.status ? { status: filters.status } : { status: CampusServiceStatus.OPEN }),
+      ...(filters.status ? { status: filters.status } : (filters.ownerId ? {} : { status: CampusServiceListingStatus.OPEN })),
       ...(keyword
         ? {
-          OR: [
-            { title: { contains: keyword } },
-            { description: { contains: keyword } },
-            { locationFrom: { contains: keyword } },
-            { locationTo: { contains: keyword } }
-          ]
-        }
+            OR: [
+              { title: { contains: keyword } },
+              { description: { contains: keyword } },
+              { locationNote: { contains: keyword } },
+              { routeFrom: { contains: keyword } },
+              { routeTo: { contains: keyword } }
+            ]
+          }
         : {}),
       ...((minReward !== undefined || maxReward !== undefined)
         ? {
-          reward: {
-            ...(minReward !== undefined ? { gte: minReward } : {}),
-            ...(maxReward !== undefined ? { lte: maxReward } : {})
+            amount: {
+              ...(minReward !== undefined ? { gte: minReward } : {}),
+              ...(maxReward !== undefined ? { lte: maxReward } : {})
+            }
           }
-        }
         : {}),
-      ...(filters.credit === 'HIGH'
+      ...(ownerCreditClauses.length
         ? {
-          publisher: {
-            is: {
-              creditScore: {
-                gte: HIGH_CREDIT_SCORE
+            owner: {
+              is: {
+                OR: ownerCreditClauses
               }
             }
           }
-        }
-        : {}),
-      ...(filters.credit === 'VERIFIED'
-        ? {
-          publisher: {
-            is: {
-              verificationStatus: VERIFIED_STATUS
-            }
-          }
-        }
         : {})
     };
 
     const orderBy = filters.sort === 'price_asc'
-      ? [{ reward: 'asc' as const }, { updatedAt: 'desc' as const }]
+      ? [{ amount: 'asc' as const }, { updatedAt: 'desc' as const }]
       : filters.sort === 'price_desc'
-        ? [{ reward: 'desc' as const }, { updatedAt: 'desc' as const }]
+        ? [{ amount: 'desc' as const }, { updatedAt: 'desc' as const }]
         : filters.sort === 'newest'
           ? [{ createdAt: 'desc' as const }]
           : [{ status: 'asc' as const }, { updatedAt: 'desc' as const }];
 
-    const total = await this.prisma.campusServiceTask.count({ where });
+    const total = await this.prisma.campusServiceListing.count({ where });
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, totalPages);
     const skip = (page - 1) * pageSize;
 
-    const tasks = await this.prisma.campusServiceTask.findMany({
+    const listings = await this.prisma.campusServiceListing.findMany({
       where,
       orderBy,
       skip,
@@ -400,7 +1312,226 @@ export class CampusServicesService {
     });
 
     return {
-      items: await this.mapTaskListItems(tasks, currentUser?.id ?? null),
+      items: await this.mapListingListItems(listings as ListingRecord[], currentUser?.id ?? null),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages
+      }
+    };
+  }
+
+  async listCampusServiceOrders(filters: SearchCampusServiceOrdersDto = {}, currentUser?: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const requestedPage = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.max(1, Math.min(filters.pageSize ?? 24, 60));
+    const groupedStatuses = filters.group ? campusServiceOrderGroupStatusMap[filters.group] : undefined;
+
+    const where = {
+      ...(filters.listingId ? { listingId: filters.listingId } : {}),
+      ...(
+        filters.listingId
+          ? {
+              listing: {
+                ownerId: authUser.id,
+                ...(filters.intent ? { intent: filters.intent } : {})
+              }
+            }
+          : filters.role === 'REQUESTER'
+            ? { requesterId: authUser.id }
+            : filters.role === 'PROVIDER'
+              ? { providerId: authUser.id }
+              : {
+                  OR: [{ requesterId: authUser.id }, { providerId: authUser.id }]
+                }
+      ),
+      ...(filters.status
+        ? { status: filters.status }
+        : groupedStatuses
+          ? { status: { in: groupedStatuses } }
+          : {})
+    };
+
+    const total = await this.prisma.campusServiceOrder.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * pageSize;
+
+    const orders = await this.prisma.campusServiceOrder.findMany({
+      where,
+      include: {
+        listing: true
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+      skip,
+      take: pageSize
+    });
+
+    const userIds = [...new Set(orders.flatMap((order) => [order.listing.ownerId, order.requesterId, order.providerId]))];
+    const [users, conversations, images] = await Promise.all([
+      userIds.length
+        ? this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: {
+              id: true,
+              displayName: true,
+              creditScore: true,
+              verificationStatus: true,
+              accountStatus: true
+            }
+          })
+        : Promise.resolve([]),
+      orders.length
+        ? this.prisma.conversation.findMany({
+            where: {
+              campusServiceOrderId: {
+                in: orders.map((order) => order.id)
+              }
+            },
+            select: {
+              id: true,
+              campusServiceOrderId: true
+            }
+          })
+        : Promise.resolve([]),
+      this.findCampusServiceImages([...new Set(orders.map((order) => order.listingId))])
+    ]);
+
+    const userMap = new Map(users.map((user) => [user.id, user]));
+    const conversationMap = new Map(
+      conversations
+        .filter((conversation) => conversation.campusServiceOrderId)
+        .map((conversation) => [conversation.campusServiceOrderId as number, conversation.id])
+    );
+    const imageMap = new Map<number, string>();
+
+    images.forEach((image) => {
+      if (!imageMap.has(image.listingId)) {
+        imageMap.set(image.listingId, image.imageUrl);
+      }
+    });
+
+    const items = orders.map((order) => {
+      const listing = order.listing as ListingRecord;
+      const isRequester = order.requesterId === authUser.id;
+      const role = isRequester ? 'REQUESTER' : 'PROVIDER';
+      const roleLabel = isRequester
+        ? (listing.intent === CampusServiceIntent.OFFER ? '我预约的服务' : '我的需求单')
+        : (listing.intent === CampusServiceIntent.REQUEST ? '我接的单' : '我提供的服务');
+      const counterpartId = isRequester ? order.providerId : order.requesterId;
+      const counterpart = userMap.get(counterpartId);
+      const publisher = userMap.get(listing.ownerId);
+      const amount = listing.priceMode === CampusServicePriceMode.FREE
+        ? 0
+        : safeNumber(order.finalAmount ?? listing.amount);
+      const rewardLabel = listing.priceMode === CampusServicePriceMode.NEGOTIABLE && order.finalAmount === null
+        ? '面议'
+        : formatCurrency(amount);
+      const routeFrom = this.resolveLocationFrom(listing);
+      const routeTo = this.resolveLocationTo(listing);
+      const routeLabel = this.resolveRouteLabel(listing);
+      const deadlineLabel = this.resolveDeadlineLabel(listing);
+      const isPublisher = listing.ownerId === authUser.id;
+      const canComplete = (
+        order.status === CampusServiceOrderStatus.CONFIRMED
+        || (
+          order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          && order.completionRequestedById !== authUser.id
+        )
+      );
+      const canCancel = isPublisher
+        ? (
+            order.status === CampusServiceOrderStatus.CONFIRMED
+            || order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          )
+        : cancellableCampusServiceOrderStatuses.includes(order.status);
+      const canConfirm = isPublisher && order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION;
+      const canReject = canConfirm;
+      const canOpenConversation = Boolean(conversationMap.get(order.id));
+
+      return {
+        id: order.id,
+        listingId: listing.id,
+        title: listing.title,
+        description: listing.description,
+        price: amount,
+        imageUrl: imageMap.get(listing.id) ?? '',
+        tags: [
+          campusServiceIntentLabelMap[listing.intent],
+          campusServiceCategoryLabelMap[listing.category],
+          campusServiceOrderStatusLabelMap[order.status]
+        ],
+        status: order.status,
+        statusLabel: campusServiceOrderStatusLabelMap[order.status],
+        orderStatus: order.status,
+        orderStatusLabel: campusServiceOrderStatusLabelMap[order.status],
+        listingStatus: listing.status,
+        listingStatusLabel: campusServiceListingStatusLabelMap[listing.status],
+        intent: listing.intent,
+        intentLabel: campusServiceIntentLabelMap[listing.intent],
+        category: listing.category,
+        categoryLabel: campusServiceCategoryLabelMap[listing.category],
+        reward: amount,
+        rewardLabel,
+        route: {
+          from: routeFrom,
+          to: routeTo,
+          label: routeLabel
+        },
+        deadlineLabel,
+        estimatedMinutes: listing.estimatedMinutes,
+        role,
+        roleLabel,
+        summaryTags: [
+          roleLabel,
+          campusServiceUrgencyLabelMap[listing.urgency],
+          `${listing.estimatedMinutes} 分钟`
+        ],
+        actionState: {
+          canComplete,
+          canCancel,
+          canOpenConversation,
+          canConfirm,
+          canReject
+        },
+        actionLabels: {
+          confirm: listing.intent === CampusServiceIntent.REQUEST ? '确认接单' : '确认预约',
+          reject: '拒绝申请',
+          complete: order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM ? '确认完成' : '提交完成',
+          cancel: isPublisher
+            ? '取消当前服务单'
+            : order.status === CampusServiceOrderStatus.PENDING_CONFIRMATION
+              ? '撤回申请'
+              : listing.intent === CampusServiceIntent.REQUEST
+                ? '退出接单'
+                : '取消预约',
+          conversation: '看消息'
+        },
+        conversationId: conversationMap.get(order.id) ?? null,
+        counterpart: {
+          id: counterpart?.id ?? counterpartId,
+          displayName: counterpart?.displayName ?? `用户#${counterpartId}`,
+          creditScore: counterpart?.creditScore ?? 60,
+          verificationStatus: counterpart?.verificationStatus ?? VerificationStatus.PENDING,
+          accountStatus: counterpart?.accountStatus ?? AccountStatus.ACTIVE
+        },
+        publisher: {
+          id: publisher?.id ?? listing.ownerId,
+          displayName: publisher?.displayName ?? `用户#${listing.ownerId}`,
+          creditScore: publisher?.creditScore ?? 60,
+          verificationStatus: publisher?.verificationStatus ?? VerificationStatus.PENDING,
+          accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE
+        },
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt
+      };
+    });
+
+    return {
+      items,
       pagination: {
         page,
         pageSize,
@@ -411,22 +1542,46 @@ export class CampusServicesService {
   }
 
   async getCampusServiceDetail(id: number, currentUser?: AuthenticatedUser) {
-    const task = await this.prisma.campusServiceTask.findUnique({
+    await this.syncExpiredListings();
+
+    const listing = await this.prisma.campusServiceListing.findUnique({
       where: { id }
     });
 
-    if (!task) {
-      throw new NotFoundException('校园服务任务不存在');
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
     }
 
-    const [detail] = await this.mapTaskDetails([task], currentUser?.id ?? null);
+    const statsClient = this.prisma as PrismaService & {
+      campusServiceBehavior?: {
+        create: (args: {
+          data: {
+            userId: number;
+            listingId: number;
+            eventType: BehaviorEventType;
+          };
+        }) => Promise<unknown>;
+      };
+    };
+
+    if (currentUser?.id && statsClient.campusServiceBehavior) {
+      await statsClient.campusServiceBehavior.create({
+        data: {
+          userId: currentUser.id,
+          listingId: listing.id,
+          eventType: BehaviorEventType.VIEW
+        }
+      });
+    }
+
+    const [detail] = await this.mapListingDetails([listing as ListingRecord], currentUser?.id ?? null);
     return detail;
   }
 
   async createCampusService(payload: CreateCampusServiceDto, currentUser: AuthenticatedUser) {
-    const publisherUser = requireAuthenticatedUser(currentUser);
+    const authUser = requireAuthenticatedUser(currentUser);
     const publisher = await this.prisma.user.findUnique({
-      where: { id: publisherUser.id },
+      where: { id: authUser.id },
       select: { id: true, accountStatus: true }
     });
 
@@ -435,37 +1590,231 @@ export class CampusServicesService {
     }
 
     if (publisher.accountStatus === AccountStatus.BANNED) {
-      throw new ForbiddenException('账号已被封禁，无法发布跑腿服务');
+      throw new ForbiddenException('账号已被封禁，无法发布校园服务');
     }
 
-    const task = await this.prisma.campusServiceTask.create({
+    const { validFromAt, validUntilAt } = this.resolveCampusServiceTimeWindow({
+      validFromAt: payload.validFromAt,
+      validUntilAt: payload.validUntilAt,
+      fallbackFromAt: new Date(),
+      fallbackUntilAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    });
+
+    const intent = payload.intent ?? CampusServiceIntent.REQUEST;
+    const pattern = payload.pattern ?? CampusServicePattern.ONE_TIME;
+    const priceMode = payload.priceMode ?? CampusServicePriceMode.FIXED;
+    const amountValue = payload.amount ?? payload.reward;
+    const maxTotalOrders = payload.maxTotalOrders ?? resolveDefaultCampusServiceMaxTotalOrders(pattern);
+    const maxConcurrentOrders = payload.maxConcurrentOrders ?? 1;
+    const autoConfirm = typeof payload.autoConfirm === 'boolean'
+      ? payload.autoConfirm
+      : resolveDefaultCampusServiceAutoConfirm(intent, pattern);
+    const normalizedImageUrls = normalizeCampusServiceImageUrls(payload.imageUrls);
+
+    if (!normalizedImageUrls.length) {
+      throw new BadRequestException('请至少上传 1 张服务图片');
+    }
+
+    if (priceMode === CampusServicePriceMode.FIXED && (amountValue === undefined || amountValue === null || amountValue <= 0)) {
+      throw new BadRequestException('固定金额服务必须提供有效金额');
+    }
+
+    if (maxTotalOrders !== null && maxConcurrentOrders > maxTotalOrders) {
+      throw new BadRequestException('同时进行中上限不能高于总名额上限');
+    }
+
+    const listing = await this.prisma.campusServiceListing.create({
       data: {
-        publisherId: publisherUser.id,
-        title: payload.title.trim(),
+        ownerId: authUser.id,
+        intent,
+        pattern,
         category: payload.category,
+        title: payload.title.trim(),
         description: payload.description.trim(),
-        reward: payload.reward,
-        locationFrom: payload.locationFrom.trim(),
-        locationTo: payload.locationTo.trim(),
-        deadlineLabel: payload.deadlineLabel.trim(),
+        priceMode,
+        amount: priceMode === CampusServicePriceMode.NEGOTIABLE
+          ? null
+          : priceMode === CampusServicePriceMode.FREE
+            ? 0
+            : amountValue ?? null,
+        locationMode: payload.locationMode ?? CampusServiceLocationMode.FLEXIBLE,
+        locationNote: payload.locationNote?.trim() || null,
+        routeFrom: payload.locationFrom?.trim() || null,
+        routeTo: payload.locationTo?.trim() || null,
+        validFromAt,
+        validUntilAt,
         estimatedMinutes: payload.estimatedMinutes,
         urgency: payload.urgency ?? CampusServiceUrgency.NORMAL,
         fulfillmentMode: payload.fulfillmentMode ?? CampusServiceFulfillmentMode.FLEXIBLE,
         contactPreference: payload.contactPreference ?? CampusServiceContactPreference.CHAT_ONLY,
         itemCount: payload.itemCount ?? 1,
         trustNote: payload.trustNote?.trim() || null,
-        status: CampusServiceStatus.OPEN
+        maxTotalOrders,
+        maxConcurrentOrders,
+        autoConfirm,
+        status: CampusServiceListingStatus.OPEN,
+        images: normalizedImageUrls.length
+          ? {
+              create: normalizedImageUrls.map((imageUrl, index) => ({
+                imageUrl,
+                sortOrder: index
+              }))
+            }
+          : undefined
       }
     });
 
-    const [card] = await this.mapTaskDetails([task], publisherUser.id);
-    return card;
+    const [detail] = await this.mapListingDetails([listing as ListingRecord], authUser.id);
+    return detail;
+  }
+
+  async updateCampusService(id: number, payload: UpdateCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const listing = await this.prisma.campusServiceListing.findUnique({
+      where: { id }
+    });
+
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
+    }
+
+    if (listing.ownerId !== authUser.id) {
+      throw new ForbiddenException('只有发布者可以编辑服务');
+    }
+
+    if (listing.status === CampusServiceListingStatus.CANCELED) {
+      throw new BadRequestException('已关闭的服务不能编辑');
+    }
+
+    const activeOrderCount = await this.prisma.campusServiceOrder.count({
+      where: {
+        listingId: id,
+        status: {
+          in: [
+            CampusServiceOrderStatus.PENDING_CONFIRMATION,
+            CampusServiceOrderStatus.CONFIRMED,
+            CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          ]
+        }
+      }
+    });
+
+    if (
+      activeOrderCount > 0
+      && (
+        payload.pattern !== undefined
+        || payload.maxTotalOrders !== undefined
+        || payload.maxConcurrentOrders !== undefined
+        || payload.autoConfirm !== undefined
+      )
+    ) {
+      throw new BadRequestException('当前存在进行中的申请或服务单，不能修改模式、容量或确认方式');
+    }
+
+    const pattern = payload.pattern ?? listing.pattern;
+    const priceMode = payload.priceMode ?? listing.priceMode;
+    const amountValue = payload.amount ?? payload.reward;
+    const maxTotalOrders = payload.maxTotalOrders !== undefined
+      ? payload.maxTotalOrders
+      : listing.maxTotalOrders;
+    const maxConcurrentOrders = payload.maxConcurrentOrders ?? listing.maxConcurrentOrders ?? 1;
+    const autoConfirm = typeof payload.autoConfirm === 'boolean'
+      ? payload.autoConfirm
+      : listing.autoConfirm;
+    const normalizedImageUrls = payload.imageUrls === undefined
+      ? undefined
+      : normalizeCampusServiceImageUrls(payload.imageUrls);
+
+    if (priceMode === CampusServicePriceMode.FIXED) {
+      const fixedAmount = amountValue ?? safeNumber(listing.amount);
+      if (!fixedAmount || fixedAmount <= 0) {
+        throw new BadRequestException('固定金额服务必须提供有效金额');
+      }
+    }
+
+    if (maxTotalOrders !== null && maxConcurrentOrders > maxTotalOrders) {
+      throw new BadRequestException('同时进行中上限不能高于总名额上限');
+    }
+
+    const { validFromAt, validUntilAt } = this.resolveCampusServiceTimeWindow({
+      validFromAt: payload.validFromAt,
+      validUntilAt: payload.validUntilAt,
+      fallbackFromAt: listing.validFromAt,
+      fallbackUntilAt: listing.validUntilAt
+    });
+
+    const normalizedTitle = payload.title?.trim();
+    const normalizedDescription = payload.description?.trim();
+    if (payload.title !== undefined && !normalizedTitle) {
+      throw new BadRequestException('标题不能为空');
+    }
+    if (payload.description !== undefined && !normalizedDescription) {
+      throw new BadRequestException('描述不能为空');
+    }
+
+    const shouldReopenFromManualEnd = (
+      listing.status === CampusServiceListingStatus.ENDED
+      && listing.endReason === CampusServiceListingEndReason.MANUAL_END
+      && validUntilAt > new Date()
+    );
+
+    await this.prisma.campusServiceListing.update({
+      where: { id },
+      data: {
+        title: normalizedTitle ?? listing.title,
+        category: payload.category ?? listing.category,
+        description: normalizedDescription ?? listing.description,
+        pattern,
+        priceMode,
+        amount: priceMode === CampusServicePriceMode.NEGOTIABLE
+          ? null
+          : priceMode === CampusServicePriceMode.FREE
+            ? 0
+            : (amountValue ?? safeNumber(listing.amount)),
+        locationMode: payload.locationMode ?? listing.locationMode,
+        locationNote: payload.locationNote !== undefined ? (payload.locationNote?.trim() || null) : listing.locationNote,
+        routeFrom: payload.locationFrom !== undefined ? (payload.locationFrom?.trim() || null) : listing.routeFrom,
+        routeTo: payload.locationTo !== undefined ? (payload.locationTo?.trim() || null) : listing.routeTo,
+        validFromAt,
+        validUntilAt,
+        estimatedMinutes: payload.estimatedMinutes ?? listing.estimatedMinutes,
+        urgency: payload.urgency ?? listing.urgency,
+        fulfillmentMode: payload.fulfillmentMode ?? listing.fulfillmentMode,
+        contactPreference: payload.contactPreference ?? listing.contactPreference,
+        itemCount: payload.itemCount ?? listing.itemCount,
+        trustNote: payload.trustNote !== undefined ? (payload.trustNote?.trim() || null) : listing.trustNote,
+        maxTotalOrders,
+        maxConcurrentOrders,
+        autoConfirm,
+        ...(normalizedImageUrls !== undefined
+          ? {
+              images: {
+                deleteMany: {},
+                create: normalizedImageUrls.map((imageUrl, index) => ({
+                  imageUrl,
+                  sortOrder: index
+                }))
+              }
+            }
+          : {}),
+        status: shouldReopenFromManualEnd ? CampusServiceListingStatus.OPEN : listing.status,
+        endReason: shouldReopenFromManualEnd ? null : listing.endReason,
+        endedAt: shouldReopenFromManualEnd ? null : listing.endedAt
+      }
+    });
+
+    await this.refreshListingCapacity(id);
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
   }
 
   async acceptCampusService(id: number, payload: AcceptCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
     const authUser = requireAuthenticatedUser(currentUser);
-    const [task, accepter] = await Promise.all([
-      this.prisma.campusServiceTask.findUnique({
+    const [listing, user] = await Promise.all([
+      this.prisma.campusServiceListing.findUnique({
         where: { id }
       }),
       this.prisma.user.findUnique({
@@ -474,55 +1823,80 @@ export class CampusServicesService {
       })
     ]);
 
-    if (!task) {
-      throw new NotFoundException('校园服务任务不存在');
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
     }
 
-    if (!accepter) {
+    if (!user) {
       throw new BadRequestException('登录状态已失效，请重新登录');
     }
 
-    if (accepter.accountStatus === AccountStatus.BANNED) {
-      throw new ForbiddenException('账号已被封禁，无法接单');
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法参与服务');
     }
 
-    if (task.publisherId === accepter.id) {
-      throw new BadRequestException('不能接自己发布的任务');
+    if (listing.ownerId === user.id) {
+      throw new BadRequestException('不能操作自己发布的服务');
     }
 
-    if (task.status !== CampusServiceStatus.OPEN) {
-      throw new BadRequestException('当前任务已被接单或已结束');
+    if (listing.status !== CampusServiceListingStatus.OPEN) {
+      throw new BadRequestException('当前服务暂不可接单或预约');
     }
 
-    const updatedTask = await this.prisma.campusServiceTask.update({
-      where: { id },
-      data: {
-        accepterId: accepter.id,
-        status: CampusServiceStatus.MATCHED,
-        matchedAt: new Date(),
-        completedAt: null,
-        canceledAt: null,
-        canceledById: null,
-        cancelReason: null
-      }
-    });
-
-    const existingConversation = await this.prisma.conversation.findFirst({
-      where: { campusServiceTaskId: id },
+    const existingOrder = await this.prisma.campusServiceOrder.findFirst({
+      where: {
+        listingId: listing.id,
+        requesterId: listing.intent === CampusServiceIntent.REQUEST ? listing.ownerId : user.id,
+        providerId: listing.intent === CampusServiceIntent.REQUEST ? user.id : listing.ownerId,
+        status: {
+          in: [
+            CampusServiceOrderStatus.PENDING_CONFIRMATION,
+            CampusServiceOrderStatus.CONFIRMED,
+            CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          ]
+        }
+      },
       select: { id: true }
     });
 
-    const conversation = existingConversation ?? await this.prisma.conversation.create({
+    if (existingOrder) {
+      throw new BadRequestException('你已经参与了这条服务，请勿重复操作');
+    }
+
+    const requesterId = listing.intent === CampusServiceIntent.REQUEST ? listing.ownerId : user.id;
+    const providerId = listing.intent === CampusServiceIntent.REQUEST ? user.id : listing.ownerId;
+    const status = listing.autoConfirm ? CampusServiceOrderStatus.CONFIRMED : CampusServiceOrderStatus.PENDING_CONFIRMATION;
+    const confirmedAt = listing.autoConfirm ? new Date() : null;
+    const orderMessage = buildCampusServiceOrderMessage(
+      payload,
+      listing.intent === CampusServiceIntent.REQUEST
+        ? `我来接“${listing.title}”，可以开始对接细节。`
+        : `我想预约“${listing.title}”，方便开始沟通安排。`
+    );
+
+    const order = await this.prisma.campusServiceOrder.create({
       data: {
-        campusServiceTaskId: id
+        listingId: listing.id,
+        requesterId,
+        providerId,
+        status,
+        applyMessage: orderMessage || null,
+        finalAmount: listing.amount,
+        confirmedAt
+      }
+    });
+
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        campusServiceOrderId: order.id
       }
     });
 
     await this.prisma.message.create({
       data: {
         conversationId: conversation.id,
-        senderId: accepter.id,
-        content: payload.initialMessage?.trim() || `我来接“${task.title}”，可以开始对接细节。`
+        senderId: user.id,
+        content: orderMessage
       }
     });
 
@@ -531,60 +1905,218 @@ export class CampusServicesService {
       data: { updatedAt: new Date() }
     });
 
-    const [card] = await this.mapTaskDetails([updatedTask], accepter.id);
-    return card;
+    await this.refreshListingCapacity(listing.id);
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
   }
 
-  async completeCampusService(id: number, _payload: CompleteCampusServiceDto, currentUser: AuthenticatedUser) {
+  async pauseCampusService(id: number, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
     const authUser = requireAuthenticatedUser(currentUser);
-    const [task, user] = await Promise.all([
-      this.prisma.campusServiceTask.findUnique({
-        where: { id }
-      }),
-      this.prisma.user.findUnique({
-        where: { id: authUser.id },
-        select: { id: true, accountStatus: true }
-      })
-    ]);
+    const listing = await this.prisma.campusServiceListing.findUnique({
+      where: { id }
+    });
 
-    if (!task) {
-      throw new NotFoundException('校园服务任务不存在');
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
     }
 
-    if (!user) {
-      throw new BadRequestException('登录状态已失效，请重新登录');
+    if (listing.ownerId !== authUser.id) {
+      throw new ForbiddenException('只有发布者可以暂停服务');
     }
 
-    if (user.accountStatus === AccountStatus.BANNED) {
-      throw new ForbiddenException('账号已被封禁，无法更新任务状态');
+    if (listing.status !== CampusServiceListingStatus.OPEN) {
+      throw new BadRequestException('当前服务不能暂停接新单');
     }
 
-    const canComplete = task.publisherId === user.id || task.accepterId === user.id;
-    if (!canComplete) {
-      throw new ForbiddenException('只有发布者或接单人可以标记完成');
+    const activeOrder = await this.prisma.campusServiceOrder.findFirst({
+      where: {
+        listingId: id,
+        status: {
+          in: [
+            CampusServiceOrderStatus.PENDING_CONFIRMATION,
+            CampusServiceOrderStatus.CONFIRMED,
+            CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+          ]
+        }
+      },
+      select: { id: true }
+    });
+
+    if (activeOrder) {
+      throw new BadRequestException('当前服务已有进行中的申请或服务单，不能暂停');
     }
 
-    if (task.status !== CampusServiceStatus.MATCHED) {
-      throw new BadRequestException('只有进行中的任务可以标记完成');
-    }
-
-    const updatedTask = await this.prisma.campusServiceTask.update({
+    await this.prisma.campusServiceListing.update({
       where: { id },
       data: {
-        status: CampusServiceStatus.DONE,
-        completedAt: new Date()
+        status: CampusServiceListingStatus.PAUSED,
+        endReason: null,
+        endedAt: null
       }
     });
 
-    const [card] = await this.mapTaskDetails([updatedTask], user.id);
-    return card;
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
   }
 
-  async cancelCampusService(id: number, payload: CancelCampusServiceDto, currentUser: AuthenticatedUser) {
+  async reopenCampusService(id: number, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
     const authUser = requireAuthenticatedUser(currentUser);
-    const [task, user] = await Promise.all([
-      this.prisma.campusServiceTask.findUnique({
-        where: { id }
+    const listing = await this.prisma.campusServiceListing.findUnique({
+      where: { id }
+    });
+
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
+    }
+
+    if (listing.ownerId !== authUser.id) {
+      throw new ForbiddenException('只有发布者可以重新开放服务');
+    }
+
+    if (listing.validUntilAt <= new Date()) {
+      throw new BadRequestException('服务已过有效期，不能重新开放');
+    }
+
+    if (
+      listing.status !== CampusServiceListingStatus.PAUSED
+      && !(listing.status === CampusServiceListingStatus.ENDED && listing.endReason === CampusServiceListingEndReason.MANUAL_END)
+    ) {
+      throw new BadRequestException('当前服务不能重新开放');
+    }
+
+    await this.prisma.campusServiceListing.update({
+      where: { id },
+      data: {
+        status: CampusServiceListingStatus.OPEN,
+        endReason: null,
+        endedAt: null
+      }
+    });
+
+    await this.refreshListingCapacity(id);
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
+  }
+
+  async endCampusService(id: number, payload: CancelCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const listing = await this.prisma.campusServiceListing.findUnique({
+      where: { id }
+    });
+
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
+    }
+
+    if (listing.ownerId !== authUser.id) {
+      throw new ForbiddenException('只有发布者可以结束发布');
+    }
+
+    if (listing.status === CampusServiceListingStatus.ENDED || listing.status === CampusServiceListingStatus.CANCELED) {
+      throw new BadRequestException('当前服务已结束，不能重复操作');
+    }
+
+    const pendingOrders = await this.prisma.campusServiceOrder.findMany({
+      where: {
+        listingId: id,
+        status: CampusServiceOrderStatus.PENDING_CONFIRMATION
+      },
+      orderBy: [{ createdAt: 'desc' }]
+    });
+
+    const activeConfirmedOrder = await this.prisma.campusServiceOrder.findFirst({
+      where: {
+        listingId: id,
+        status: {
+          in: [CampusServiceOrderStatus.CONFIRMED, CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM]
+        }
+      },
+      select: { id: true }
+    });
+
+    if (activeConfirmedOrder) {
+      throw new BadRequestException('当前仍有进行中的服务单，请先完成或取消后再结束发布');
+    }
+
+    const reasonText = payload.reason?.trim() || null;
+    const operationAt = new Date();
+
+    if (pendingOrders.length) {
+      for (const pendingOrder of pendingOrders) {
+        await this.prisma.campusServiceOrder.update({
+          where: { id: pendingOrder.id },
+          data: {
+            status: CampusServiceOrderStatus.CANCELED,
+            canceledAt: operationAt,
+            cancelReason: reasonText ?? '发布者结束了当前发布'
+          }
+        });
+      }
+
+      const conversations = await this.prisma.conversation.findMany({
+        where: {
+          campusServiceOrderId: {
+            in: pendingOrders.map((order) => order.id)
+          }
+        },
+        select: {
+          id: true,
+          campusServiceOrderId: true
+        }
+      });
+      const conversationMap = new Map(
+        conversations
+          .filter((conversation) => conversation.campusServiceOrderId)
+          .map((conversation) => [conversation.campusServiceOrderId as number, conversation.id])
+      );
+
+      for (const pendingOrder of pendingOrders) {
+        const conversationId = conversationMap.get(pendingOrder.id);
+        if (!conversationId) {
+          continue;
+        }
+
+        await this.prisma.message.create({
+          data: {
+            conversationId,
+            senderId: authUser.id,
+            content: reasonText
+              ? `发布已结束，本次申请随之关闭：${reasonText}`
+              : '发布者已结束当前发布，本次申请随之关闭。'
+          }
+        });
+        await this.prisma.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: operationAt }
+        });
+      }
+    }
+
+    await this.prisma.campusServiceListing.update({
+      where: { id },
+      data: {
+        status: CampusServiceListingStatus.ENDED,
+        endReason: CampusServiceListingEndReason.MANUAL_END,
+        endedAt: operationAt
+      }
+    });
+
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
+  }
+
+  async confirmCampusServiceOrder(orderId: number, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const [order, user] = await Promise.all([
+      this.prisma.campusServiceOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          listing: true
+        }
       }),
       this.prisma.user.findUnique({
         where: { id: authUser.id },
@@ -592,8 +2124,8 @@ export class CampusServicesService {
       })
     ]);
 
-    if (!task) {
-      throw new NotFoundException('校园服务任务不存在');
+    if (!order) {
+      throw new NotFoundException('服务单不存在');
     }
 
     if (!user) {
@@ -601,39 +2133,100 @@ export class CampusServicesService {
     }
 
     if (user.accountStatus === AccountStatus.BANNED) {
-      throw new ForbiddenException('账号已被封禁，无法更新任务状态');
+      throw new ForbiddenException('账号已被封禁，无法处理服务单');
     }
 
-    const canCancel = task.publisherId === user.id || task.accepterId === user.id;
-    if (!canCancel) {
-      throw new ForbiddenException('只有发布者或接单人可以取消任务');
+    if (order.listing.ownerId !== user.id) {
+      throw new ForbiddenException('只有发布者可以确认服务单');
     }
 
-    if (task.status === CampusServiceStatus.DONE || task.status === CampusServiceStatus.CANCELED) {
-      throw new BadRequestException('当前任务已结束，不能再次取消');
+    if (order.status !== CampusServiceOrderStatus.PENDING_CONFIRMATION) {
+      throw new BadRequestException('当前服务单无需确认');
     }
 
-    const accepterWithdraws = task.accepterId === user.id && task.status === CampusServiceStatus.MATCHED;
-    const reasonText = payload.reason?.trim();
-    const updatedTask = await this.prisma.campusServiceTask.update({
-      where: { id },
-      data: accepterWithdraws
-        ? {
-            status: CampusServiceStatus.OPEN,
-            accepterId: null,
-            matchedAt: null
-          }
-        : {
-            status: CampusServiceStatus.CANCELED,
-            accepterId: task.publisherId === user.id ? null : task.accepterId,
-            canceledAt: new Date(),
-            canceledById: user.id,
-            cancelReason: reasonText || null
-          }
+    const updatedOrder = await this.prisma.campusServiceOrder.update({
+      where: { id: orderId },
+      data: {
+        status: CampusServiceOrderStatus.CONFIRMED,
+        confirmedAt: new Date(),
+        cancelReason: null,
+        canceledAt: null,
+        expiredAt: null
+      }
     });
 
     const conversation = await this.prisma.conversation.findFirst({
-      where: { campusServiceTaskId: id },
+      where: { campusServiceOrderId: updatedOrder.id },
+      select: { id: true }
+    });
+
+    if (conversation) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: user.id,
+          content: `${user.displayName} 已确认当前服务单，进入履约阶段。`
+        }
+      });
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    await this.refreshListingCapacity(order.listingId);
+    return this.getCampusServiceDetail(order.listingId, { ...currentUser, id: authUser.id });
+  }
+
+  async rejectCampusServiceOrder(orderId: number, payload: CancelCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const [order, user] = await Promise.all([
+      this.prisma.campusServiceOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          listing: true
+        }
+      }),
+      this.prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { id: true, accountStatus: true, displayName: true }
+      })
+    ]);
+
+    if (!order) {
+      throw new NotFoundException('服务单不存在');
+    }
+
+    if (!user) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法处理服务单');
+    }
+
+    if (order.listing.ownerId !== user.id) {
+      throw new ForbiddenException('只有发布者可以拒绝服务单');
+    }
+
+    if (order.status !== CampusServiceOrderStatus.PENDING_CONFIRMATION) {
+      throw new BadRequestException('当前服务单无法拒绝');
+    }
+
+    const reasonText = payload.reason?.trim() || null;
+    const updatedOrder = await this.prisma.campusServiceOrder.update({
+      where: { id: orderId },
+      data: {
+        status: CampusServiceOrderStatus.REJECTED,
+        cancelReason: reasonText,
+        canceledAt: new Date()
+      }
+    });
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { campusServiceOrderId: updatedOrder.id },
       select: { id: true }
     });
 
@@ -643,20 +2236,342 @@ export class CampusServicesService {
           conversationId: conversation.id,
           senderId: user.id,
           content: reasonText
-            ? `${accepterWithdraws ? '接单人已退出：' : '任务已取消：'}${reasonText}`
-            : accepterWithdraws
-              ? `${user.displayName ?? `用户#${user.id}`} 退出了当前协作，任务已重新开放。`
-              : `任务已取消，${user.displayName ?? `用户#${user.id}`} 结束了当前协作。`
+            ? `服务单已拒绝：${reasonText}`
+            : `${user.displayName} 拒绝了当前服务申请。`
         }
       });
-
       await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: { updatedAt: new Date() }
       });
     }
 
-    const [card] = await this.mapTaskDetails([updatedTask], user.id);
-    return card;
+    await this.refreshListingCapacity(order.listingId);
+    return this.getCampusServiceDetail(order.listingId, { ...currentUser, id: authUser.id });
+  }
+
+  async completeCampusServiceOrder(orderId: number, payload: CompleteCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const [order, user] = await Promise.all([
+      this.prisma.campusServiceOrder.findUnique({
+        where: { id: orderId },
+        include: {
+          listing: true
+        }
+      }),
+      this.prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { id: true, accountStatus: true, displayName: true }
+      })
+    ]);
+
+    if (!order) {
+      throw new NotFoundException('服务单不存在');
+    }
+
+    if (!user) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法更新服务状态');
+    }
+
+    const isParticipant = order.requesterId === user.id || order.providerId === user.id;
+    if (!isParticipant) {
+      throw new ForbiddenException('只有参与双方可以完成服务');
+    }
+
+    if (
+      order.status !== CampusServiceOrderStatus.CONFIRMED
+      && order.status !== CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+    ) {
+      throw new BadRequestException('当前没有可完成的服务单');
+    }
+
+    const updatedOrder = order.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+      && order.completionRequestedById
+      && order.completionRequestedById !== user.id
+      ? await this.prisma.campusServiceOrder.update({
+          where: { id: orderId },
+          data: {
+            status: CampusServiceOrderStatus.COMPLETED,
+            completedAt: new Date()
+          }
+        })
+      : await this.prisma.campusServiceOrder.update({
+          where: { id: orderId },
+          data: {
+            status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+            completionRequestedById: user.id,
+            completionRequestedAt: new Date()
+          }
+        });
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { campusServiceOrderId: updatedOrder.id },
+      select: { id: true }
+    });
+
+    if (conversation) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: user.id,
+          content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
+            ? `${user.displayName} 已确认服务完成。`
+            : `${user.displayName} 已提交服务完成，请对方确认。`
+        }
+      });
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    await this.refreshListingCapacity(order.listingId);
+    return this.getCampusServiceDetail(order.listingId, { ...currentUser, id: authUser.id });
+  }
+
+  async cancelCampusServiceOrder(orderId: number, payload: CancelCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const order = await this.prisma.campusServiceOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        listing: true
+      }
+    });
+
+    if (!order) {
+      throw new NotFoundException('服务单不存在');
+    }
+
+    const [user] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { id: true, accountStatus: true, displayName: true }
+      })
+    ]);
+
+    if (!user) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法更新服务状态');
+    }
+
+    if (![order.requesterId, order.providerId, order.listing.ownerId].includes(user.id)) {
+      throw new ForbiddenException('只有发布者或参与者可以取消');
+    }
+
+    if (!cancellableCampusServiceOrderStatuses.includes(order.status)) {
+      throw new BadRequestException('当前服务单不可取消');
+    }
+
+    const reasonText = payload.reason?.trim() || null;
+    const updatedOrder = await this.prisma.campusServiceOrder.update({
+      where: { id: orderId },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: new Date(),
+        cancelReason: reasonText
+      }
+    });
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { campusServiceOrderId: updatedOrder.id },
+      select: { id: true }
+    });
+
+    if (conversation) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: user.id,
+          content: reasonText
+            ? `服务已取消：${reasonText}`
+            : `${user.displayName} 取消了当前服务协作。`
+        }
+      });
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    await this.refreshListingCapacity(order.listingId);
+    return this.getCampusServiceDetail(order.listingId, { ...currentUser, id: authUser.id });
+  }
+
+  async completeCampusService(id: number, _payload: CompleteCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const [listing, user] = await Promise.all([
+      this.prisma.campusServiceListing.findUnique({
+        where: { id }
+      }),
+      this.prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { id: true, accountStatus: true, displayName: true }
+      })
+    ]);
+
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
+    }
+
+    if (!user) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法更新服务状态');
+    }
+
+    const latestOrder = await this.findViewerOrderForListing({
+      listingId: id,
+      userId: user.id,
+      statuses: [CampusServiceOrderStatus.CONFIRMED, CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM]
+    });
+
+    if (!latestOrder) {
+      throw new BadRequestException('当前没有可完成的服务单');
+    }
+
+    const isParticipant = latestOrder.requesterId === user.id || latestOrder.providerId === user.id;
+    if (!isParticipant) {
+      throw new ForbiddenException('只有参与双方可以完成服务');
+    }
+
+    const updatedOrder = latestOrder.status === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+      && latestOrder.completionRequestedById
+      && latestOrder.completionRequestedById !== user.id
+      ? await this.prisma.campusServiceOrder.update({
+          where: { id: latestOrder.id },
+          data: {
+            status: CampusServiceOrderStatus.COMPLETED,
+            completedAt: new Date()
+          }
+        })
+      : await this.prisma.campusServiceOrder.update({
+          where: { id: latestOrder.id },
+          data: {
+            status: CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM,
+            completionRequestedById: user.id,
+            completionRequestedAt: new Date()
+          }
+        });
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { campusServiceOrderId: updatedOrder.id },
+      select: { id: true }
+    });
+
+    if (conversation) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: user.id,
+          content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
+            ? `${user.displayName} 已确认服务完成。`
+            : `${user.displayName} 已提交服务完成，请对方确认。`
+        }
+      });
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    await this.refreshListingCapacity(id);
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
+  }
+
+  async cancelCampusService(id: number, payload: CancelCampusServiceDto, currentUser: AuthenticatedUser) {
+    await this.syncExpiredListings();
+
+    const authUser = requireAuthenticatedUser(currentUser);
+    const [listing, user] = await Promise.all([
+      this.prisma.campusServiceListing.findUnique({
+        where: { id }
+      }),
+      this.prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { id: true, accountStatus: true, displayName: true }
+      })
+    ]);
+
+    if (!listing) {
+      throw new NotFoundException('校园服务发布不存在');
+    }
+
+    if (!user) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (user.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法更新服务状态');
+    }
+
+    const latestOrder = await this.findViewerOrderForListing({
+      listingId: id,
+      userId: user.id,
+      statuses: [
+        CampusServiceOrderStatus.PENDING_CONFIRMATION,
+        CampusServiceOrderStatus.CONFIRMED,
+        CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+      ]
+    });
+
+    const reasonText = payload.reason?.trim() || null;
+
+    if (!latestOrder) {
+      throw new BadRequestException('当前没有可取消的服务单');
+    }
+
+    const isParticipant = latestOrder.requesterId === user.id || latestOrder.providerId === user.id;
+    const isPublisher = listing.ownerId === user.id;
+    if (!isParticipant && !isPublisher) {
+      throw new ForbiddenException('只有发布者或参与者可以取消');
+    }
+
+    const updatedOrder = await this.prisma.campusServiceOrder.update({
+      where: { id: latestOrder.id },
+      data: {
+        status: CampusServiceOrderStatus.CANCELED,
+        canceledAt: new Date(),
+        cancelReason: reasonText
+      }
+    });
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { campusServiceOrderId: updatedOrder.id },
+      select: { id: true }
+    });
+
+    if (conversation) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: user.id,
+          content: reasonText
+            ? `服务已取消：${reasonText}`
+            : `${user.displayName} 取消了当前服务协作。`
+        }
+      });
+      await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() }
+      });
+    }
+
+    await this.refreshListingCapacity(id);
+    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
   }
 }

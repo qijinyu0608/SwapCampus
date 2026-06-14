@@ -1,8 +1,9 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus, CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
+import { AccountStatus, OrderStatus, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAdminUser, requireAuthenticatedUser } from '../auth/auth.utils';
+import { cancelCampusServicesForUser } from '../campus-services/campus-service-moderation';
 import { SearchService } from '../search/search.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
@@ -27,6 +28,7 @@ export class ReportsService {
       id: report.id,
       reporterId: report.reporterId,
       productId: report.productId,
+      campusServiceListingId: report.campusServiceListingId,
       targetUserId: report.targetUserId,
       reason: report.reason,
       status: report.status,
@@ -39,7 +41,7 @@ export class ReportsService {
 
   async createReport(payload: CreateReportDto, currentUser: AuthenticatedUser) {
     const reporterUser = requireAuthenticatedUser(currentUser);
-    if (!payload.productId && !payload.targetUserId) {
+    if (!payload.productId && !payload.campusServiceListingId && !payload.targetUserId) {
       throw new BadRequestException('举报对象不能为空');
     }
 
@@ -67,6 +69,17 @@ export class ReportsService {
       }
     }
 
+    if (payload.campusServiceListingId) {
+      const listing = await this.prisma.campusServiceListing.findUnique({
+        where: { id: payload.campusServiceListingId },
+        select: { id: true }
+      });
+
+      if (!listing) {
+        throw new NotFoundException('举报校园服务不存在');
+      }
+    }
+
     if (payload.targetUserId) {
       const targetUser = await this.prisma.user.findUnique({
         where: { id: payload.targetUserId },
@@ -82,6 +95,7 @@ export class ReportsService {
       data: {
         reporterId: reporterUser.id,
         productId: payload.productId,
+        campusServiceListingId: payload.campusServiceListingId,
         targetUserId: payload.targetUserId,
         reason: payload.reason,
         status: 'OPEN'
@@ -93,8 +107,8 @@ export class ReportsService {
         actorId: reporterUser.id,
         actorName: `用户#${reporterUser.id}`,
         action: 'CREATE_REPORT',
-        targetType: payload.productId ? 'PRODUCT' : 'USER',
-        targetId: payload.productId ?? payload.targetUserId!,
+        targetType: payload.productId ? 'PRODUCT' : payload.campusServiceListingId ? 'CAMPUS_SERVICE' : 'USER',
+        targetId: payload.productId ?? payload.campusServiceListingId ?? payload.targetUserId!,
         detail: payload.reason
       }
     });
@@ -154,7 +168,7 @@ export class ReportsService {
           tx.product.updateMany({
             where: {
               sellerId: report.targetUserId,
-              status: { in: [ProductStatus.PENDING, ProductStatus.ON_SALE] }
+              status: { in: [ProductStatus.ON_SALE] }
             },
             data: { status: ProductStatus.OFFLINE }
           }),
@@ -165,13 +179,7 @@ export class ReportsService {
             },
             data: { status: OrderStatus.CANCELED }
           }),
-          tx.campusServiceTask.updateMany({
-            where: {
-              OR: [{ publisherId: report.targetUserId }, { accepterId: report.targetUserId }],
-              status: { in: [CampusServiceStatus.OPEN, CampusServiceStatus.MATCHED] }
-            },
-            data: { status: CampusServiceStatus.CANCELED }
-          })
+          cancelCampusServicesForUser(tx, report.targetUserId, payload.resolutionNote?.trim() || '举报封禁处理')
         ]);
       }
 

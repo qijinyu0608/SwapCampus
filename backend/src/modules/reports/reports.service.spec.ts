@@ -1,5 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import { CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
+import {
+  CampusServiceListingStatus,
+  OrderStatus,
+  ProductStatus
+} from '@prisma/client';
 import { ReportsService } from './reports.service';
 
 describe('ReportsService', () => {
@@ -38,8 +42,27 @@ describe('ReportsService', () => {
       order: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
-      campusServiceTask: {
-        updateMany: jest.fn().mockResolvedValue({ count: 1 })
+      campusServiceListing: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      campusServiceOrder: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 501,
+          listingId: 41,
+          listing: {
+            id: 41,
+            ownerId: 24,
+            status: CampusServiceListingStatus.OPEN,
+            endReason: null,
+            endedAt: null,
+            validUntilAt: new Date('2026-06-30T10:00:00.000Z'),
+            maxTotalOrders: 1,
+            maxConcurrentOrders: 1
+          }
+        }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        groupBy: jest.fn().mockResolvedValue([])
       },
       auditLog: {
         create: jest.fn().mockResolvedValue(undefined)
@@ -65,7 +88,7 @@ describe('ReportsService', () => {
     expect(prisma.product.updateMany).toHaveBeenCalledWith({
       where: {
         sellerId: 24,
-        status: { in: [ProductStatus.PENDING, ProductStatus.ON_SALE] }
+        status: { in: [ProductStatus.ON_SALE] }
       },
       data: { status: ProductStatus.OFFLINE }
     });
@@ -76,13 +99,9 @@ describe('ReportsService', () => {
       },
       data: { status: OrderStatus.CANCELED }
     });
-    expect(prisma.campusServiceTask.updateMany).toHaveBeenCalledWith({
-      where: {
-        OR: [{ publisherId: 24 }, { accepterId: 24 }],
-        status: { in: [CampusServiceStatus.OPEN, CampusServiceStatus.MATCHED] }
-      },
-      data: { status: CampusServiceStatus.CANCELED }
-    });
+    expect(prisma.campusServiceListing.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.campusServiceOrder.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.campusServiceOrder.updateMany).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       id: 6,
       status: 'RESOLVED'
@@ -110,8 +129,14 @@ describe('ReportsService', () => {
       order: {
         updateMany: jest.fn()
       },
-      campusServiceTask: {
-        updateMany: jest.fn()
+      campusServiceListing: {
+        updateMany: jest.fn(),
+        findMany: jest.fn()
+      },
+      campusServiceOrder: {
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+        groupBy: jest.fn()
       },
       auditLog: {
         create: jest.fn()

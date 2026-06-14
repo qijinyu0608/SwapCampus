@@ -65,7 +65,7 @@ export function FavoritesPage() {
 
   function formatFavoritedAt(item: ProductSummary) {
     if (!item.favoritedAt) {
-      return '刚刚想要';
+      return '刚刚收藏';
     }
 
     return `收藏于 ${new Date(item.favoritedAt).toLocaleDateString()}`;
@@ -98,14 +98,14 @@ export function FavoritesPage() {
 
   return (
     <div className="favorites-page page-grid">
-      <PageHeader title="想要" subtitle="已收藏" meta={<span>{favoriteProducts.length} 件</span>} />
+      <PageHeader title="收藏" subtitle="已收藏商品" meta={<span>{favoriteProducts.length} 件</span>} />
 
       {loading ? (
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : favoriteProducts.length === 0 ? (
         <EmptyState
           className="favorites-empty"
-          title="还没有想要的商品"
+          title="还没有收藏的商品"
           action={(
             <button type="button" className="fish-search-button" onClick={() => navigate('/')}>
               去逛逛
@@ -117,7 +117,7 @@ export function FavoritesPage() {
           <StatStrip items={summaryItems} className="favorites-summary-strip" />
           <FoldSection
             title="筛选"
-            meta={favoritePreview ? `${favoritePreview.category} / 同校面交` : '全部'}
+            meta={favoritePreview ? favoritePreview.category : '全部'}
             compact
           >
             <div className="favorites-filter-strip">
@@ -165,25 +165,10 @@ export function FavoritesPage() {
                     className={index % 3 === 2 ? 'offset' : ''}
                     item={item}
                     imageSrc={getProductImage(item, index)}
-                    signal={`${item.category} · ${item.condition}`}
-                    coverActions={(
-                      <button
-                        type="button"
-                        className="fish-item-favorite"
-                        onClick={async (event) => {
-                          event.stopPropagation();
-                          await handleRemoveFavorite(item);
-                        }}
-                        aria-label="取消收藏"
-                      >
-                        取消
-                      </button>
-                    )}
-                    priceMeta={`${item.favoriteCount ?? 0} 人想要`}
+                    priceMeta={`${item.favoriteCount ?? 0} 收藏`}
                     tagItems={[
                       item.sellerName,
-                      formatFavoritedAt(item),
-                      '同校面交'
+                      formatFavoritedAt(item)
                     ]}
                     onOpen={() => navigate(`/products/${item.id}`)}
                   />
@@ -207,20 +192,6 @@ export function FavoritesPage() {
                     className={`favorites-inactive-card${index % 3 === 2 ? ' offset' : ''}`}
                     item={item}
                     imageSrc={getProductImage(item, index)}
-                    signal={`${item.category} · ${item.condition}`}
-                    coverActions={(
-                      <button
-                        type="button"
-                        className="fish-item-favorite"
-                        onClick={async (event) => {
-                          event.stopPropagation();
-                          await handleRemoveFavorite(item);
-                        }}
-                        aria-label="移出收藏列表"
-                      >
-                        移出
-                      </button>
-                    )}
                     priceMeta={item.status}
                     tagItems={[
                       item.sellerName,

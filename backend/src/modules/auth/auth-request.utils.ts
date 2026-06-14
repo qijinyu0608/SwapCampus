@@ -1,13 +1,15 @@
 import { UserRole } from '@prisma/client';
+import Session from 'supertokens-node/recipe/session';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser, RequestWithAuthenticatedUser } from './auth.types';
 import { DEV_AUTH_HEADER } from './dev-auth.constants';
 import { resolveDevFallbackUser } from './dev-auth.utils';
-import type { SessionRequest } from './supertokens.types';
+import type { SessionRequest, SessionResponse } from './supertokens.types';
 
 export async function resolveOptionalAuthUser(
   prisma: PrismaService,
-  request: SessionRequest & RequestWithAuthenticatedUser
+  request: SessionRequest & RequestWithAuthenticatedUser,
+  response?: SessionResponse
 ): Promise<AuthenticatedUser | undefined> {
   const headers = (request as { headers?: Record<string, string | string[] | undefined> }).headers ?? {};
 
@@ -15,7 +17,19 @@ export async function resolveOptionalAuthUser(
     return request.user;
   }
 
-  const session = request.session;
+  let session = request.session;
+  if (!session && response) {
+    try {
+      session = await Session.getSession(request, response, {
+        sessionRequired: false,
+        checkDatabase: true
+      });
+      request.session = session ?? undefined;
+    } catch {
+      session = undefined;
+    }
+  }
+
   const accessTokenPayload = session?.getAccessTokenPayload();
   if (session && accessTokenPayload) {
     return {

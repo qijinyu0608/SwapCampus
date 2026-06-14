@@ -1,6 +1,5 @@
 import { Input, Skeleton, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import type { MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../components/feedback';
@@ -10,14 +9,42 @@ import {
   getApiErrorMessage,
   ProductSummary
 } from '../services/api';
-import { useAuthState } from '../services/auth-state';
-import { subscribeFavorites, toggleFavorite } from '../services/favorites';
+import { subscribeFavorites } from '../services/favorites';
 import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getProductImage } from '../utils/productCover';
 
+type CreditFilterKey = 'OUTSTANDING' | 'EXCELLENT' | 'GOOD' | 'STABLE' | 'IMPROVE';
+
+const CREDIT_FILTER_OPTIONS: Array<{ key: CreditFilterKey; label: string }> = [
+  { key: 'OUTSTANDING', label: '极好' },
+  { key: 'EXCELLENT', label: '优秀' },
+  { key: 'GOOD', label: '良好' },
+  { key: 'STABLE', label: '稳定' },
+  { key: 'IMPROVE', label: '待提升' }
+];
+
+function matchesCreditLevel(score: number, filter: CreditFilterKey) {
+  if (filter === 'OUTSTANDING') {
+    return score >= 90;
+  }
+
+  if (filter === 'EXCELLENT') {
+    return score >= 80 && score < 90;
+  }
+
+  if (filter === 'GOOD') {
+    return score >= 70 && score < 80;
+  }
+
+  if (filter === 'STABLE') {
+    return score >= 60 && score < 70;
+  }
+
+  return score < 60;
+}
+
 export function SearchPage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuthState();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialKeyword = searchParams.get('q')?.trim() ?? '';
   const [searchInput, setSearchInput] = useState(initialKeyword);
@@ -25,7 +52,7 @@ export function SearchPage() {
   const [sortKey, setSortKey] = useState<'relevance' | 'price_asc' | 'price_desc'>('relevance');
   const [minPrice, setMinPrice] = useState<number | null>(null);
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
-  const [creditFilter, setCreditFilter] = useState<'ALL' | 'HIGH' | 'VERIFIED'>('ALL');
+  const [activeCreditFilters, setActiveCreditFilters] = useState<CreditFilterKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [favoriteVersion, setFavoriteVersion] = useState(0);
@@ -74,25 +101,18 @@ export function SearchPage() {
     };
   }, [initialKeyword]);
 
-  async function handleToggleFavorite(event: MouseEvent<HTMLButtonElement>, item: ProductSummary) {
-    event.stopPropagation();
-
-    try {
-      const nextState = await toggleFavorite(item.id, currentUser);
-      setProducts((current) => current.map((product) => product.id === item.id ? {
-        ...product,
-        isFavorited: nextState,
-        favoriteCount: Math.max(0, (product.favoriteCount ?? 0) + (nextState ? 1 : -1))
-      } : product));
-    } catch (error) {
-      message.error(getApiErrorMessage(error, '收藏操作失败'));
-    }
-  }
-
   function submitSearch(keyword: string) {
     const nextKeyword = keyword.trim();
     setSearchInput(keyword);
     setSearchParams(nextKeyword ? { q: nextKeyword } : {});
+  }
+
+  function toggleCreditFilter(key: CreditFilterKey) {
+    setActiveCreditFilters((current) => (
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    ));
   }
 
   const visibleProducts = useMemo(() => {
@@ -100,13 +120,14 @@ export function SearchPage() {
       .filter((item) => minPrice === null || item.price >= minPrice)
       .filter((item) => maxPrice === null || item.price <= maxPrice)
       .filter((item) => {
-        if (creditFilter === 'HIGH') {
-          return (item.sellerCreditScore ?? 0) >= 85;
+        if (!activeCreditFilters.length) {
+          return true;
         }
-        if (creditFilter === 'VERIFIED') {
-          return Boolean(item.sellerVerified);
-        }
-        return true;
+
+        const score = item.sellerCreditScore ?? 0;
+        return activeCreditFilters.some((filter) => {
+          return matchesCreditLevel(score, filter);
+        });
       })
       .sort((left, right) => {
         if (sortKey === 'price_asc') {
@@ -117,7 +138,7 @@ export function SearchPage() {
         }
         return 0;
       });
-  }, [creditFilter, maxPrice, minPrice, products, sortKey]);
+  }, [activeCreditFilters, maxPrice, minPrice, products, sortKey]);
 
   return (
     <div className="fish-home">
@@ -163,13 +184,9 @@ export function SearchPage() {
           maxPrice={maxPrice}
           onMinPriceChange={setMinPrice}
           onMaxPriceChange={setMaxPrice}
-          creditOptions={[
-            { key: 'ALL', label: '全部信用' },
-            { key: 'HIGH', label: '高信用' },
-            { key: 'VERIFIED', label: '已认证' }
-          ]}
-          activeCredit={creditFilter}
-          onCreditChange={(key) => setCreditFilter(key as 'ALL' | 'HIGH' | 'VERIFIED')}
+          creditOptions={CREDIT_FILTER_OPTIONS}
+          activeCredits={activeCreditFilters}
+          onCreditToggle={(key) => toggleCreditFilter(key as CreditFilterKey)}
         />
 
         {loading ? (
@@ -180,27 +197,16 @@ export function SearchPage() {
           <ProductGrid
             items={visibleProducts}
             className="fish-feed-grid"
-            emptyState={<EmptyState className="is-shell" title="没有找到相关商品" description="换个关键词试试，或者晚点再看新上架。" />}
+            emptyState={<EmptyState className="is-shell" title="没有找到相关商品" />}
             renderItem={(item, index) => {
               const status = getListingStatusPresentation(item.status);
 
               return (
-                <ProductSummaryCard
-                  key={item.id}
-                  className={index % 3 === 2 ? 'offset' : ''}
-                  item={item}
-                  imageSrc={getProductImage(item, index)}
-                  signal={`${item.category} · ${item.condition}`}
-                  coverActions={(
-                    <button
-                      type="button"
-                      className={item.isFavorited ? 'fish-item-favorite active' : 'fish-item-favorite'}
-                      onClick={(event) => void handleToggleFavorite(event, item)}
-                      aria-label={item.isFavorited ? '取消收藏' : '收藏商品'}
-                    >
-                      {item.isFavorited ? '已想要' : '想要'}
-                    </button>
-                  )}
+	                <ProductSummaryCard
+	                  key={item.id}
+	                  className={index % 3 === 2 ? 'offset' : ''}
+	                  item={item}
+	                  imageSrc={getProductImage(item, index)}
                   priceMeta={`${status.label} · ${item.sellerName}`}
                   tagItems={item.tags.slice(0, 3)}
                   onOpen={() => navigate(`/products/${item.id}`)}

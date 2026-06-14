@@ -3,22 +3,24 @@ import { Button, Form, Input, Modal, Radio, Select, Skeleton, message } from 'an
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MetaList } from '../components/data-display';
-import { DetailShell, SectionHeader } from '../components/layout';
+import { DetailShell } from '../components/layout';
 import { ProductGrid, ProductSummaryCard } from '../components/product';
-import { getBjfuMeetupLabel } from '../constants/campus';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import {
   createConversation,
-  createOrder,
   createReport,
   fetchProductDetail,
+  fetchUserTrustSummary,
+  followUser,
   getApiErrorMessage,
+  recordProductContact,
+  unfollowUser,
   type ProductDetailView
 } from '../services/api';
 import { isFavorite, subscribeFavorites, toggleFavorite } from '../services/favorites';
 import { hasTradingAccess, isGuestUser } from '../services/session';
 import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/productCover';
-import { getListingStatusPresentation } from '../utils/listingStatus';
 import { getUserPresentation } from '../utils/userPresentation';
 
 const reportTypeOptions = [
@@ -45,13 +47,15 @@ export function ProductDetailPage() {
   const { currentUser, clearCurrentUser } = useAuthState();
   const [detail, setDetail] = useState<ProductDetailView | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState<'chat' | 'order' | 'report' | null>(null);
+  const [submitting, setSubmitting] = useState<'chat' | 'report' | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [favoriteVersion, setFavoriteVersion] = useState(0);
   const [favoriteAnimating, setFavoriteAnimating] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportForm] = Form.useForm<ReportFormValues>();
+  const [sellerFollowing, setSellerFollowing] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -76,6 +80,31 @@ export function ProductDetailPage() {
   }, [id]);
 
   useEffect(() => subscribeFavorites(() => setFavoriteVersion((value) => value + 1)), []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFollowState() {
+      setSellerFollowing(false);
+      if (!detail || !currentUser || isGuestUser(currentUser) || currentUser.id === detail.seller.id) {
+        return;
+      }
+
+      try {
+        const summary = await fetchUserTrustSummary(detail.seller.id);
+        if (!cancelled) {
+          setSellerFollowing(summary.isFollowing);
+        }
+      } catch {
+        // 拉取失败时保持未关注的默认展示
+      }
+    }
+
+    void loadFollowState();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, currentUser]);
 
   const favorited = useMemo(
     () => (detail ? isFavorite(detail.id, currentUser) : false),
@@ -122,6 +151,29 @@ export function ProductDetailPage() {
     return true;
   }
 
+  async function handleToggleFollow() {
+    if (!detail) {
+      return;
+    }
+
+    if (!ensureTradingAccess('关注卖家')) {
+      return;
+    }
+
+    setFollowPending(true);
+    try {
+      const result = sellerFollowing
+        ? await unfollowUser(detail.seller.id)
+        : await followUser(detail.seller.id);
+      setSellerFollowing(result.isFollowing);
+      message.success(result.isFollowing ? '已关注卖家' : '已取消关注');
+    } catch (error) {
+      showActionError(error, '关注操作失败');
+    } finally {
+      setFollowPending(false);
+    }
+  }
+
   async function handleContactSeller() {
     if (!detail) {
       return;
@@ -131,26 +183,28 @@ export function ProductDetailPage() {
       return;
     }
 
-    const activeUser = currentUser;
-    if (!activeUser) {
+    if (!currentUser) {
       return;
     }
+
     setSubmitting('chat');
     try {
-      const conversation = await createConversation({
-        productId: detail.id,
-        initialMessage: `你好，我对“${detail.title}”感兴趣，还在吗？`
+      await recordProductContact(detail.id);
+      const conversation = await createConversation({ productId: detail.id });
+      setSubmitting(null);
+      void navigate('/messages', {
+        state: {
+          conversationId: conversation.id,
+          channel: 'trade'
+        }
       });
-      message.success(conversation.reused ? '已打开原会话' : '已发起新会话');
-      void navigate('/messages', { state: { conversationId: conversation.id } });
     } catch (error) {
-      showActionError(error, '联系对方失败');
-    } finally {
+      showActionError(error, '联系卖家失败');
       setSubmitting(null);
     }
   }
 
-  async function handleCreateOrder() {
+  function handleCreateOrder() {
     if (!detail) {
       return;
     }
@@ -163,20 +217,7 @@ export function ProductDetailPage() {
     if (!activeUser) {
       return;
     }
-    setSubmitting('order');
-    try {
-      await createOrder({
-        productId: detail.id,
-        meetupLocation: getBjfuMeetupLabel(detail.id),
-        note: `想约“${detail.title}”当面交易`
-      });
-      message.success('下单成功，已生成订单和会话');
-      void navigate('/profile', { state: { section: 'orders', orderScope: 'buying' } });
-    } catch (error) {
-      showActionError(error, '下单失败');
-    } finally {
-      setSubmitting(null);
-    }
+    void navigate(`/orders/checkout?type=product&productId=${detail.id}`);
   }
 
   function openReportModal() {
@@ -257,7 +298,7 @@ export function ProductDetailPage() {
         setFavoriteAnimating(true);
         window.setTimeout(() => setFavoriteAnimating(false), 520);
       }
-      message.success(nextState ? '已加入想要' : '已取消想要');
+      message.success(nextState ? '已加入收藏' : '已取消收藏');
     } catch (error) {
       showActionError(error, '收藏操作失败');
     }
@@ -287,7 +328,7 @@ export function ProductDetailPage() {
       sellerName: detail.seller.displayName
     },
     detail.id,
-    4
+    6
   );
   const currentImage = detailImages[activeImage] ?? detailImages[0];
   const sellerPresentation = getUserPresentation(detail.seller);
@@ -295,12 +336,10 @@ export function ProductDetailPage() {
     ? detail.detailBase.description
     : `${detail.detailBase.description.slice(0, 88)}...`;
   const sellerIdentity = sellerPresentation.creditBadge.label;
-  const statusPresentation = getListingStatusPresentation(detail.detailBase.status, detail.detailBase.statusLabel);
   const sellerStats = [
     detail.seller.college,
-    `${detail.seller.responseRate}% 回复率`,
     `完成 ${detail.seller.completedOrders} 单`,
-    `评分 ${detail.seller.averageRating.toFixed(1)}`
+    detail.seller.averageRating === null ? '暂无评分' : `评分 ${detail.seller.averageRating.toFixed(1)}`
   ];
 
   return (
@@ -313,6 +352,12 @@ export function ProductDetailPage() {
           className="detail-seller-strip-main detail-seller-link"
           aria-label={`打开${detail.seller.displayName}的主页`}
         >
+          <UserAvatar
+            src={detail.seller.avatarUrl}
+            alt={`${detail.seller.displayName}的头像`}
+            fallbackLabel={detail.seller.displayName}
+            className="detail-seller-avatar"
+          />
           <div className="detail-seller-strip-copy">
             <div className="detail-seller-strip-title">
               <strong>{detail.seller.displayName}</strong>
@@ -323,6 +368,16 @@ export function ProductDetailPage() {
             <MetaList items={sellerStats} className="detail-seller-strip-meta" />
           </div>
         </Link>
+        {currentUser?.id !== detail.seller.id && (
+          <button
+            type="button"
+            className={`detail-seller-follow${sellerFollowing ? ' is-following' : ''}`}
+            onClick={() => void handleToggleFollow()}
+            disabled={followPending}
+          >
+            {sellerFollowing ? '已关注' : '关注'}
+          </button>
+        )}
       </section>
 
       <DetailShell
@@ -347,10 +402,6 @@ export function ProductDetailPage() {
                 src={currentImage}
                 alt={detail.title}
               />
-              <div className="detail-photo-overlay">
-                <span>{detail.category}</span>
-                <strong>{activeImage + 1} / {detailImages.length}</strong>
-              </div>
             </div>
           </div>
         )}
@@ -378,15 +429,11 @@ export function ProductDetailPage() {
                 </button>
               </div>
 
-              <div className="detail-price-block">
-                <div className="listing-detail-amount">
-                  <strong>{detail.detailBase.amountLabel}</strong>
-                  <div className="detail-price-meta">
-                    <span className="detail-condition-inline">{detail.condition}</span>
-                    <span>同校面交</span>
-                  </div>
-                </div>
-              </div>
+	              <div className="detail-price-block">
+	                <div className="listing-detail-amount">
+	                  <strong>{detail.detailBase.amountLabel}</strong>
+	                </div>
+	              </div>
             </div>
 
             <div className="detail-info-body">
@@ -410,8 +457,8 @@ export function ProductDetailPage() {
                 <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
                   聊一聊
                 </Button>
-                <Button size="large" onClick={() => void handleCreateOrder()} loading={submitting === 'order'}>
-                  立即购买
+                <Button size="large" onClick={handleCreateOrder}>
+                  立即下单
                 </Button>
               </div>
 
@@ -419,23 +466,6 @@ export function ProductDetailPage() {
                 <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
                   {submitting === 'report' ? '提交中...' : '举报'}
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-        bottomContent={(
-          <div className="detail-bottom-layout">
-            <div className="detail-card detail-balance-card">
-              <SectionHeader title="交易保障" description={statusPresentation.label} />
-              <div className="ui-split-list">
-                {detail.compliance.trustSignals.slice(0, 3).map((signal) => (
-                  <div key={signal} className="ui-split-list-row">
-                    <div className="ui-split-list-copy">
-                      <strong>{signal}</strong>
-                      <span>支持校内当面交易</span>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -508,9 +538,6 @@ export function ProductDetailPage() {
                 className="detail-related-card"
                 item={item}
                 imageSrc={resolvePrimaryProductImage(item, item.id)}
-                signal={`${item.category} · ${item.condition}`}
-                priceMeta="同校在售"
-                tagItems={[item.sellerName, '相似推荐']}
               />
             </Link>
           )}

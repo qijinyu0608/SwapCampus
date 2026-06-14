@@ -7,6 +7,10 @@ export class CreateReportDto {
 
   @IsInt()
   @IsOptional()
+  campusServiceListingId?: number;
+
+  @IsInt()
+  @IsOptional()
   targetUserId?: number;
 
   @IsString()

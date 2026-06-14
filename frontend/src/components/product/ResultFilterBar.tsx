@@ -1,4 +1,6 @@
-import { InputNumber } from 'antd';
+import { Checkbox, InputNumber, Popover } from 'antd';
+import { DownOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export type ResultFilterTab = {
@@ -28,8 +30,8 @@ type ResultFilterBarProps = {
   onMinPriceChange: (value: number | null) => void;
   onMaxPriceChange: (value: number | null) => void;
   creditOptions?: ResultCreditOption[];
-  activeCredit?: string;
-  onCreditChange?: (key: string) => void;
+  activeCredits?: string[];
+  onCreditToggle?: (key: string) => void;
   trailingContent?: ReactNode;
 };
 
@@ -45,10 +47,20 @@ export function ResultFilterBar({
   onMinPriceChange,
   onMaxPriceChange,
   creditOptions,
-  activeCredit,
-  onCreditChange,
+  activeCredits,
+  onCreditToggle,
   trailingContent
 }: ResultFilterBarProps) {
+  const [creditOpen, setCreditOpen] = useState(false);
+  const selectedCreditCount = activeCredits?.length ?? 0;
+  const creditLabel = useMemo(() => {
+    if (!selectedCreditCount) {
+      return '信用';
+    }
+
+    return `信用 ${selectedCreditCount}`;
+  }, [selectedCreditCount]);
+
   return (
     <div className="result-filter-bar">
       <div className="result-filter-bar-tabs" role="tablist" aria-label="结果分类">
@@ -105,20 +117,44 @@ export function ResultFilterBar({
           />
         </div>
 
-        {creditOptions && activeCredit && onCreditChange ? (
+        {creditOptions?.length && activeCredits && onCreditToggle ? (
           <>
             <div className="result-filter-divider" aria-hidden="true" />
-            <div className="result-filter-segment" role="tablist" aria-label="信用筛选">
-              {creditOptions.map((option) => (
+            <div className="result-filter-trailing result-filter-credit-group" role="group" aria-label="信用筛选">
+              <Popover
+                trigger="click"
+                placement="bottomRight"
+                open={creditOpen}
+                onOpenChange={setCreditOpen}
+                content={(
+                  <div className="result-filter-credit-popover" role="menu" aria-label="信用等级筛选">
+                    {creditOptions.map((option) => {
+                      const active = activeCredits.includes(option.key);
+
+                      return (
+                        <Checkbox
+                          key={option.key}
+                          checked={active}
+                          onChange={() => onCreditToggle(option.key)}
+                          className="result-filter-credit-option"
+                        >
+                          {option.label}
+                        </Checkbox>
+                      );
+                    })}
+                  </div>
+                )}
+              >
                 <button
-                  key={option.key}
                   type="button"
-                  className={activeCredit === option.key ? 'result-filter-control active' : 'result-filter-control'}
-                  onClick={() => onCreditChange(option.key)}
+                  className={selectedCreditCount ? 'result-filter-credit-trigger active' : 'result-filter-credit-trigger'}
+                  aria-haspopup="menu"
+                  aria-expanded={creditOpen}
                 >
-                  {option.label}
+                  <span className="result-filter-group-label">{creditLabel}</span>
+                  <DownOutlined className={creditOpen ? 'result-filter-credit-arrow active' : 'result-filter-credit-arrow'} />
                 </button>
-              ))}
+              </Popover>
             </div>
           </>
         ) : null}

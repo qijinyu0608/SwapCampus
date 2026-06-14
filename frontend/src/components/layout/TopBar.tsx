@@ -129,7 +129,7 @@ export function TopBar({ currentUser }: TopBarProps) {
           key: 'publish',
           to: '/publish',
           label: '发布',
-          tooltip: '发布商品',
+          tooltip: '发布内容',
           icon: <PlusCircleOutlined />,
           activeMatch: (pathname) => pathname.startsWith('/publish')
         },

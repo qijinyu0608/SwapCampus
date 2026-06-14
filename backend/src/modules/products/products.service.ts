@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
+import { VendureService } from '../vendure/vendure.service';
 import { isProductCategoryName, normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-categories';
 import { isProductConditionValue, PRODUCT_CONDITION_VALUES } from './product-conditions';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -14,50 +15,23 @@ const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 const allowedCategories = [...PRODUCT_CATEGORY_NAMES];
 const prohibitedKeywords = ['刀具', '代抢', '账号', '药品', '烟草', '酒精', '发票', '银行卡', '代写', '代考', '外挂', '校园贷'];
 const dormElectricalWhitelist = ['电脑', '非充电台灯', '手机', '平板电脑', '20000mAh以下充电宝', '电动牙刷', '电动剃须刀', '相机'];
-const dormElectricalKeywords = [
-  '吹风机',
-  '电吹风',
-  '卷发棒',
-  '直板夹',
-  '电热水壶',
-  '烧水壶',
-  '热水壶',
-  '养生壶',
-  '电饭锅',
-  '电煮锅',
-  '电热杯',
-  '电热饭盒',
-  '暖手宝',
-  '电热毯',
-  '取暖器',
-  '电暖器',
-  '小太阳',
-  '电磁炉',
-  '煮蛋器',
-  '咖啡机',
-  '破壁机',
-  '榨汁机',
-  '空气炸锅',
-  '加湿器',
-  '小风扇'
-];
 const communityNotices = [
-  '宿舍电器按白名单发布，未列入的新旧小家电不进入审核池，系统会直接驳回。',
+  '宿舍电器请优先控制在校内允许使用和交易的范围内，发布前自行确认宿舍管理要求。',
   '交易建议优先选择图书馆、食堂、公寓楼下等校内公共区域，当面验货后再确认。',
   '教材资料、数码配件和生活用品请写清成色、配件、容量或版本，避免误导同学。',
   '平台禁止账号、代写代考、烟酒药品、刀具、校园贷等内容，违规账号会被限制发布。'
 ];
 const productStatusLabelMap: Record<ProductStatus, string> = {
   ON_SALE: '在售',
-  PENDING: '审核中',
+  PENDING: '暂不可见',
   SOLD: '已售',
   OFFLINE: '已下架'
 };
 const ruleHighlights = [
-  '禁售词自动审核命中后直接驳回',
-  '宿舍电器仅允许白名单范围内发布',
-  '充电宝需标明容量且不超过 20000mAh',
-  '商品通过后仍保留人工巡检和举报下架'
+  '商品提交后直接上架展示',
+  '发布人需自行保证标题、描述和图片真实一致',
+  '宿舍电器请按白名单和校内用电要求谨慎发布',
+  '平台保留基于举报或运营巡检下架违规内容的权利'
 ];
 const categoryImageMap: Record<string, string[]> = {
   教材资料: [DEMO_PRODUCT_IMAGE],
@@ -182,78 +156,15 @@ function getPriceBand(price: number) {
   return '100_plus';
 }
 
-function normalizeAuditContent(payload: Pick<CreateProductDto, 'title' | 'description' | 'category' | 'tags'>) {
-  return `${payload.title} ${payload.description} ${payload.category} ${(payload.tags ?? []).join(' ')}`.toLowerCase();
-}
-
-function extractPowerBankCapacity(content: string) {
-  const match = content.match(/(\d{4,5})\s*(?:mah|ma|毫安)/i);
-  return match ? Number(match[1]) : null;
-}
-
-function matchesAllowedDormElectrical(content: string) {
-  if (/(电脑|笔记本|台式机|手机|平板|ipad|电动牙刷|电动剃须刀|剃须刀|相机|单反|微单)/i.test(content)) {
-    return true;
-  }
-
-  if (/(台灯|阅读灯|护眼灯)/.test(content)) {
-    if (/(非充电|不充电|插电|有线)/.test(content)) {
-      return true;
-    }
-
-    return !/(充电|无线|锂电|电池)/.test(content);
-  }
-
-  if (/(充电宝|移动电源|powerbank)/i.test(content)) {
-    const capacity = extractPowerBankCapacity(content);
-    return capacity !== null && capacity <= 20000;
-  }
-
-  return false;
-}
-
-function rejectReasonForDormElectrical(content: string) {
-  const powerBankCapacity = /(充电宝|移动电源|powerbank)/i.test(content) ? extractPowerBankCapacity(content) : null;
-  if (/(充电宝|移动电源|powerbank)/i.test(content) && (powerBankCapacity === null || powerBankCapacity > 20000)) {
-    return '充电宝需标明容量且不超过 20000mAh';
-  }
-
-  if (/(台灯|阅读灯|护眼灯)/.test(content) && /(充电|无线|锂电|电池)/.test(content)) {
-    return '宿舍台灯仅允许非充电款';
-  }
-
-  return '宿舍电器不在白名单内';
-}
-
-function getModerationRejectReason(payload: Pick<CreateProductDto, 'title' | 'description' | 'category' | 'tags'>) {
-  const content = normalizeAuditContent(payload);
-  const blockedKeyword = prohibitedKeywords.find((keyword) => content.includes(keyword.toLowerCase()));
-  if (blockedKeyword) {
-    return `包含禁售内容：${blockedKeyword}`;
-  }
-
-  const blockedDormElectrical = dormElectricalKeywords.find((keyword) => content.includes(keyword.toLowerCase()));
-  if (blockedDormElectrical) {
-    return '宿舍电器不在白名单内';
-  }
-
-  const normalizedCategory = normalizeProductCategoryName(payload.category);
-  const mentionsDormElectrical = normalizedCategory === '宿舍生活' ||
-    /(充电宝|移动电源|powerbank|台灯|阅读灯|护眼灯|电脑|笔记本|台式机|手机|平板|ipad|电动牙刷|电动剃须刀|剃须刀|相机|单反|微单)/i.test(content);
-  if (mentionsDormElectrical && !matchesAllowedDormElectrical(content)) {
-    return rejectReasonForDormElectrical(content);
-  }
-
-  return null;
-}
-
 @Injectable()
 export class ProductsService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(SearchService)
-    private readonly searchService: SearchService
+    private readonly searchService: SearchService,
+    @Inject(VendureService)
+    private readonly vendureService: VendureService
   ) {}
 
   private async buildProductCards(products: Array<{
@@ -270,7 +181,7 @@ export class ProductsService {
     const sellerIds = [...new Set(products.map((product) => product.sellerId))];
     const productIds = products.map((product) => product.id);
 
-    const [sellers, images, favoriteCounts, favoritedProductIds] = await Promise.all([
+    const [sellers, images, favoriteCounts, wantCounts, favoritedProductIds] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: sellerIds } },
         select: { id: true, displayName: true, creditScore: true, verificationStatus: true }
@@ -282,6 +193,14 @@ export class ProductsService {
       this.prisma.favorite.groupBy({
         by: ['productId'],
         where: { productId: { in: productIds } },
+        _count: { _all: true }
+      }),
+      this.prisma.userBehavior.groupBy({
+        by: ['productId'],
+        where: {
+          productId: { in: productIds },
+          eventType: BehaviorEventType.CONTACT
+        },
         _count: { _all: true }
       }),
       userId
@@ -296,6 +215,7 @@ export class ProductsService {
     ]);
 
     const favoriteCountMap = new Map(favoriteCounts.map((item) => [item.productId, item._count._all]));
+    const wantCountMap = new Map(wantCounts.map((item) => [item.productId, item._count._all]));
     const userFavoriteMap = new Map(favoritedProductIds.map((item) => [item.productId, item.createdAt]));
     const sellerMap = new Map(sellers.map((seller) => [seller.id, seller]));
     const imageMap = new Map<number, string>();
@@ -325,6 +245,7 @@ export class ProductsService {
         sellerVerified: sellerMap.get(product.sellerId)?.verificationStatus === VerificationStatus.APPROVED,
         imageUrl: imageMap.get(product.id) ?? getDefaultImageUrl(product.id, normalizedCategory, product.title),
         favoriteCount: favoriteCountMap.get(product.id) ?? 0,
+        wantCount: wantCountMap.get(product.id) ?? 0,
         isFavorited: Boolean(userFavoritedAt),
         favoritedAt: userFavoritedAt ?? null
       };
@@ -560,7 +481,7 @@ export class ProductsService {
       dormElectricalWhitelist,
       communityNotices,
       ruleHighlights,
-      reviewFlow: ['实名认证', '自动审核', '人工审核', '通过上架'],
+      reviewFlow: ['实名认证', '填写商品信息', '直接上架'],
       trustSignals: ['实名账号', '信用分', '举报下架', '审核留痕']
     };
   }
@@ -575,16 +496,26 @@ export class ProductsService {
     }
 
     if (userId) {
-      await this.prisma.userBehavior.create({
-        data: {
+      await this.prisma.userBehavior.upsert({
+        where: {
+          userId_productId_eventType: {
+            userId,
+            productId: product.id,
+            eventType: BehaviorEventType.VIEW
+          }
+        },
+        update: {
+          createdAt: new Date()
+        },
+        create: {
           userId,
           productId: product.id,
-          eventType: 'VIEW'
+          eventType: BehaviorEventType.VIEW
         }
       });
     }
 
-    const [seller, images, relatedProducts, reportCount, favoriteCount, viewCount, sellerOrders, sellerMessages] = await Promise.all([
+    const [seller, images, relatedProducts, reportCount, favoriteCount, wantCount, viewCount, sellerOrders] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: product.sellerId },
         include: { verification: true }
@@ -611,6 +542,12 @@ export class ProductsService {
       this.prisma.userBehavior.count({
         where: {
           productId: product.id,
+          eventType: BehaviorEventType.CONTACT
+        }
+      }),
+      this.prisma.userBehavior.count({
+        where: {
+          productId: product.id,
           eventType: BehaviorEventType.VIEW
         }
       }),
@@ -618,9 +555,6 @@ export class ProductsService {
         where: { sellerId: product.sellerId },
         select: { id: true, status: true }
       }),
-      this.prisma.message.count({
-        where: { senderId: product.sellerId }
-      })
     ]);
 
     const sellerOrderIds = sellerOrders.map((order) => order.id);
@@ -632,11 +566,10 @@ export class ProductsService {
       : [];
 
     const relatedCards = await this.buildProductCards(relatedProducts, userId);
-    const responseRate = Math.min(99, (seller?.verificationStatus === VerificationStatus.APPROVED ? 88 : 76) + Math.min(10, Math.floor(sellerMessages / 4)));
     const completedOrders = sellerOrders.filter((order) => order.status === OrderStatus.COMPLETED).length;
     const averageRating = sellerReviews.length
       ? Number((sellerReviews.reduce((sum, review) => sum + review.rating, 0) / sellerReviews.length).toFixed(1))
-      : 4.8;
+      : null;
 
     const detailCard = (await this.buildProductCards([product], userId))[0];
     const sellerCreditScore = seller?.creditScore ?? detailCard.sellerCreditScore ?? 60;
@@ -652,25 +585,25 @@ export class ProductsService {
       seller: {
         id: seller?.id ?? product.sellerId,
         displayName: seller?.displayName ?? detailCard.sellerName,
+        avatarUrl: seller?.avatarUrl ?? null,
         creditScore: sellerCreditScore,
         creditLevel: getCreditLevel(sellerCreditScore),
         verificationStatus: sellerVerificationStatus,
         accountStatus: sellerAccountStatus,
         college: seller?.verification?.college ?? (sellerVerificationStatus === VerificationStatus.APPROVED ? '林学院' : '待认证'),
-        responseRate,
         averageRating,
         completedOrders
       },
       stats: {
         favoriteCount: detailCard.favoriteCount ?? favoriteCount,
         reportCount,
-        wantCount: detailCard.favoriteCount ?? favoriteCount,
+        wantCount,
         viewCount
       },
       compliance: {
         allowedCategory: allowedCategories.includes(normalizeProductCategoryName(product.category)),
         trustSignals: [sellerVerificationStatus === VerificationStatus.APPROVED ? '实名账号' : '待实名', `信用${sellerCreditScore}`, reportCount > 0 ? `近30天举报${reportCount}` : '近30天无举报'],
-        reviewFlow: ['内容校验', '人工巡检', '异常下架']
+        reviewFlow: ['信息填写', '直接上架', '举报处置']
       },
       relatedProducts: relatedCards,
       detailBase: {
@@ -694,7 +627,6 @@ export class ProductsService {
         },
         metaItems: [
           { key: 'category', label: '分类', value: detailCard.category },
-          { key: 'condition', label: '成色', value: detailCard.condition },
           { key: 'seller-status', label: '卖家状态', value: sellerVerificationStatus === VerificationStatus.APPROVED ? '实名认证' : '普通账号' },
           { key: 'credit-level', label: '信用等级', value: getCreditLevel(sellerCreditScore) },
           { key: 'published-at', label: '发布时间', value: product.createdAt.toISOString() }
@@ -707,25 +639,77 @@ export class ProductsService {
     };
   }
 
+  async recordProductContact(id: number, currentUser: AuthenticatedUser) {
+    const user = requireAuthenticatedUser(currentUser);
+    const [product, account] = await Promise.all([
+      this.prisma.product.findUnique({
+        where: { id },
+        select: { id: true, sellerId: true }
+      }),
+      this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, accountStatus: true }
+      })
+    ]);
+
+    if (!product) {
+      throw new NotFoundException('商品不存在');
+    }
+
+    if (!account) {
+      throw new BadRequestException('登录状态已失效，请重新登录');
+    }
+
+    if (account.accountStatus === AccountStatus.BANNED) {
+      throw new ForbiddenException('账号已被封禁，无法联系卖家');
+    }
+
+    if (account.id === product.sellerId) {
+      throw new BadRequestException('不能联系自己发布的商品');
+    }
+
+    await this.prisma.userBehavior.upsert({
+      where: {
+        userId_productId_eventType: {
+          userId: account.id,
+          productId: product.id,
+          eventType: BehaviorEventType.CONTACT
+        }
+      },
+      update: {},
+      create: {
+        userId: account.id,
+        productId: product.id,
+        eventType: BehaviorEventType.CONTACT
+      }
+    });
+
+    return {
+      productId: product.id,
+      recorded: true
+    };
+  }
+
+
   async getDashboardStats() {
     try {
-      const [userCount, productCount, pendingCount] = await Promise.all([
+      const [userCount, productCount, onSaleCount] = await Promise.all([
         this.prisma.user.count(),
         this.prisma.product.count(),
-        this.prisma.product.count({ where: { status: ProductStatus.PENDING } })
+        this.prisma.product.count({ where: { status: ProductStatus.ON_SALE } })
       ]);
 
       return {
         userCount,
         productCount,
-        pendingCount
+        onSaleCount
       };
     } catch (error) {
       console.error('ProductsService.getDashboardStats fallback:', error);
       return {
         userCount: 3,
         productCount: 0,
-        pendingCount: 1
+        onSaleCount: 0
       };
     }
   }
@@ -746,6 +730,10 @@ export class ProductsService {
       .filter((url, index, list) => list.indexOf(url) === index)
       .slice(0, 6);
 
+    if (!normalizedImageUrls.length) {
+      throw new BadRequestException('请至少上传 1 张商品图片');
+    }
+
     const seller = await this.prisma.user.findUnique({
       where: { id: sellerUser.id },
       select: { id: true, accountStatus: true }
@@ -759,14 +747,6 @@ export class ProductsService {
       throw new ForbiddenException('账号已被封禁，无法发布商品');
     }
 
-    const rejectReason = getModerationRejectReason({
-      ...payload,
-      tags: normalizedTags
-    });
-    if (rejectReason) {
-      throw new BadRequestException(`自动审核未通过：${rejectReason}`);
-    }
-
     const product = await this.prisma.product.create({
       data: {
         sellerId: sellerUser.id,
@@ -776,7 +756,7 @@ export class ProductsService {
         category: payload.category,
         condition: payload.condition,
         tags: normalizedTags,
-        status: ProductStatus.PENDING,
+        status: ProductStatus.ON_SALE,
         images: normalizedImageUrls.length
           ? {
               create: normalizedImageUrls.map((imageUrl, index) => ({
@@ -788,12 +768,21 @@ export class ProductsService {
       }
     });
 
+    const vendureProduct = await this.vendureService.ensureProductVariant(product);
+    const syncedProduct = await this.prisma.product.update({
+      where: { id: product.id },
+      data: {
+        vendureProductId: vendureProduct.id,
+        vendureVariantId: vendureProduct.variantId
+      }
+    });
+
     await this.searchService.syncProduct(product.id);
 
     return {
-      id: product.id,
-      title: product.title,
-      status: product.status
+      id: syncedProduct.id,
+      title: syncedProduct.title,
+      status: syncedProduct.status
     };
   }
 }

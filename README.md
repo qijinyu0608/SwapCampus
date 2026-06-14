@@ -58,6 +58,19 @@
 - IaC
 - 事件驱动预留
 
+## 文档与规范入口
+
+- `README.md`
+  - 项目总览、运行方式、目录入口
+- `AGENT.md`
+  - 给自动化 agent 的总入口，先看工程规范，再看课程文档
+- `agent/`
+  - 当前有效工程规范，涉及结构、领域、数据和 UI 的改动优先以这里为准
+- `docs/00-文档目录.md`
+  - 当前有效课程文档与专题分析索引
+- `docs/archive/`
+  - 历史过程材料、课程表单、已归档专题，不作为当前基线直接维护
+
 ## 当前项目结构
 ```text
 SwapCampus
@@ -65,6 +78,7 @@ SwapCampus
 ├── Makefile
 ├── docker-compose.yml
 ├── README.md
+├── AGENT.md
 ├── backend
 │   ├── Dockerfile
 │   ├── package.json
@@ -72,7 +86,8 @@ SwapCampus
 │   │   ├── schema.prisma
 │   │   ├── init.ts
 │   │   ├── remove-demo-data.ts
-│   │   └── verify-category-products.ts
+│   │   ├── seed-demo-data.ts
+│   │   └── ...
 │   └── src
 │       ├── app.module.ts
 │       ├── main.ts
@@ -81,56 +96,47 @@ SwapCampus
 │           ├── admin
 │           ├── auth
 │           ├── campus-services
+│           ├── credit-center
+│           ├── favorites
 │           ├── health
+│           ├── media
 │           ├── messages
 │           ├── orders
 │           ├── products
 │           ├── recommendations
 │           ├── reports
+│           ├── search
 │           └── users
 ├── frontend
 │   ├── Dockerfile
 │   ├── package.json
-│   ├── nginx/default.conf
 │   └── src
 │       ├── components
 │       ├── constants
 │       ├── pages
 │       ├── router
 │       ├── services
+│       ├── styles
+│       ├── theme
 │       ├── utils
-│       ├── App.tsx
-│       ├── main.tsx
-│       └── styles.css
+│       └── ...
+├── agent
+│   ├── INDEX.md
+│   ├── governance
+│   ├── domain
+│   ├── architecture
+│   ├── data
+│   └── ui
 ├── docs
 │   ├── 00-文档目录.md
 │   ├── 01-项目开题报告.md
-│   ├── 02-需求规格说明书.md
-│   ├── 03-概要设计说明书.md
-│   ├── 04-详细设计说明书.md
-│   ├── 05-数据库设计说明书.md
-│   ├── 06-测试计划与测试报告.md
-│   ├── 07-用户手册.md
-│   ├── 08-部署与运维手册.md
-│   ├── 部署说明.md
-│   ├── 09-课程设计总结报告.md
-│   ├── 10-项目计划.md
-│   ├── 11-团队分工与贡献说明.md
-│   ├── 12-答辩材料提纲.md
-│   ├── 13-开发记录.md
-│   ├── 14-验收与演示记录.md
-│   ├── 15-中期检查报告.md
-│   ├── 16-交付清单.md
-│   ├── 17-任务需求实现追踪矩阵.md
-│   ├── 18-文档管理与版本规范.md
-│   ├── T-01-选题申报表.md
-│   ├── T-02-团队组建申报表.md
-│   ├── T-03-周进度汇报表.md
-│   ├── T-04-团队互评表.md
-│   ├── T-05-个人贡献度评定表.md
-│   └── superpowers
-│       ├── plans
-│       └── specs
+│   ├── ...
+│   └── archive
+│       ├── README.md
+│       ├── forms
+│       ├── planning
+│       ├── process
+│       └── technical
 ├── infra
 │   ├── architecture.md
 │   ├── generate-screenshots.mjs
@@ -145,9 +151,11 @@ SwapCampus
 关键目录说明：
 - `backend/src/modules`：按领域拆分的单体后端模块，当前业务核心都在这里
 - `backend/prisma`：数据库模型、初始化、种子数据和补齐脚本
-- `frontend/src/pages`：主要页面入口，包括首页、登录、发布、消息、个人中心、后台
+- `frontend/src/pages`：主要页面入口，包括首页、详情、发布、消息、个人中心、校园服务、下单和后台
 - `frontend/src/services`：前端接口调用、登录态、收藏、行为埋点封装
-- `docs`：课程设计交付文档和过程材料
+- `agent`：当前有效工程规范入口
+- `docs`：当前有效课程设计文档、专题分析和交付材料
+- `docs/archive`：历史过程材料、课程表单和归档专题
 - `infra`：架构说明、压测计划和辅助脚本
 - `artifacts/screenshots`：页面截图和验收素材
 
@@ -175,9 +183,9 @@ make start
 - `make start` / `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
 
 ### 访问地址
-- Frontend：`http://10.66.0.11:5178`
-- Backend Health：`http://10.66.0.11:3001/api/health`
-- Socket.IO：`http://10.66.0.11:3001`
+- Frontend：`http://127.0.0.1:5178`
+- Backend Health：`http://127.0.0.1:3001/api/health`
+- Socket.IO：`http://127.0.0.1:3001`
 - MinIO Console：`http://localhost:9001`
 
 ### 重置数据
@@ -191,7 +199,7 @@ make start
 ```bash
 docker compose ps
 docker compose logs backend --tail=50
-curl http://10.66.0.11:3001/api/health
+curl http://127.0.0.1:3001/api/health
 ```
 
 ### 常用命令
@@ -249,7 +257,8 @@ make frontend-build
 - `ProductImage`
 - `Favorite`
 - `Order`
-- `CampusServiceTask`
+- `CampusServiceListing`
+- `CampusServiceOrder`
 - `Review`
 - `Conversation`
 - `Message`

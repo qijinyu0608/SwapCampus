@@ -44,14 +44,13 @@ enum CampusServiceCategory {
   ERRAND
   AGENCY
   GROUP_BUY
+  MOVING
+  TUTORING
+  SKILL
+  REPAIR
+  EVENT
+  OTHER
   HELP
-}
-
-enum CampusServiceStatus {
-  OPEN
-  MATCHED
-  DONE
-  CANCELED
 }
 
 enum CampusServiceUrgency {
@@ -72,6 +71,54 @@ enum CampusServiceContactPreference {
   FLEXIBLE
 }
 
+enum CampusServiceIntent {
+  REQUEST
+  OFFER
+}
+
+enum CampusServicePattern {
+  ONE_TIME
+  REUSABLE
+}
+
+enum CampusServicePriceMode {
+  FIXED
+  NEGOTIABLE
+  FREE
+}
+
+enum CampusServiceLocationMode {
+  ONLINE
+  ON_SITE
+  DELIVERY
+  FLEXIBLE
+}
+
+enum CampusServiceListingStatus {
+  OPEN
+  BUSY
+  PAUSED
+  ENDED
+  CANCELED
+}
+
+enum CampusServiceListingEndReason {
+  EXPIRED
+  QUOTA_REACHED
+  MANUAL_END
+  ADMIN_CLOSE
+}
+
+enum CampusServiceOrderStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  WAITING_COMPLETE_CONFIRM
+  COMPLETED
+  REJECTED
+  CANCELED
+  EXPIRED
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -86,9 +133,30 @@ enum BehaviorEventType {
   ORDER
 }
 
+enum CreditPointChangeType {
+  EARN
+  SPEND
+  ADJUST
+}
+
+enum CreditPointSourceType {
+  SIGNIN
+  MISSION
+  REDEEM
+  ADMIN
+}
+
+enum CreditRedeemOrderStatus {
+  CREATED
+  FULFILLED
+  CANCELED
+  REJECTED
+}
+
 model User {
   id                          Int                  @id @default(autoincrement())
   supertokensUserId           String?              @unique
+  vendureCustomerId           String?
   studentId                   String?              @unique
   displayName                 String
   email                       String               @unique
@@ -104,9 +172,13 @@ model User {
   favorites                   Favorite[]
   buyerOrders                 Order[]              @relation("OrderBuyer")
   sellerOrders                Order[]              @relation("OrderSeller")
-  publishedCampusServiceTasks CampusServiceTask[]  @relation("CampusServicePublisher")
-  acceptedCampusServiceTasks  CampusServiceTask[]  @relation("CampusServiceAccepter")
+  campusServiceListings       CampusServiceListing[] @relation("CampusServiceListingOwner")
+  campusServiceFavorites      CampusServiceFavorite[]
+  campusServiceBehaviors      CampusServiceBehavior[]
+  campusServiceRequests       CampusServiceOrder[] @relation("CampusServiceRequester")
+  campusServiceOffers         CampusServiceOrder[] @relation("CampusServiceProvider")
   reviews                     Review[]             @relation("ReviewReviewer")
+  initiatedConversations      Conversation[]       @relation("ConversationInitiator")
   sentMessages                Message[]
   reportsFiled                Report[]             @relation("ReportReporter")
   reportsTargeted             Report[]             @relation("ReportTargetUser")
@@ -115,6 +187,10 @@ model User {
   behaviors                   UserBehavior[]
   following                   UserFollow[]         @relation("UserFollowing")
   followers                   UserFollow[]         @relation("UserFollowers")
+  creditAsset                 UserCreditAsset?
+  creditPointLedgers          CreditPointLedger[]
+  creditMissionClaims         CreditMissionClaim[]
+  creditRedeemOrders          CreditRedeemOrder[]
 }
 
 model StudentVerification {
@@ -131,6 +207,8 @@ model StudentVerification {
 model Product {
   id            Int            @id @default(autoincrement())
   sellerId      Int
+  vendureProductId String?
+  vendureVariantId String?
   title         String
   description   String
   price         Decimal        @db.Decimal(10, 2)
@@ -177,6 +255,8 @@ model Favorite {
 
 model Order {
   id             Int            @id @default(autoincrement())
+  vendureOrderId String?
+  vendureOrderCode String?
   productId      Int
   buyerId        Int
   sellerId       Int
@@ -197,38 +277,109 @@ model Order {
   @@index([status, createdAt])
 }
 
-model CampusServiceTask {
-  id               Int                   @id @default(autoincrement())
-  title            String
-  category         CampusServiceCategory
-  description      String
-  reward           Decimal               @db.Decimal(10, 2)
-  locationFrom     String
-  locationTo       String
-  deadlineLabel    String
-  estimatedMinutes Int
-  urgency          CampusServiceUrgency           @default(NORMAL)
-  fulfillmentMode  CampusServiceFulfillmentMode   @default(FLEXIBLE)
-  contactPreference CampusServiceContactPreference @default(CHAT_ONLY)
-  itemCount        Int                   @default(1)
-  trustNote        String?
-  matchedAt        DateTime?
-  completedAt      DateTime?
-  canceledAt       DateTime?
-  canceledById     Int?
-  cancelReason     String?
-  publisherId      Int
-  accepterId       Int?
-  status           CampusServiceStatus   @default(OPEN)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  publisher        User                  @relation("CampusServicePublisher", fields: [publisherId], references: [id])
-  accepter         User?                 @relation("CampusServiceAccepter", fields: [accepterId], references: [id])
-  conversations    Conversation[]
+model CampusServiceListing {
+  id                   Int                             @id @default(autoincrement())
+  ownerId              Int
+  intent               CampusServiceIntent
+  pattern              CampusServicePattern           @default(ONE_TIME)
+  category             CampusServiceCategory
+  title                String
+  description          String
+  priceMode            CampusServicePriceMode         @default(FIXED)
+  amount               Decimal?                       @db.Decimal(10, 2)
+  locationMode         CampusServiceLocationMode      @default(FLEXIBLE)
+  locationNote         String?
+  routeFrom            String?
+  routeTo              String?
+  validFromAt          DateTime                       @default(now())
+  validUntilAt         DateTime
+  estimatedMinutes     Int
+  urgency              CampusServiceUrgency           @default(NORMAL)
+  fulfillmentMode      CampusServiceFulfillmentMode   @default(FLEXIBLE)
+  contactPreference    CampusServiceContactPreference @default(CHAT_ONLY)
+  itemCount            Int                            @default(1)
+  trustNote            String?
+  maxTotalOrders       Int?
+  maxConcurrentOrders  Int?
+  autoConfirm          Boolean                        @default(true)
+  status               CampusServiceListingStatus     @default(OPEN)
+  endReason            CampusServiceListingEndReason?
+  endedAt              DateTime?
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  owner                User                           @relation("CampusServiceListingOwner", fields: [ownerId], references: [id])
+  images               CampusServiceImage[]
+  favorites            CampusServiceFavorite[]
+  behaviors            CampusServiceBehavior[]
+  reports              Report[]
+  orders               CampusServiceOrder[]
 
-  @@index([publisherId, status, createdAt])
-  @@index([accepterId, status, updatedAt])
+  @@index([ownerId, status, createdAt])
+  @@index([intent, status, validUntilAt])
   @@index([category, status, createdAt])
+}
+
+model CampusServiceImage {
+  id        Int                  @id @default(autoincrement())
+  listingId Int
+  imageUrl  String
+  sortOrder Int                  @default(0)
+  listing   CampusServiceListing @relation(fields: [listingId], references: [id])
+
+  @@index([listingId, sortOrder])
+}
+
+model CampusServiceFavorite {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  listingId Int
+  createdAt DateTime             @default(now())
+  user      User                 @relation(fields: [userId], references: [id])
+  listing   CampusServiceListing @relation(fields: [listingId], references: [id])
+
+  @@unique([userId, listingId])
+  @@index([listingId, createdAt])
+}
+
+model CampusServiceBehavior {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  listingId Int
+  eventType BehaviorEventType
+  createdAt DateTime             @default(now())
+  user      User                 @relation(fields: [userId], references: [id])
+  listing   CampusServiceListing @relation(fields: [listingId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, listingId, createdAt])
+  @@index([listingId, eventType])
+}
+
+model CampusServiceOrder {
+  id                     Int                      @id @default(autoincrement())
+  listingId              Int
+  requesterId            Int
+  providerId             Int
+  status                 CampusServiceOrderStatus @default(PENDING_CONFIRMATION)
+  applyMessage           String?
+  finalAmount            Decimal?                 @db.Decimal(10, 2)
+  confirmedAt            DateTime?
+  completedAt            DateTime?
+  canceledAt             DateTime?
+  cancelReason           String?
+  expiredAt              DateTime?
+  completionRequestedById Int?
+  completionRequestedAt  DateTime?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  listing                CampusServiceListing     @relation(fields: [listingId], references: [id])
+  requester              User                     @relation("CampusServiceRequester", fields: [requesterId], references: [id])
+  provider               User                     @relation("CampusServiceProvider", fields: [providerId], references: [id])
+  conversations          Conversation[]
+
+  @@index([listingId, status, createdAt])
+  @@index([requesterId, status, updatedAt])
+  @@index([providerId, status, updatedAt])
 }
 
 model Review {
@@ -249,17 +400,20 @@ model Conversation {
   id                  Int                @id @default(autoincrement())
   orderId             Int?
   productId           Int?
-  campusServiceTaskId Int?
+  campusServiceOrderId Int?
+  initiatorId         Int?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   order               Order?             @relation(fields: [orderId], references: [id])
   product             Product?           @relation(fields: [productId], references: [id])
-  campusServiceTask   CampusServiceTask? @relation(fields: [campusServiceTaskId], references: [id])
+  campusServiceOrder  CampusServiceOrder? @relation(fields: [campusServiceOrderId], references: [id])
+  initiator           User?              @relation("ConversationInitiator", fields: [initiatorId], references: [id])
   messages            Message[]
 
   @@index([orderId, updatedAt])
   @@index([productId, updatedAt])
-  @@index([campusServiceTaskId, updatedAt])
+  @@index([campusServiceOrderId, updatedAt])
+  @@index([initiatorId, updatedAt])
 }
 
 model Message {
@@ -280,6 +434,7 @@ model Report {
   id             Int      @id @default(autoincrement())
   reporterId     Int
   productId      Int?
+  campusServiceListingId Int?
   targetUserId   Int?
   reason         String
   status         String   @default("OPEN")
@@ -289,11 +444,13 @@ model Report {
   updatedAt      DateTime @updatedAt
   reporter       User     @relation("ReportReporter", fields: [reporterId], references: [id])
   product        Product? @relation(fields: [productId], references: [id])
+  campusServiceListing CampusServiceListing? @relation(fields: [campusServiceListingId], references: [id])
   targetUser     User?    @relation("ReportTargetUser", fields: [targetUserId], references: [id])
   handler        User?    @relation("ReportHandler", fields: [handledBy], references: [id])
 
   @@index([reporterId, createdAt])
   @@index([productId, status])
+  @@index([campusServiceListingId, status])
   @@index([targetUserId, status])
   @@index([handledBy, status])
   @@index([status, createdAt])
@@ -326,6 +483,7 @@ model UserBehavior {
   @@index([userId, createdAt])
   @@index([userId, productId, createdAt])
   @@index([productId, eventType])
+  @@unique([userId, productId, eventType])
 }
 
 model UserFollow {
@@ -339,4 +497,72 @@ model UserFollow {
   @@unique([followerId, followingId])
   @@index([followerId, createdAt])
   @@index([followingId, createdAt])
+}
+
+model UserCreditAsset {
+  userId            Int                @id
+  availablePoints   Int                @default(0)
+  totalEarnedPoints Int                @default(0)
+  totalSpentPoints  Int                @default(0)
+  signInStreak      Int                @default(0)
+  lastSignInAt      DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id])
+  pointLedgers      CreditPointLedger[]
+  missionClaims     CreditMissionClaim[]
+  redeemOrders      CreditRedeemOrder[]
+}
+
+model CreditPointLedger {
+  id           Int                   @id @default(autoincrement())
+  userId       Int
+  assetUserId  Int
+  changeType   CreditPointChangeType
+  sourceType   CreditPointSourceType
+  sourceId     String?
+  pointsDelta  Int
+  balanceAfter Int
+  remark       String?
+  createdAt    DateTime              @default(now())
+  user         User                  @relation(fields: [userId], references: [id])
+  asset        UserCreditAsset       @relation(fields: [assetUserId], references: [userId])
+
+  @@index([userId, createdAt])
+  @@index([sourceType, sourceId])
+}
+
+model CreditMissionClaim {
+  id             Int             @id @default(autoincrement())
+  userId         Int
+  assetUserId    Int
+  missionCode    String
+  cycleKey       String
+  rewardPoints   Int
+  sourceSnapshot Json?
+  claimedAt      DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id])
+  asset          UserCreditAsset @relation(fields: [assetUserId], references: [userId])
+
+  @@index([userId, missionCode, cycleKey])
+  @@index([missionCode, cycleKey])
+}
+
+model CreditRedeemOrder {
+  id            Int                     @id @default(autoincrement())
+  userId        Int
+  assetUserId   Int
+  rewardCode    String
+  pointsCost    Int
+  status        CreditRedeemOrderStatus @default(CREATED)
+  rewardPayload Json?
+  fulfilledAt   DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  user          User                    @relation(fields: [userId], references: [id])
+  asset         UserCreditAsset         @relation(fields: [assetUserId], references: [userId])
+
+  @@index([userId, createdAt])
+  @@index([rewardCode, status])
 }

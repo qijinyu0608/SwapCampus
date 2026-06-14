@@ -1,0 +1,30 @@
+Source files
+
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/COVID-19词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/GFW补充词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/其他词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/反动词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/广告类型.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/政治类型.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/新思想启蒙.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/暴恐词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/民生词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/涉枪涉爆.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/网易前端过滤敏感词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/色情类型.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/色情词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/补充词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/贪腐词库.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/零时-Tencent.txt
+- /tmp/swapcampus-wordlists/Sensitive-lexicon/Vocabulary/非法网址.txt
+- /tmp/swapcampus-wordlists/sensitive-stop-words/广告.txt
+- /tmp/swapcampus-wordlists/sensitive-stop-words/政治类.txt
+- /tmp/swapcampus-wordlists/sensitive-stop-words/涉枪涉爆违法信息关键词.txt
+- /tmp/swapcampus-wordlists/sensitive-stop-words/网址.txt
+- /tmp/swapcampus-wordlists/sensitive-stop-words/色情类.txt
+- /tmp/swapcampus-wordlists/TextFilter/敏感词库大全.utf8.txt
+- moderation/blocked-terms.local.txt
+
+Counts
+
+51406 moderation/blocked-terms.txt

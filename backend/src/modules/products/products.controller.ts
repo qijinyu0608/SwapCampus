@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { ProductsService } from './products.service';
@@ -7,7 +7,7 @@ import { SearchProductsDto } from './dto/search-products.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
-import type { SessionRequest } from '../auth/supertokens.types';
+import type { SessionRequest, SessionResponse } from '../auth/supertokens.types';
 import { resolveOptionalAuthUser } from '../auth/auth-request.utils';
 
 @Controller('products')
@@ -50,9 +50,14 @@ export class ProductsController {
   @Get(':id')
   getProductDetail(
     @Param('id', ParseIntPipe) id: number,
-    @Req() request?: SessionRequest
+    @Req() request?: SessionRequest,
+    @Res({ passthrough: true }) response?: SessionResponse
   ) {
-    return resolveOptionalAuthUser(this.prisma, (request ?? {}) as SessionRequest & { user?: AuthenticatedUser })
+    return resolveOptionalAuthUser(
+      this.prisma,
+      (request ?? {}) as SessionRequest & { user?: AuthenticatedUser },
+      response
+    )
       .then((user) => this.productsService.getProductDetail(id, user?.id));
   }
 
@@ -63,5 +68,14 @@ export class ProductsController {
     @CurrentUser() user: AuthenticatedUser
   ) {
     return this.productsService.createProduct(payload, user);
+  }
+
+  @Post(':id/contact')
+  @UseGuards(JwtAuthGuard)
+  recordProductContact(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.productsService.recordProductContact(id, user);
   }
 }

@@ -12,6 +12,11 @@ import Session from 'supertokens-node/recipe/session';
 import { UserRole } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  collectConversationParticipantIds,
+  messageConversationAccessInclude,
+  type MessageConversationAccessRecord
+} from './message-conversation.helpers';
 
 type NewMessageEvent = {
   conversationId: number;
@@ -92,8 +97,17 @@ export class MessagesGateway implements OnGatewayConnection {
       return;
     }
 
-    const participantIds = await this.getConversationParticipantIds(payload.conversationId);
-    if (!participantIds || !participantIds.has(authUser.id)) {
+    const accessContext = await this.getConversationAccessContext(payload.conversationId);
+    if (!accessContext || !accessContext.participantIds.has(authUser.id)) {
+      throw new UnauthorizedException('无权加入此会话');
+    }
+
+    if (
+      accessContext.conversation.productId &&
+      accessContext.conversation.initiatorId &&
+      accessContext.conversation.messages.length === 0 &&
+      accessContext.conversation.initiatorId !== authUser.id
+    ) {
       throw new UnauthorizedException('无权加入此会话');
     }
 
@@ -124,23 +138,10 @@ export class MessagesGateway implements OnGatewayConnection {
     return `conversation:${conversationId}`;
   }
 
-  private async getConversationParticipantIds(conversationId: number) {
+  private async getConversationAccessContext(conversationId: number) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        campusServiceTask: {
-          select: {
-            publisherId: true,
-            accepterId: true
-          }
-        },
-        order: true,
-        messages: {
-          select: {
-            senderId: true
-          }
-        }
-      }
+      include: messageConversationAccessInclude
     });
 
     if (!conversation) {
@@ -156,32 +157,12 @@ export class MessagesGateway implements OnGatewayConnection {
         })
       : null;
 
-    const participantIds = new Set<number>();
-
-    if (conversation.order?.buyerId) {
-      participantIds.add(conversation.order.buyerId);
-    }
-
-    if (conversation.order?.sellerId) {
-      participantIds.add(conversation.order.sellerId);
-    }
-
-    if (product?.sellerId) {
-      participantIds.add(product.sellerId);
-    }
-
-    if (conversation.campusServiceTask?.publisherId) {
-      participantIds.add(conversation.campusServiceTask.publisherId);
-    }
-
-    if (conversation.campusServiceTask?.accepterId) {
-      participantIds.add(conversation.campusServiceTask.accepterId);
-    }
-
-    conversation.messages.forEach((message) => {
-      participantIds.add(message.senderId);
-    });
-
-    return participantIds;
+    return {
+      conversation,
+      participantIds: collectConversationParticipantIds({
+        conversation: conversation as MessageConversationAccessRecord,
+        productSellerId: product?.sellerId ?? null
+      })
+    };
   }
 }

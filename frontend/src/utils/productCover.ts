@@ -170,10 +170,25 @@ function resolveRealImages(product: ProductImageLike) {
 }
 
 export function resolvePrimaryProductImage(product: ProductImageLike, variant = 0) {
+  const realImages = resolveRealImages(product);
+  if (realImages.length) {
+    return realImages[variant % realImages.length];
+  }
+
   return DEMO_PRODUCT_IMAGE;
 }
 
-export function resolveProductGallery(product: ProductImageLike, variant = 0, count = 4) {
+export function resolveProductGallery(product: ProductImageLike, variant = 0, count = 6) {
+  const realImages = resolveRealImages(product);
+  if (realImages.length) {
+    if (realImages.length <= count) {
+      return realImages;
+    }
+
+    const start = variant % realImages.length;
+    return Array.from({ length: count }, (_, index) => realImages[(start + index) % realImages.length]);
+  }
+
   return Array.from({ length: count }, () => DEMO_PRODUCT_IMAGE);
 }
 

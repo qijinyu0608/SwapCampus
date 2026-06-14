@@ -10,7 +10,12 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 import { SuperTokensMiddleware } from './modules/auth/supertokens.middleware';
 import { SuperTokensService } from './modules/auth/supertokens.service';
 import { CampusServicesController } from './modules/campus-services/campus-services.controller';
+import { CampusServiceOrdersController } from './modules/campus-services/campus-service-orders.controller';
 import { CampusServicesService } from './modules/campus-services/campus-services.service';
+import { CreditCenterController } from './modules/credit-center/credit-center.controller';
+import { CreditCenterService } from './modules/credit-center/credit-center.service';
+import { CampusServiceFavoritesController } from './modules/favorites/campus-service-favorites.controller';
+import { CampusServiceFavoritesService } from './modules/favorites/campus-service-favorites.service';
 import { FavoritesController } from './modules/favorites/favorites.controller';
 import { FavoritesService } from './modules/favorites/favorites.service';
 import { MessagesController } from './modules/messages/messages.controller';
@@ -27,6 +32,7 @@ import { ReportsService } from './modules/reports/reports.service';
 import { SearchService } from './modules/search/search.service';
 import { UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
+import { VendureService } from './modules/vendure/vendure.service';
 import { PrismaService } from './prisma/prisma.service';
 
 @Module({
@@ -36,6 +42,9 @@ import { PrismaService } from './prisma/prisma.service';
     HealthController,
     AuthController,
     CampusServicesController,
+    CampusServiceOrdersController,
+    CreditCenterController,
+    CampusServiceFavoritesController,
     FavoritesController,
     MediaController,
     MessagesController,
@@ -52,6 +61,8 @@ import { PrismaService } from './prisma/prisma.service';
     RolesGuard,
     SuperTokensService,
     CampusServicesService,
+    CreditCenterService,
+    CampusServiceFavoritesService,
     FavoritesService,
     MediaService,
     MessagesGateway,
@@ -61,6 +72,7 @@ import { PrismaService } from './prisma/prisma.service';
     ReportsService,
     SearchService,
     UsersService,
+    VendureService,
     PrismaService
   ]
 })

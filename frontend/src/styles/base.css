@@ -20,6 +20,12 @@ body {
   background: var(--bg);
 }
 
+/* Ant Design Modal opens a body scroll lock and injects a width compensation.
+   We already reserve scrollbar gutter on the root, so the extra width tweak causes a small layout shift. */
+body.ant-scrolling-effect {
+  width: auto !important;
+}
+
 button,
 input,
 select,

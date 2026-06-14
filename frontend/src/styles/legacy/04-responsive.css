@@ -136,7 +136,7 @@
   }
 
   .fish-home-user-stats {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .fish-market-category-head {
@@ -204,6 +204,20 @@
 
   .service-detail-metrics {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .service-detail-order-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .service-detail-order-top,
+  .service-detail-order-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .service-detail-order-pagination {
+    justify-content: flex-start;
   }
 
   .detail-feed-grid {
@@ -420,7 +434,7 @@
   }
 
   .detail-thumb-column {
-    grid-auto-columns: 88px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px;
   }
 
@@ -445,6 +459,22 @@
 
   .service-detail-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .service-detail-order-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .service-detail-order-actions {
+    justify-content: flex-start;
+  }
+
+  .service-detail-order-tabs {
+    gap: 6px;
+  }
+
+  .service-detail-order-tabs button {
+    padding-inline: 10px;
   }
 
   .fish-search-shell {
@@ -525,7 +555,7 @@
   }
 
   .detail-thumb-column {
-    grid-auto-columns: 72px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
 

@@ -6,6 +6,11 @@ export {
   defaultProhibitedKeywords,
   defaultReviewFlow,
   defaultRuleHighlights,
+  defaultServiceCommunityNotices,
+  defaultServiceProhibitedItems,
+  defaultServiceReviewFlow,
+  defaultServiceRuleHighlights,
+  defaultServiceTrustSignals,
   defaultTrustSignals,
   PublishRulesDocument,
   resolvePublishingRulesDocumentProps

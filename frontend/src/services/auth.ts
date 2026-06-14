@@ -26,7 +26,7 @@ function resolveBrowserWebsiteDomain() {
 export const authConfig = {
   apiDomain: resolveBrowserApiDomain() ?? requireEnv(import.meta.env.VITE_API_DOMAIN, 'http://localhost:3001'),
   apiBasePath: '/api/auth',
-  websiteDomain: resolveBrowserWebsiteDomain() ?? requireEnv(import.meta.env.VITE_WEBSITE_DOMAIN, 'http://localhost:5178'),
+  websiteDomain: resolveBrowserWebsiteDomain() ?? requireEnv(import.meta.env.VITE_WEBSITE_DOMAIN, 'http://localhost:5179'),
   websiteBasePath: '/login'
 };
 

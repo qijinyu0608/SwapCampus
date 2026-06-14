@@ -1,5 +1,10 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus } from '@prisma/client';
+import {
+  AccountStatus,
+  CampusServiceCategory,
+  CampusServiceListingStatus,
+  CampusServiceOrderStatus
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
@@ -7,6 +12,12 @@ import { SearchService } from '../search/search.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { MessagesGateway } from './messages.gateway';
+import {
+  collectConversationParticipantIds,
+  messageConversationAccessInclude,
+  resolveCampusConversationParticipants,
+  type MessageConversationAccessRecord
+} from './message-conversation.helpers';
 
 @Injectable()
 export class MessagesService {
@@ -16,6 +27,76 @@ export class MessagesService {
     @Inject(MessagesGateway)
     private readonly messagesGateway: MessagesGateway
   ) {}
+
+  private mapCampusConversationStatus(params: {
+    listingStatus: CampusServiceListingStatus | null;
+    orderStatus: CampusServiceOrderStatus | null;
+  }) {
+    const { listingStatus, orderStatus } = params;
+    if (listingStatus === CampusServiceListingStatus.CANCELED || orderStatus === CampusServiceOrderStatus.CANCELED || orderStatus === CampusServiceOrderStatus.EXPIRED) {
+      return 'CANCELED' as const;
+    }
+
+    if (orderStatus === CampusServiceOrderStatus.COMPLETED) {
+      return 'DONE' as const;
+    }
+
+    if (
+      orderStatus === CampusServiceOrderStatus.PENDING_CONFIRMATION
+      || orderStatus === CampusServiceOrderStatus.CONFIRMED
+      || orderStatus === CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
+    ) {
+      return 'MATCHED' as const;
+    }
+
+    return listingStatus === CampusServiceListingStatus.ENDED ? 'DONE' as const : 'OPEN' as const;
+  }
+
+  private mapCampusConversationStatusLabel(status: ReturnType<MessagesService['mapCampusConversationStatus']>) {
+    switch (status) {
+      case 'OPEN':
+        return '可参与';
+      case 'MATCHED':
+        return '进行中';
+      case 'DONE':
+        return '已完成';
+      case 'CANCELED':
+        return '已取消';
+      default:
+        return status;
+    }
+  }
+
+  private mapCampusServiceCategoryLabel(category: CampusServiceCategory) {
+    switch (category) {
+      case 'ERRAND':
+        return '跑腿';
+      case 'AGENCY':
+        return '代办';
+      case 'GROUP_BUY':
+        return '拼单';
+      case 'MOVING':
+        return '搬运';
+      case 'TUTORING':
+        return '辅导';
+      case 'SKILL':
+        return '技能';
+      case 'REPAIR':
+        return '维修';
+      case 'EVENT':
+        return '活动协助';
+      case 'OTHER':
+        return '其他';
+      case 'HELP':
+        return '帮忙';
+      default:
+        return category;
+    }
+  }
+
+  private isBuyerOnlyDraftConversation(conversation: Pick<MessageConversationAccessRecord, 'productId' | 'initiatorId' | 'messages'>) {
+    return Boolean(conversation.productId && conversation.initiatorId && conversation.messages.length === 0);
+  }
 
   async listConversations(currentUser?: AuthenticatedUser) {
     const userId = currentUser?.id;
@@ -30,29 +111,47 @@ export class MessagesService {
       where: userId
         ? {
             OR: [
+              { initiatorId: userId },
               { order: { is: { buyerId: userId } } },
               { order: { is: { sellerId: userId } } },
-              { campusServiceTask: { is: { publisherId: userId } } },
-              { campusServiceTask: { is: { accepterId: userId } } },
+              { campusServiceOrder: { is: { requesterId: userId } } },
+              { campusServiceOrder: { is: { providerId: userId } } },
               { messages: { some: { senderId: userId } } },
-              ...(sellerProductIds.length ? [{ productId: { in: sellerProductIds } }] : [])
+              ...(sellerProductIds.length
+                ? [{
+                    AND: [
+                      { productId: { in: sellerProductIds } },
+                      { messages: { some: {} } }
+                    ]
+                  }]
+                : [])
             ]
           }
         : undefined,
       include: {
-        campusServiceTask: {
+        campusServiceOrder: {
           select: {
             id: true,
-            title: true,
-            category: true,
-            reward: true,
-            locationFrom: true,
-            locationTo: true,
-            deadlineLabel: true,
-            estimatedMinutes: true,
+            requesterId: true,
+            providerId: true,
             status: true,
-            publisherId: true,
-            accepterId: true
+            finalAmount: true,
+            listing: {
+              select: {
+                id: true,
+                intent: true,
+                title: true,
+                category: true,
+                amount: true,
+                routeFrom: true,
+                routeTo: true,
+                locationNote: true,
+                validUntilAt: true,
+                estimatedMinutes: true,
+                status: true,
+                ownerId: true
+              }
+            }
           }
         },
         order: true,
@@ -108,16 +207,13 @@ export class MessagesService {
         })
       : [];
 
+    const productSellerMap = new Map(products.map((product) => [product.id, product.sellerId]));
     const participantIds = Array.from(
       new Set([
-        ...products.map((product) => product.sellerId),
-        ...conversations.flatMap((conversation) => [
-          conversation.order?.buyerId,
-          conversation.order?.sellerId,
-          conversation.messages[0]?.senderId,
-          conversation.campusServiceTask?.publisherId,
-          conversation.campusServiceTask?.accepterId
-        ])
+        ...conversations.flatMap((conversation) => Array.from(collectConversationParticipantIds({
+          conversation: conversation as MessageConversationAccessRecord,
+          productSellerId: conversation.productId ? productSellerMap.get(conversation.productId) ?? null : null
+        })))
       ].filter((value): value is number => Boolean(value)))
     );
 
@@ -127,6 +223,7 @@ export class MessagesService {
           select: {
             id: true,
             displayName: true,
+            avatarUrl: true,
             verification: {
               select: {
                 college: true
@@ -149,13 +246,16 @@ export class MessagesService {
       const latestMessage = conversation.messages[0] ?? null;
       const product = conversation.productId ? productMap.get(conversation.productId) ?? null : null;
       const productSellerId = product?.sellerId ?? conversation.order?.sellerId ?? null;
-      const campusPublisherId = conversation.campusServiceTask?.publisherId ?? null;
-      const campusAccepterId = conversation.campusServiceTask?.accepterId ?? null;
+      const campusOrder = conversation.campusServiceOrder;
+      const campusListing = campusOrder?.listing ?? null;
+      const campusParticipants = resolveCampusConversationParticipants({ campusServiceOrder: campusOrder });
+      const campusPublisherId = campusParticipants.publisherId;
+      const campusParticipantId = campusParticipants.participantId;
       const selfRole = this.resolveSelfRole(
         userId,
         conversation.order?.buyerId,
         productSellerId,
-        campusAccepterId,
+        campusParticipantId,
         campusPublisherId
       );
       const counterpartId = this.resolveCounterpartId({
@@ -165,29 +265,68 @@ export class MessagesService {
         sellerId: conversation.order?.sellerId ?? null,
         latestSenderId: latestMessage?.senderId ?? null,
         campusPublisherId,
-        campusAccepterId
+        campusParticipantId
       });
       const counterpart = counterpartId ? userMap.get(counterpartId) ?? null : null;
+      const campusServiceSnapshot = campusListing
+        ? {
+            title: campusListing.title,
+            category: campusListing.category,
+            reward: campusOrder?.finalAmount ?? campusListing.amount ?? 0,
+            locationFrom: campusListing.routeFrom ?? campusListing.locationNote ?? '待协商',
+            locationTo: campusListing.routeTo ?? campusListing.locationNote ?? '待协商',
+            deadlineLabel: campusListing.validUntilAt.toISOString().slice(0, 16).replace('T', ' '),
+            estimatedMinutes: campusListing.estimatedMinutes,
+            status: this.mapCampusConversationStatus({
+              listingStatus: campusListing.status,
+              orderStatus: campusOrder?.status ?? null
+            })
+          }
+        : null;
+      const campusServiceDisplay = campusServiceSnapshot
+        ? {
+            title: campusServiceSnapshot.title,
+            category: campusServiceSnapshot.category,
+            categoryLabel: this.mapCampusServiceCategoryLabel(campusServiceSnapshot.category),
+            intent: campusListing?.intent ?? null,
+            intentLabel: campusListing
+              ? (campusListing.ownerId === campusOrder?.requesterId ? '找人帮我' : '我来提供')
+              : null,
+            reward: Number(campusServiceSnapshot.reward),
+            routeLabel: `${campusServiceSnapshot.locationFrom} -> ${campusServiceSnapshot.locationTo}`,
+            locationFrom: campusServiceSnapshot.locationFrom,
+            locationTo: campusServiceSnapshot.locationTo,
+            deadlineLabel: campusServiceSnapshot.deadlineLabel,
+            estimatedMinutes: campusServiceSnapshot.estimatedMinutes,
+            status: campusServiceSnapshot.status,
+            statusLabel: this.mapCampusConversationStatusLabel(campusServiceSnapshot.status)
+          }
+        : null;
 
       return {
         id: conversation.id,
         orderId: conversation.orderId,
         productId: conversation.productId,
-        campusServiceTaskId: conversation.campusServiceTask?.id ?? null,
-        campusServiceTaskTitle: conversation.campusServiceTask?.title ?? null,
-        campusServiceTask: conversation.campusServiceTask
+        campusServiceOrderId: campusOrder?.id ?? null,
+        campusServiceListing: campusListing
           ? {
-              id: conversation.campusServiceTask.id,
-              title: conversation.campusServiceTask.title,
-              category: conversation.campusServiceTask.category,
-              reward: Number(conversation.campusServiceTask.reward),
-              locationFrom: conversation.campusServiceTask.locationFrom,
-              locationTo: conversation.campusServiceTask.locationTo,
-              deadlineLabel: conversation.campusServiceTask.deadlineLabel,
-              estimatedMinutes: conversation.campusServiceTask.estimatedMinutes,
-              status: conversation.campusServiceTask.status
+              id: campusListing.id,
+              title: campusListing.title,
+              category: campusListing.category,
+              intent: campusListing.intent,
+              intentLabel: campusListing.ownerId === campusOrder?.requesterId ? '找人帮我' : '我来提供',
+              reward: Number(campusOrder?.finalAmount ?? campusListing.amount ?? 0),
+              locationFrom: campusListing.routeFrom ?? campusListing.locationNote ?? '待协商',
+              locationTo: campusListing.routeTo ?? campusListing.locationNote ?? '待协商',
+              deadlineLabel: campusListing.validUntilAt.toISOString().slice(0, 16).replace('T', ' '),
+              estimatedMinutes: campusListing.estimatedMinutes,
+              status: this.mapCampusConversationStatus({
+                listingStatus: campusListing.status,
+                orderStatus: campusOrder?.status ?? null
+              })
             }
           : null,
+        campusServiceDisplay,
         preview: latestMessage?.content ?? '点击查看消息',
         updatedAt: conversation.updatedAt,
         latestMessageSenderId: latestMessage?.senderId ?? null,
@@ -196,6 +335,7 @@ export class MessagesService {
         participant: {
           id: counterpart?.id ?? counterpartId ?? null,
           displayName: counterpart?.displayName ?? '同校同学',
+          avatarUrl: counterpart?.avatarUrl ?? null,
           college: counterpart?.verification?.college ?? null,
           isSeller: Boolean(productSellerId && counterpartId === productSellerId)
         },
@@ -243,14 +383,12 @@ export class MessagesService {
       throw new BadRequestException('不能和自己发起会话');
     }
 
+    const initialMessage = dto.initialMessage?.trim();
+
     const existing = await this.prisma.conversation.findFirst({
       where: {
         productId: dto.productId,
-        messages: {
-          some: {
-            senderId: buyerUser.id
-          }
-        }
+        initiatorId: buyerUser.id
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -265,17 +403,20 @@ export class MessagesService {
 
     const conversation = await this.prisma.conversation.create({
       data: {
-        productId: dto.productId
+        productId: dto.productId,
+        initiatorId: buyerUser.id
       }
     });
 
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        senderId: buyerUser.id,
-        content: dto.initialMessage?.trim() || '你好，这件商品还在吗？'
-      }
-    });
+    if (initialMessage) {
+      await this.prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: buyerUser.id,
+          content: initialMessage
+        }
+      });
+    }
 
     await this.prisma.conversation.update({
       where: { id: conversation.id },
@@ -300,6 +441,13 @@ export class MessagesService {
       throw new ForbiddenException('无权查看此会话');
     }
 
+    if (
+      this.isBuyerOnlyDraftConversation(accessContext.conversation as MessageConversationAccessRecord) &&
+      accessContext.conversation.initiatorId !== authUser.id
+    ) {
+      throw new ForbiddenException('无权查看此会话');
+    }
+
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       include: {
@@ -309,7 +457,8 @@ export class MessagesService {
             sender: {
               select: {
                 id: true,
-                displayName: true
+                displayName: true,
+                avatarUrl: true
               }
             }
           }
@@ -325,6 +474,7 @@ export class MessagesService {
       id: message.id,
       senderId: message.senderId,
       senderName: message.sender.displayName,
+      senderAvatarUrl: message.sender.avatarUrl ?? null,
       content: message.content,
       type: message.type,
       createdAt: message.createdAt
@@ -336,7 +486,7 @@ export class MessagesService {
     const [sender, accessContext] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: authUser.id },
-        select: { id: true, accountStatus: true, displayName: true }
+        select: { id: true, accountStatus: true, displayName: true, avatarUrl: true }
       }),
       this.getConversationAccessContext(conversationId)
     ]);
@@ -357,6 +507,13 @@ export class MessagesService {
       throw new ForbiddenException('当前账号无权发送此会话消息');
     }
 
+    if (
+      this.isBuyerOnlyDraftConversation(accessContext.conversation as MessageConversationAccessRecord) &&
+      accessContext.conversation.initiatorId !== authUser.id
+    ) {
+      throw new ForbiddenException('当前账号无权发送此会话消息');
+    }
+
     const message = await this.prisma.message.create({
       data: {
         conversationId,
@@ -374,6 +531,7 @@ export class MessagesService {
       id: message.id,
       senderId: message.senderId,
       senderName: sender.displayName,
+      senderAvatarUrl: sender.avatarUrl ?? null,
       content: message.content,
       type: message.type,
       createdAt: message.createdAt
@@ -391,8 +549,8 @@ export class MessagesService {
     currentUserId?: number,
     buyerId?: number | null,
     sellerId?: number | null,
-    campusBuyerId?: number | null,
-    campusSellerId?: number | null
+    campusParticipantId?: number | null,
+    campusPublisherId?: number | null
   ) {
     if (!currentUserId) {
       return null;
@@ -406,11 +564,11 @@ export class MessagesService {
       return 'buyer';
     }
 
-    if (campusSellerId === currentUserId) {
+    if (campusPublisherId === currentUserId) {
       return 'seller';
     }
 
-    if (campusBuyerId === currentUserId) {
+    if (campusParticipantId === currentUserId) {
       return 'buyer';
     }
 
@@ -424,7 +582,7 @@ export class MessagesService {
     productSellerId: number | null;
     latestSenderId: number | null;
     campusPublisherId: number | null;
-    campusAccepterId: number | null;
+    campusParticipantId: number | null;
   }) {
     const {
       currentUserId,
@@ -433,7 +591,7 @@ export class MessagesService {
       productSellerId,
       latestSenderId,
       campusPublisherId,
-      campusAccepterId
+      campusParticipantId
     } = params;
 
     if (currentUserId) {
@@ -457,35 +615,22 @@ export class MessagesService {
         return latestSenderId;
       }
 
-      if (campusPublisherId === currentUserId && campusAccepterId) {
-        return campusAccepterId;
+      if (campusPublisherId === currentUserId && campusParticipantId) {
+        return campusParticipantId;
       }
 
-      if (campusAccepterId === currentUserId && campusPublisherId) {
+      if (campusParticipantId === currentUserId && campusPublisherId) {
         return campusPublisherId;
       }
     }
 
-    return sellerId ?? buyerId ?? productSellerId ?? campusAccepterId ?? campusPublisherId ?? latestSenderId ?? null;
+    return sellerId ?? buyerId ?? productSellerId ?? campusParticipantId ?? campusPublisherId ?? latestSenderId ?? null;
   }
 
   async getConversationAccessContext(conversationId: number) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        campusServiceTask: {
-          select: {
-            publisherId: true,
-            accepterId: true
-          }
-        },
-        order: true,
-        messages: {
-          select: {
-            senderId: true
-          }
-        }
-      }
+      include: messageConversationAccessInclude
     });
 
     if (!conversation) {
@@ -501,30 +646,9 @@ export class MessagesService {
         })
       : null;
 
-    const participantIds = new Set<number>();
-
-    if (conversation.order?.buyerId) {
-      participantIds.add(conversation.order.buyerId);
-    }
-
-    if (conversation.order?.sellerId) {
-      participantIds.add(conversation.order.sellerId);
-    }
-
-    if (product?.sellerId) {
-      participantIds.add(product.sellerId);
-    }
-
-    if (conversation.campusServiceTask?.publisherId) {
-      participantIds.add(conversation.campusServiceTask.publisherId);
-    }
-
-    if (conversation.campusServiceTask?.accepterId) {
-      participantIds.add(conversation.campusServiceTask.accepterId);
-    }
-
-    conversation.messages.forEach((message) => {
-      participantIds.add(message.senderId);
+    const participantIds = collectConversationParticipantIds({
+      conversation: conversation as MessageConversationAccessRecord,
+      productSellerId: product?.sellerId ?? null
     });
 
     return {

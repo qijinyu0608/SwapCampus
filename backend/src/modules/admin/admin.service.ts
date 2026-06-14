@@ -1,10 +1,21 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountStatus, CampusServiceStatus, OrderStatus, ProductStatus } from '@prisma/client';
+import {
+  AccountStatus,
+  CampusServiceIntent,
+  CampusServiceListingEndReason,
+  CampusServiceListingStatus,
+  CampusServiceOrderStatus,
+  OrderStatus,
+  ProductStatus
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAdminUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
-import { UpdateAdminCampusServiceStatusDto } from './dto/update-admin-campus-service-status.dto';
+import {
+  AdminCampusServiceAction,
+  UpdateAdminCampusServiceStatusDto
+} from './dto/update-admin-campus-service-status.dto';
 import { UpdateAdminOrderStatusDto } from './dto/update-admin-order-status.dto';
 import { UpdateAdminProductStatusDto } from './dto/update-admin-product-status.dto';
 
@@ -12,6 +23,18 @@ const activeOrderStatuses: OrderStatus[] = [
   OrderStatus.PENDING,
   OrderStatus.IN_PROGRESS,
   OrderStatus.WAITING_REVIEW
+];
+
+const activeCampusListingStatuses: CampusServiceListingStatus[] = [
+  CampusServiceListingStatus.OPEN,
+  CampusServiceListingStatus.BUSY,
+  CampusServiceListingStatus.PAUSED
+];
+
+const activeCampusOrderStatuses: CampusServiceOrderStatus[] = [
+  CampusServiceOrderStatus.PENDING_CONFIRMATION,
+  CampusServiceOrderStatus.CONFIRMED,
+  CampusServiceOrderStatus.WAITING_COMPLETE_CONFIRM
 ];
 
 @Injectable()
@@ -33,20 +56,20 @@ export class AdminService {
 
   async getOverview(currentUser: AuthenticatedUser) {
     requireAdminUser(currentUser);
-    const [pendingProducts, totalUsers, reportCount, activeOrders, activeCampusServices] = await Promise.all([
-      this.prisma.product.count({ where: { status: ProductStatus.PENDING } }),
+    const [onSaleProducts, totalUsers, reportCount, activeOrders, activeCampusServices] = await Promise.all([
+      this.prisma.product.count({ where: { status: ProductStatus.ON_SALE } }),
       this.prisma.user.count(),
       this.prisma.report.count({ where: { status: 'OPEN' } }),
       this.prisma.order.count({
         where: { status: { in: activeOrderStatuses } }
       }),
-      this.prisma.campusServiceTask.count({
-        where: { status: { in: [CampusServiceStatus.OPEN, CampusServiceStatus.MATCHED] } }
+      this.prisma.campusServiceListing.count({
+        where: { status: { in: activeCampusListingStatuses } }
       })
     ]);
 
     const recentProducts = await this.prisma.product.findMany({
-      where: { status: ProductStatus.PENDING },
+      where: { status: ProductStatus.ON_SALE },
       orderBy: { createdAt: 'desc' },
       take: 6
     });
@@ -57,7 +80,7 @@ export class AdminService {
     });
 
     return {
-      pendingProducts,
+      onSaleProducts,
       totalUsers,
       reportCount,
       activeOrders,
@@ -261,7 +284,6 @@ export class AdminService {
           activeOrderStatuses.includes(order.status) &&
           !otherActiveOrder &&
           seller?.accountStatus !== AccountStatus.BANNED &&
-          product.status !== ProductStatus.PENDING &&
           product.status !== ProductStatus.SOLD
         ) {
           await tx.product.update({
@@ -300,76 +322,225 @@ export class AdminService {
 
   async listCampusServices(currentUser: AuthenticatedUser) {
     requireAdminUser(currentUser);
-    const tasks = await this.prisma.campusServiceTask.findMany({
+    const listings = await this.prisma.campusServiceListing.findMany({
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
       take: 30
     });
     const userIds = [...new Set(
-      tasks
-        .flatMap((task) => [task.publisherId, task.accepterId])
+      listings
+        .flatMap((listing) => [listing.ownerId])
         .filter((id): id is number => typeof id === 'number')
     )];
+    const listingIds = listings.map((listing) => listing.id);
+    const orders = listingIds.length
+      ? await this.prisma.campusServiceOrder.findMany({
+          where: { listingId: { in: listingIds } },
+          orderBy: [{ createdAt: 'desc' }]
+        })
+      : [];
+    orders.forEach((order) => {
+      userIds.push(order.requesterId, order.providerId);
+    });
     const users = await this.prisma.user.findMany({
-      where: { id: { in: userIds } },
+      where: { id: { in: [...new Set(userIds)] } },
       select: { id: true, displayName: true }
     });
     const userMap = new Map(users.map((user) => [user.id, user.displayName]));
+    const latestOrderMap = new Map<number, (typeof orders)[number] | null>();
+    const activeOrderMap = new Map<number, (typeof orders)[number] | null>();
+    orders.forEach((order) => {
+      if (!latestOrderMap.has(order.listingId)) {
+        latestOrderMap.set(order.listingId, order);
+      }
+      if (!activeOrderMap.has(order.listingId) && activeCampusOrderStatuses.includes(order.status)) {
+        activeOrderMap.set(order.listingId, order);
+      }
+    });
 
-    return tasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      category: task.category,
-      reward: Number(task.reward),
-      publisherId: task.publisherId,
-      publisherName: userMap.get(task.publisherId) ?? `用户#${task.publisherId}`,
-      accepterId: task.accepterId,
-      accepterName: task.accepterId ? userMap.get(task.accepterId) ?? `用户#${task.accepterId}` : null,
-      status: task.status,
-      locationFrom: task.locationFrom,
-      locationTo: task.locationTo,
-      deadlineLabel: task.deadlineLabel,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt
-    }));
+    const mapAdminStatus = (listingStatus: CampusServiceListingStatus, latestOrderStatus: CampusServiceOrderStatus | null) => {
+      if (listingStatus === CampusServiceListingStatus.CANCELED) {
+        return 'CANCELED' as const;
+      }
+
+      if (latestOrderStatus && activeCampusOrderStatuses.includes(latestOrderStatus)) {
+        return 'MATCHED' as const;
+      }
+
+      if (
+        listingStatus === CampusServiceListingStatus.OPEN
+        || listingStatus === CampusServiceListingStatus.BUSY
+        || listingStatus === CampusServiceListingStatus.PAUSED
+      ) {
+        return listingStatus;
+      }
+
+      if (latestOrderStatus === CampusServiceOrderStatus.COMPLETED) {
+        return 'DONE' as const;
+      }
+
+      if (listingStatus === CampusServiceListingStatus.ENDED) {
+        return 'ENDED' as const;
+      }
+
+      if (latestOrderStatus === CampusServiceOrderStatus.CANCELED || latestOrderStatus === CampusServiceOrderStatus.EXPIRED) {
+        return 'CANCELED' as const;
+      }
+
+      return listingStatus;
+    };
+
+    return listings.map((listing) => {
+      const latestOrder = latestOrderMap.get(listing.id) ?? null;
+      const activeOrder = activeOrderMap.get(listing.id) ?? null;
+      const primaryOrder = activeOrder ?? latestOrder;
+      const requesterId = primaryOrder?.requesterId ?? null;
+      const providerId = primaryOrder?.providerId ?? null;
+      const publisherId = listing.ownerId;
+      const participantId = primaryOrder
+        ? (listing.intent === CampusServiceIntent.REQUEST ? providerId : requesterId)
+        : null;
+      const reward = primaryOrder?.finalAmount ?? listing.amount ?? 0;
+
+      return {
+        id: listing.id,
+        title: listing.title,
+        category: listing.category,
+        intent: listing.intent,
+        intentLabel: listing.intent === CampusServiceIntent.REQUEST ? '找人帮我' : '我来提供',
+        reward: Number(reward),
+        publisherId,
+        publisherName: userMap.get(publisherId) ?? `用户#${publisherId}`,
+        participantId,
+        participantName: participantId ? userMap.get(participantId) ?? `用户#${participantId}` : null,
+        status: mapAdminStatus(listing.status, activeOrder?.status ?? latestOrder?.status ?? null),
+        locationFrom: listing.routeFrom ?? listing.locationNote ?? '待协商',
+        locationTo: listing.routeTo ?? listing.locationNote ?? '待协商',
+        deadlineLabel: listing.validUntilAt.toISOString().slice(0, 16).replace('T', ' '),
+        createdAt: listing.createdAt,
+        updatedAt: listing.updatedAt
+      };
+    });
   }
 
   async updateCampusServiceStatus(
-    taskId: number,
+    listingId: number,
     payload: UpdateAdminCampusServiceStatusDto,
     currentUser: AuthenticatedUser
   ) {
     const adminUser = requireAdminUser(currentUser);
-    const supportedStatuses = [
-      CampusServiceStatus.OPEN,
-      CampusServiceStatus.MATCHED,
-      CampusServiceStatus.DONE,
-      CampusServiceStatus.CANCELED
-    ];
-
-    if (!supportedStatuses.includes(payload.status)) {
-      throw new BadRequestException('校园服务状态不支持');
-    }
 
     return this.prisma.$transaction(async (tx) => {
-      const task = await tx.campusServiceTask.findUnique({
-        where: { id: taskId }
+      const listing = await tx.campusServiceListing.findUnique({
+        where: { id: listingId }
       });
 
-      if (!task) {
-        throw new NotFoundException('校园服务任务不存在');
+      if (!listing) {
+        throw new NotFoundException('校园服务发布不存在');
       }
 
-      if ((payload.status === CampusServiceStatus.MATCHED || payload.status === CampusServiceStatus.DONE) && !task.accepterId) {
-        throw new BadRequestException('没有接单人的任务不能标记为进行中或已完成');
+      const latestOrder = await tx.campusServiceOrder.findFirst({
+        where: { listingId },
+        orderBy: { createdAt: 'desc' }
+      });
+      const activeOrder = await tx.campusServiceOrder.findFirst({
+        where: {
+          listingId,
+          status: {
+            in: activeCampusOrderStatuses
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      const actionLabelMap: Record<AdminCampusServiceAction, string> = {
+        [AdminCampusServiceAction.REOPEN]: '恢复开放',
+        [AdminCampusServiceAction.FORCE_MATCH]: '强制设为进行中',
+        [AdminCampusServiceAction.FORCE_COMPLETE]: '强制完成',
+        [AdminCampusServiceAction.CANCEL]: '关闭发布'
+      };
+
+      if (
+        payload.action === AdminCampusServiceAction.FORCE_MATCH
+        && !activeOrder
+      ) {
+        throw new BadRequestException('没有可推进的服务单，不能强制设为进行中');
       }
 
-      const updated = await tx.campusServiceTask.update({
-        where: { id: taskId },
-        data: {
-          status: payload.status,
-          accepterId: payload.status === CampusServiceStatus.OPEN ? null : undefined
+      if (payload.action === AdminCampusServiceAction.FORCE_COMPLETE && !activeOrder) {
+        throw new BadRequestException('没有服务单，不能直接强制完成');
+      }
+
+      if (payload.action === AdminCampusServiceAction.REOPEN) {
+        await tx.campusServiceListing.update({
+          where: { id: listingId },
+          data: {
+            status: CampusServiceListingStatus.OPEN,
+            endReason: null,
+            endedAt: null
+          }
+        });
+      }
+
+      if (payload.action === AdminCampusServiceAction.CANCEL) {
+        await tx.campusServiceListing.update({
+          where: { id: listingId },
+          data: {
+            status: CampusServiceListingStatus.CANCELED,
+            endReason: CampusServiceListingEndReason.ADMIN_CLOSE,
+            endedAt: new Date()
+          }
+        });
+        await tx.campusServiceOrder.updateMany({
+          where: {
+            listingId,
+            status: {
+              in: activeCampusOrderStatuses
+            }
+          },
+          data: {
+            status: CampusServiceOrderStatus.CANCELED,
+            canceledAt: new Date(),
+            cancelReason: this.getDetail(payload.reason, '管理员关闭发布')
+          }
+        });
+      }
+
+      if (payload.action === AdminCampusServiceAction.FORCE_MATCH && activeOrder) {
+        await tx.campusServiceListing.update({
+          where: { id: listingId },
+          data: {
+            status: CampusServiceListingStatus.BUSY,
+            endReason: null,
+            endedAt: null
+          }
+        });
+        if (activeOrder.status === CampusServiceOrderStatus.PENDING_CONFIRMATION) {
+          await tx.campusServiceOrder.update({
+            where: { id: activeOrder.id },
+            data: {
+              status: CampusServiceOrderStatus.CONFIRMED,
+              confirmedAt: activeOrder.confirmedAt ?? new Date()
+            }
+          });
         }
-      });
+      }
+
+      if (payload.action === AdminCampusServiceAction.FORCE_COMPLETE && activeOrder) {
+        await tx.campusServiceOrder.update({
+          where: { id: activeOrder.id },
+          data: {
+            status: CampusServiceOrderStatus.COMPLETED,
+            completedAt: activeOrder.completedAt ?? new Date()
+          }
+        });
+        await tx.campusServiceListing.update({
+          where: { id: listingId },
+          data: {
+            status: CampusServiceListingStatus.ENDED,
+            endReason: CampusServiceListingEndReason.MANUAL_END,
+            endedAt: new Date()
+          }
+        });
+      }
 
       await tx.auditLog.create({
         data: {
@@ -377,14 +548,14 @@ export class AdminService {
           actorName: this.getActorName(adminUser),
           action: 'UPDATE_CAMPUS_SERVICE_STATUS',
           targetType: 'CAMPUS_SERVICE',
-          targetId: taskId,
-          detail: this.getDetail(payload.reason, `校园服务状态改为 ${payload.status}`)
+          targetId: listingId,
+          detail: this.getDetail(payload.reason, `校园服务${actionLabelMap[payload.action]}`)
         }
       });
 
       return {
-        id: updated.id,
-        status: updated.status
+        id: listingId,
+        action: payload.action
       };
     });
   }

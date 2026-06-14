@@ -1,9 +1,5 @@
 import {
   EnvironmentOutlined,
-  FieldTimeOutlined,
-  MoreOutlined,
-  PictureOutlined,
-  ScissorOutlined,
   SendOutlined,
   ShopOutlined,
   SmileOutlined
@@ -12,11 +8,14 @@ import { Empty, Input, message } from 'antd';
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { io, type Socket } from 'socket.io-client';
+import { CAMPUS_SERVICE_CATEGORY_LABEL } from '../constants/campusServiceCategories';
+import { UserAvatar } from '../components/user/UserAvatar';
 import { useAuthState } from '../services/auth-state';
 import Session from 'supertokens-auth-react/recipe/session';
 import {
   ConversationMessage,
   ConversationSummary,
+  createConversation,
   fetchConversationMessages,
   fetchConversations,
   getApiErrorMessage,
@@ -34,6 +33,38 @@ type NewMessageEvent = {
 };
 
 type MessageChannel = 'trade' | 'service';
+
+type DraftConversation = {
+  productId: number;
+  product: { id: number; title: string; price: number; imageUrl: string | null };
+  participant: { id: number | null; displayName: string; college: string | null };
+};
+
+function parseDraftConversation(value: unknown): DraftConversation | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Record<string, any>;
+  if (typeof candidate.productId !== 'number' || !candidate.product) {
+    return null;
+  }
+
+  return {
+    productId: candidate.productId,
+    product: {
+      id: Number(candidate.product.id ?? candidate.productId),
+      title: String(candidate.product.title ?? ''),
+      price: Number(candidate.product.price ?? 0),
+      imageUrl: typeof candidate.product.imageUrl === 'string' ? candidate.product.imageUrl : null
+    },
+    participant: {
+      id: typeof candidate.participant?.id === 'number' ? candidate.participant.id : null,
+      displayName: String(candidate.participant?.displayName ?? '卖家'),
+      college: candidate.participant?.college ?? null
+    }
+  };
+}
 
 function formatSessionTime(input: string) {
   const target = new Date(input);
@@ -86,26 +117,11 @@ function isSameDay(left: string, right: string) {
   return new Date(left).toDateString() === new Date(right).toDateString();
 }
 
-function getAvatarMeta(name: string) {
-  const palettes = [
-    ['#72c6ef', '#004e92'],
-    ['#ffd66b', '#ff9a00'],
-    ['#97f6c4', '#22a06b'],
-    ['#ffb7c5', '#ff5a78'],
-    ['#a3b8ff', '#4f46e5'],
-    ['#ffd9b8', '#d97706']
-  ] as const;
-  const seed = Array.from(name).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const [start, end] = palettes[seed % palettes.length];
-  const label = name.trim().slice(-2) || '同学';
-
-  return {
-    label,
-    style: {
-      background: `linear-gradient(135deg, ${start}, ${end})`
-    }
-  };
-}
+const EMOJI_CHOICES = [
+  '🙂', '😄', '😅', '😉', '😍', '🤝',
+  '👍', '👌', '🙏', '💪', '🎉', '✅',
+  '❤️', '🔥', '💰', '📦', '📍', '⏰'
+] as const;
 
 function readStoredReadMap(userId?: number) {
   if (!userId) {
@@ -125,17 +141,8 @@ function readStoredReadMap(userId?: number) {
 }
 
 function getSessionImage(session: ConversationSummary) {
-  if (session.product?.imageUrl) {
-    return DEMO_PRODUCT_IMAGE;
-  }
-
   if (!session.product) {
-    return getProductImage({
-      title: session.participant.displayName,
-      category: '其他',
-      price: 0,
-      condition: '同校私聊'
-    });
+    return DEMO_PRODUCT_IMAGE;
   }
 
   return getProductImage({
@@ -143,34 +150,49 @@ function getSessionImage(session: ConversationSummary) {
     category: normalizeProductCategoryName(session.product.category),
     price: session.product.price,
     condition: session.product.condition,
+    imageUrl: session.product.imageUrl ?? undefined,
     sellerName: session.participant.displayName
   });
 }
 
 const campusServiceStatusLabel = {
-  OPEN: '待接单',
+  OPEN: '可参与',
+  BUSY: '名额已满',
+  PAUSED: '已暂停',
+  ENDED: '已结束',
   MATCHED: '进行中',
   DONE: '已完成',
   CANCELED: '已取消'
 } as const;
 
-const campusServiceCategoryLabel = {
-  ERRAND: '跑腿',
-  AGENCY: '代办',
-  GROUP_BUY: '拼单',
-  HELP: '帮忙'
-} as const;
-
-function getSessionMetaLabel(session: ConversationSummary, unread: boolean) {
-  if (unread) {
-    return '未读';
+function getCampusConversation(session: ConversationSummary) {
+  if (session.campusServiceDisplay) {
+    return session.campusServiceDisplay;
   }
 
-  if (session.campusServiceTaskId) {
-    return session.selfRole === 'buyer' ? '我接单' : '我发布';
+  if (!session.campusServiceListing) {
+    return null;
   }
 
-  return session.selfRole === 'seller' ? '卖家会话' : '买家会话';
+  return {
+    title: session.campusServiceListing.title,
+    category: session.campusServiceListing.category,
+    categoryLabel: CAMPUS_SERVICE_CATEGORY_LABEL[session.campusServiceListing.category],
+    intent: session.campusServiceListing.intent,
+    intentLabel: session.campusServiceListing.intentLabel,
+    reward: session.campusServiceListing.reward,
+    routeLabel: `${session.campusServiceListing.locationFrom} -> ${session.campusServiceListing.locationTo}`,
+    locationFrom: session.campusServiceListing.locationFrom,
+    locationTo: session.campusServiceListing.locationTo,
+    deadlineLabel: session.campusServiceListing.deadlineLabel,
+    estimatedMinutes: session.campusServiceListing.estimatedMinutes,
+    status: session.campusServiceListing.status,
+    statusLabel: campusServiceStatusLabel[session.campusServiceListing.status]
+  };
+}
+
+function isCampusServiceConversation(session: ConversationSummary) {
+  return Boolean(session.campusServiceOrderId ?? session.campusServiceListing ?? session.campusServiceDisplay);
 }
 
 export function MessagesPage() {
@@ -181,7 +203,7 @@ export function MessagesPage() {
   const queryParams = new URLSearchParams(location.search);
   const queryConversationId = Number(queryParams.get('conversationId'));
   const queryChannel = queryParams.get('channel');
-  const routeState = location.state as { conversationId?: unknown; channel?: unknown } | null;
+  const routeState = location.state as { conversationId?: unknown; channel?: unknown; draftConversation?: unknown } | null;
   const stateConversationId = typeof routeState?.conversationId === 'number'
     ? routeState.conversationId
     : null;
@@ -202,7 +224,9 @@ export function MessagesPage() {
         ? queryChannel
         : null
   );
+  const desiredDraft = useRef<DraftConversation | null>(parseDraftConversation(routeState?.draftConversation));
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const emojiRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const activeIdRef = useRef<number | null>(null);
   const conversationsRef = useRef<ConversationSummary[]>([]);
@@ -213,12 +237,16 @@ export function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [readMap, setReadMap] = useState<Record<number, string>>({});
   const [activeChannel, setActiveChannel] = useState<MessageChannel>('trade');
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pendingDraft, setPendingDraft] = useState<DraftConversation | null>(() =>
+    parseDraftConversation(routeState?.draftConversation)
+  );
   const activeConversation = useMemo(
     () => conversations.find((item) => item.id === activeId) ?? null,
     [conversations, activeId]
   );
 
-  async function refreshConversations(preferredId?: number | null) {
+  async function refreshConversations(preferredId?: number | null, options?: { keepPending?: boolean }) {
     if (!currentUser?.id) {
       return [];
     }
@@ -227,15 +255,21 @@ export function MessagesPage() {
     setConversations(list);
     const preferredConversation = preferredId ? list.find((item) => item.id === preferredId) : null;
     if (preferredConversation) {
-      setActiveChannel(preferredConversation.campusServiceTaskId ? 'service' : 'trade');
+      setActiveChannel(isCampusServiceConversation(preferredConversation) ? 'service' : 'trade');
     } else if (desiredChannel.current) {
       setActiveChannel(desiredChannel.current);
-    } else if (!list.some((item) => !item.campusServiceTaskId) && list.some((item) => item.campusServiceTaskId)) {
+    } else if (!list.some((item) => !isCampusServiceConversation(item)) && list.some((item) => isCampusServiceConversation(item))) {
       setActiveChannel('service');
     }
     setActiveId((previous) => {
       if (preferredId && list.some((item) => item.id === preferredId)) {
         return preferredId;
+      }
+
+      // When entering a pending (not-yet-created) conversation, do not auto-select an
+      // existing thread — keep the composer focused on the new draft.
+      if (options?.keepPending) {
+        return null;
       }
 
       if (previous && list.some((item) => item.id === previous)) {
@@ -342,12 +376,12 @@ export function MessagesPage() {
     return new Date(session.updatedAt).getTime() > new Date(lastReadAt).getTime();
   }
 
-  function injectDraft(snippet: string) {
-    setDraft((previous) => (previous.trim() ? `${previous}\n${snippet}` : snippet));
+  function insertEmoji(emoji: string) {
+    setDraft((previous) => previous + emoji);
   }
 
   async function handleSend() {
-    if (!activeId || !draft.trim()) {
+    if (!draft.trim() || (!activeId && !pendingDraft)) {
       return;
     }
 
@@ -362,6 +396,34 @@ export function MessagesPage() {
     }
 
     const content = draft.trim();
+
+    // Pending draft: the conversation is created with the user's own first message,
+    // so nothing is auto-sent when they merely open the chat from a product page.
+    if (!activeId && pendingDraft) {
+      setSending(true);
+      try {
+        const created = await createConversation({ productId: pendingDraft.productId, initialMessage: content });
+        // A brand-new conversation stores `content` as its first message. A reused one
+        // (e.g. an older thread not in the loaded list) ignores initialMessage, so send it.
+        if (created.reused) {
+          await sendConversationMessage(created.id, { content });
+        }
+        setDraft('');
+        setPendingDraft(null);
+        setEmojiOpen(false);
+        await refreshConversations(created.id);
+      } catch (error) {
+        message.error(getApiErrorMessage(error, '消息发送失败，请稍后重试。'));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    if (!activeId) {
+      return;
+    }
+
     const optimisticTimestamp = new Date().toISOString();
     const optimisticMessage: ConversationMessage = {
       id: -Date.now(),
@@ -482,15 +544,36 @@ export function MessagesPage() {
       setConversations([]);
       setActiveId(null);
       setMessages([]);
+      setPendingDraft(null);
       return;
     }
 
-    refreshConversations(desiredConversationId.current).catch(() => {
-      setConversations([]);
-      setActiveId(null);
-    });
+    const draft = desiredDraft.current;
+
+    refreshConversations(desiredConversationId.current, { keepPending: Boolean(draft) })
+      .then((list) => {
+        if (!draft) {
+          return;
+        }
+
+        const existing = list.find(
+          (item) => !isCampusServiceConversation(item) && item.productId === draft.productId
+        );
+        setActiveChannel('trade');
+        if (existing) {
+          setActiveId(existing.id);
+          setPendingDraft(null);
+        } else {
+          setPendingDraft(draft);
+        }
+      })
+      .catch(() => {
+        setConversations([]);
+        setActiveId(null);
+      });
     desiredConversationId.current = null;
     desiredChannel.current = null;
+    desiredDraft.current = null;
   }, [canTrade, currentUser?.id]);
 
   useEffect(() => {
@@ -518,6 +601,25 @@ export function MessagesPage() {
   }, [messages, activeId]);
 
   useEffect(() => {
+    setEmojiOpen(false);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (!emojiOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(event.target as Node)) {
+        setEmojiOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [emojiOpen]);
+
+  useEffect(() => {
     if (!conversations.length) {
       return;
     }
@@ -529,7 +631,7 @@ export function MessagesPage() {
     if (Number.isInteger(targetConversationId) && targetConversationId > 0) {
       const targetConversation = conversations.find((item) => item.id === targetConversationId);
       if (targetConversation) {
-        setActiveChannel(targetConversation.campusServiceTaskId ? 'service' : 'trade');
+        setActiveChannel(isCampusServiceConversation(targetConversation) ? 'service' : 'trade');
         setActiveId(targetConversation.id);
       }
       return;
@@ -541,8 +643,13 @@ export function MessagesPage() {
   }, [conversations, location.search]);
 
   useEffect(() => {
+    // A pending (not-yet-created) draft owns the main panel; don't auto-select a thread.
+    if (pendingDraft) {
+      return;
+    }
+
     const visibleConversations = conversations.filter((item) =>
-      activeChannel === 'service' ? item.campusServiceTaskId : !item.campusServiceTaskId
+      activeChannel === 'service' ? isCampusServiceConversation(item) : !isCampusServiceConversation(item)
     );
 
     if (!visibleConversations.length) {
@@ -555,85 +662,27 @@ export function MessagesPage() {
     if (!visibleConversations.some((item) => item.id === activeId)) {
       setActiveId(visibleConversations[0]?.id ?? null);
     }
-  }, [conversations, activeId, activeChannel]);
+  }, [conversations, activeId, activeChannel, pendingDraft]);
 
-  const isActiveCampusService = Boolean(activeConversation?.campusServiceTaskId);
-  const activeServiceTask = activeConversation?.campusServiceTask ?? null;
+  const isActiveCampusService = Boolean(activeConversation && isCampusServiceConversation(activeConversation));
+  const activeServiceTask = activeConversation ? getCampusConversation(activeConversation) : null;
+  const composerEnabled = Boolean(activeConversation || pendingDraft);
   const tradeConversations = useMemo(
-    () => conversations.filter((item) => !item.campusServiceTaskId),
+    () => conversations.filter((item) => !isCampusServiceConversation(item)),
     [conversations]
   );
   const serviceConversations = useMemo(
-    () => conversations.filter((item) => item.campusServiceTaskId),
+    () => conversations.filter((item) => isCampusServiceConversation(item)),
     [conversations]
   );
   const visibleConversations = activeChannel === 'service' ? serviceConversations : tradeConversations;
-
-  const composerTools = isActiveCampusService ? [
-    {
-      key: 'emoji',
-      label: '表情',
-      icon: <SmileOutlined />,
-      action: () => injectDraft('🙂')
-    },
-    {
-      key: 'route',
-      label: '路线',
-      icon: <EnvironmentOutlined />,
-      action: () => injectDraft(
-        activeServiceTask
-          ? `我确认一下路线：${activeServiceTask.locationFrom} -> ${activeServiceTask.locationTo}。`
-          : '我确认一下取送地点和交接方式。'
-      )
-    },
-    {
-      key: 'time',
-      label: '时间',
-      icon: <FieldTimeOutlined />,
-      action: () => injectDraft(activeServiceTask ? `我会尽量在${activeServiceTask.deadlineLabel}完成。` : '我会确认预计完成时间。')
-    },
-    {
-      key: 'handoff',
-      label: '交接',
-      icon: <ShopOutlined />,
-      action: () => injectDraft('到达后我在消息里发位置，方便交接。')
-    }
-  ] : [
-    {
-      key: 'emoji',
-      label: '表情',
-      icon: <SmileOutlined />,
-      action: () => injectDraft('🙂')
-    },
-    {
-      key: 'photo',
-      label: '细节图',
-      icon: <PictureOutlined />,
-      action: () => injectDraft('方便的话我再补两张细节图。')
-    },
-    {
-      key: 'bargain',
-      label: '议价',
-      icon: <ScissorOutlined />,
-      action: () => injectDraft('价格还能小刀一点吗？')
-    },
-    {
-      key: 'trade',
-      label: '交易',
-      icon: <ShopOutlined />,
-      action: () => injectDraft('可以同校面交，支持当面验货。')
-    },
-    {
-      key: 'location',
-      label: '地点',
-      icon: <EnvironmentOutlined />,
-      action: () => injectDraft(
-        activeConversation?.product?.meetupLocation
-          ? `我们可以约在${activeConversation.product.meetupLocation}面交。`
-          : '我们可以约在校内方便的位置面交。'
-      )
-    }
-  ];
+  // Campus-service headers keep a real status line; trade headers show name + role only.
+  const headerSubtitleParts = activeConversation && isActiveCampusService
+    ? [
+        activeConversation.participant.college,
+        activeServiceTask?.status ? campusServiceStatusLabel[activeServiceTask.status] : null
+      ].filter((part): part is string => Boolean(part))
+    : [];
 
   return (
     <div className="page-grid messages-page trade-chat-page">
@@ -648,7 +697,10 @@ export function MessagesPage() {
                 <button
                   type="button"
                   className={activeChannel === 'trade' ? 'trade-chat-channel-tab active' : 'trade-chat-channel-tab'}
-                  onClick={() => setActiveChannel('trade')}
+                  onClick={() => {
+                    setActiveChannel('trade');
+                    setPendingDraft(null);
+                  }}
                   role="tab"
                   aria-selected={activeChannel === 'trade'}
                 >
@@ -659,12 +711,15 @@ export function MessagesPage() {
                 <button
                   type="button"
                   className={activeChannel === 'service' ? 'trade-chat-channel-tab active' : 'trade-chat-channel-tab'}
-                  onClick={() => setActiveChannel('service')}
+                  onClick={() => {
+                    setActiveChannel('service');
+                    setPendingDraft(null);
+                  }}
                   role="tab"
                   aria-selected={activeChannel === 'service'}
                 >
                   <EnvironmentOutlined />
-                  <span>跑腿</span>
+                  <span>服务</span>
                   <em>{serviceConversations.length}</em>
                 </button>
               </div>
@@ -672,49 +727,49 @@ export function MessagesPage() {
 
             <div className="trade-chat-session-list">
               {visibleConversations.length ? visibleConversations.map((session) => {
-                const avatar = getAvatarMeta(session.participant.displayName);
-                const unread = isUnreadConversation(session);
-                const isCampusServiceSession = Boolean(session.campusServiceTaskId);
-                const metaLabel = getSessionMetaLabel(session, unread);
+                const isCampusServiceSession = isCampusServiceConversation(session);
+                const campusConversation = getCampusConversation(session);
 
                 return (
                   <button
                     key={session.id}
                     type="button"
                     className={`${session.id === activeId ? 'trade-chat-session active' : 'trade-chat-session'}${isCampusServiceSession ? ' service-session' : ''}`}
-                    onClick={() => setActiveId(session.id)}
+                    onClick={() => {
+                      setActiveId(session.id);
+                      setPendingDraft(null);
+                    }}
                   >
-                    <div className="trade-chat-avatar" style={avatar.style}>
-                      {avatar.label}
-                    </div>
+                    <UserAvatar
+                      src={session.participant.avatarUrl}
+                      fallbackLabel={session.participant.displayName}
+                      alt={session.participant.displayName}
+                      className="trade-chat-avatar"
+                    />
                     <div className="trade-chat-session-copy">
                       <div className="trade-chat-session-top">
                         <strong>{session.participant.displayName}</strong>
                         <span>{formatSessionTime(session.updatedAt)}</span>
                       </div>
                       <div className="trade-chat-session-preview">{session.preview}</div>
-                      <div className="trade-chat-session-meta">
-                        <span>{session.campusServiceTask?.title ?? session.campusServiceTaskTitle ?? session.product?.title ?? '同校私聊'}</span>
-                        {unread ? <em>{metaLabel}</em> : <span>{metaLabel}</span>}
-                      </div>
                     </div>
                     {isCampusServiceSession ? (
                       <div className="trade-chat-session-service-mark">
                         <EnvironmentOutlined />
-                        <span>{session.campusServiceTask ? campusServiceCategoryLabel[session.campusServiceTask.category] : '服务'}</span>
+                        <span>{campusConversation?.category ? CAMPUS_SERVICE_CATEGORY_LABEL[campusConversation.category] : '服务'}</span>
                       </div>
-                    ) : (
+                    ) : session.product ? (
                       <img
                         src={getSessionImage(session)}
-                        alt={session.product?.title ?? session.participant.displayName}
+                        alt={session.product.title}
                         className="trade-chat-session-thumb"
                       />
-                    )}
+                    ) : null}
                   </button>
                 );
               }) : (
                 <div className="trade-chat-empty-shell">
-                  <Empty description={activeChannel === 'service' ? '暂无跑腿会话' : '暂无交易会话'} />
+                  <Empty description={activeChannel === 'service' ? '暂无服务会话' : '暂无交易会话'} />
                 </div>
               )}
             </div>
@@ -728,32 +783,18 @@ export function MessagesPage() {
                     <div className="trade-chat-main-title-row">
                       <strong>{activeConversation.participant.displayName}</strong>
                       <span className="trade-chat-role-tag">
-                        {activeConversation.campusServiceTaskId
-                          ? activeConversation.selfRole === 'buyer' ? '接单方' : '发布方'
+                        {isCampusServiceConversation(activeConversation)
+                          ? activeConversation.selfRole === 'seller'
+                            ? '发布方'
+                            : activeServiceTask?.intent === 'REQUEST'
+                              ? '承接方'
+                              : activeServiceTask?.intent === 'OFFER'
+                                ? '预约方'
+                                : '协作方'
                           : activeConversation.participant.isSeller ? '卖家' : '同校用户'}
                       </span>
                     </div>
-                    <span>
-                      {activeConversation.participant.college ?? '同校认证用户'}
-                      {activeConversation.campusServiceTaskId
-                        ? ` · ${activeConversation.campusServiceTask ? campusServiceStatusLabel[activeConversation.campusServiceTask.status] : '服务协作'}`
-                        : activeConversation.product?.meetupLocation ? ` · 常约 ${activeConversation.product.meetupLocation}` : ''}
-                    </span>
-                  </div>
-                  <div className="trade-chat-head-actions">
-                    {activeConversation.product ? (
-                      <button
-                        type="button"
-                        className="trade-chat-head-pill"
-                        onClick={() => navigate(`/products/${activeConversation.product?.id}`)}
-                      >
-                        <ShopOutlined />
-                        商品详情
-                      </button>
-                    ) : null}
-                    <button type="button" className="trade-chat-icon-button" aria-label="更多操作">
-                      <MoreOutlined />
-                    </button>
+                    {headerSubtitleParts.length ? <span>{headerSubtitleParts.join(' · ')}</span> : null}
                   </div>
                 </div>
 
@@ -767,41 +808,47 @@ export function MessagesPage() {
                       />
                       <div className="trade-chat-product-copy">
                         <strong>{activeConversation.product.title}</strong>
-                        <b>活动价 ¥{activeConversation.product.price.toFixed(2)}</b>
-                        <span>
-                          {activeConversation.product.condition}
-                          {activeConversation.product.meetupLocation ? ` · ${activeConversation.product.meetupLocation}` : ' · 同校面交'}
-                        </span>
+                        <b>¥{activeConversation.product.price.toFixed(2)}</b>
+                        {activeConversation.product.meetupLocation ? (
+                          <span>{activeConversation.product.meetupLocation}</span>
+                        ) : null}
                       </div>
-                      <button
-                        type="button"
-                        className="trade-chat-buy-button"
-                        onClick={() => navigate(`/products/${activeConversation.product?.id}`)}
-                      >
-                        立即购买
-                      </button>
+                      <div className="trade-chat-product-actions">
+                        <button
+                          type="button"
+                          className="trade-chat-buy-button secondary"
+                          onClick={() => navigate(`/products/${activeConversation.product?.id}`)}
+                        >
+                          商品详情
+                        </button>
+                        <button
+                          type="button"
+                          className="trade-chat-buy-button"
+                          onClick={() => navigate(`/orders/checkout?type=product&productId=${activeConversation.product?.id}`)}
+                        >
+                          立即下单
+                        </button>
+                      </div>
                     </div>
-                  ) : activeConversation.campusServiceTaskId ? (
+                  ) : isCampusServiceConversation(activeConversation) && activeServiceTask ? (
                     <div className="trade-chat-service-card">
                       <div className="trade-chat-service-icon">
                         <EnvironmentOutlined />
                       </div>
                       <div className="trade-chat-product-copy">
-                        <strong>{activeConversation.campusServiceTask?.title ?? activeConversation.campusServiceTaskTitle ?? '校园服务委托'}</strong>
-                        <b>{activeConversation.campusServiceTask ? `酬谢 ¥${activeConversation.campusServiceTask.reward}` : '服务协作'}</b>
-                        <span>
-                          {activeConversation.campusServiceTask
-                            ? `${activeConversation.campusServiceTask.locationFrom} -> ${activeConversation.campusServiceTask.locationTo}`
-                            : '在消息里确认取送地点、时间和交接方式'}
-                        </span>
+                        <strong>{activeServiceTask.title}</strong>
+                        <b>
+                          {activeServiceTask.intentLabel
+                            ? `${activeServiceTask.intentLabel} · ¥${activeServiceTask.reward}`
+                            : `¥${activeServiceTask.reward}`}
+                        </b>
+                        <span>{`${activeServiceTask.locationFrom} -> ${activeServiceTask.locationTo}`}</span>
                       </div>
-                      {activeConversation.campusServiceTask ? (
-                        <div className="trade-chat-service-tags">
-                          <span>{campusServiceCategoryLabel[activeConversation.campusServiceTask.category]}</span>
-                          <span>{activeConversation.campusServiceTask.deadlineLabel}</span>
-                          <span>{activeConversation.campusServiceTask.estimatedMinutes} 分钟</span>
-                        </div>
-                      ) : null}
+                      <div className="trade-chat-service-tags">
+                        <span>{activeServiceTask.category ? CAMPUS_SERVICE_CATEGORY_LABEL[activeServiceTask.category] : '服务'}</span>
+                        <span>{activeServiceTask.deadlineLabel}</span>
+                        <span>{activeServiceTask.estimatedMinutes} 分钟</span>
+                      </div>
                     </div>
                   ) : (
                     <div className="trade-chat-context-placeholder" aria-hidden="true" />
@@ -811,9 +858,9 @@ export function MessagesPage() {
                 <div className="trade-chat-thread" ref={threadRef}>
                   {messages.length ? messages.map((entry, index) => {
                     const isSelf = entry.senderId === currentUser?.id;
-                    const avatar = getAvatarMeta(isSelf ? currentUser?.displayName ?? entry.senderName : entry.senderName);
+                    const avatarSrc = isSelf ? currentUser?.avatarUrl : entry.senderAvatarUrl;
+                    const avatarName = isSelf ? currentUser?.displayName ?? '我' : entry.senderName;
                     const showDivider = index === 0 || !isSameDay(messages[index - 1].createdAt, entry.createdAt);
-                    const isLatestSelfMessage = isSelf && index === messages.length - 1 && activeConversation.latestMessageSenderId === currentUser?.id;
 
                     return (
                       <div key={entry.id} className="trade-chat-message-block">
@@ -825,88 +872,158 @@ export function MessagesPage() {
 
                         <div className={isSelf ? 'trade-chat-row self' : 'trade-chat-row other'}>
                           {!isSelf ? (
-                            <div className="trade-chat-avatar small" style={avatar.style}>
-                              {avatar.label}
-                            </div>
+                            <UserAvatar
+                              src={avatarSrc}
+                              fallbackLabel={avatarName}
+                              alt={avatarName}
+                              className="trade-chat-avatar small"
+                            />
                           ) : null}
                           <div className="trade-chat-bubble-wrap">
-                            <span className="trade-chat-speaker">{isSelf ? currentUser?.displayName ?? '我' : entry.senderName}</span>
                             <div className={isSelf ? 'trade-chat-bubble self' : 'trade-chat-bubble other'}>
                               {entry.content}
                             </div>
                             <div className={isSelf ? 'trade-chat-bubble-meta self' : 'trade-chat-bubble-meta'}>
                               <span>{formatBubbleTime(entry.createdAt)}</span>
-                              {isLatestSelfMessage ? <em>未读</em> : null}
                             </div>
                           </div>
                           {isSelf ? (
-                            <div className="trade-chat-avatar small" style={avatar.style}>
-                              {avatar.label}
-                            </div>
+                            <UserAvatar
+                              src={avatarSrc}
+                              fallbackLabel={avatarName}
+                              alt={avatarName}
+                              className="trade-chat-avatar small"
+                            />
                           ) : null}
                         </div>
                       </div>
                     );
                   }) : (
                     <div className="trade-chat-empty-shell thread">
-                      <Empty description="当前会话暂无消息，发一句试试" />
+                      <Empty description="暂无消息" />
                     </div>
                   )}
                 </div>
 
-                <div className="trade-chat-compose">
-                  <div className="trade-chat-tools">
-                    {composerTools.map((tool) => (
-                      <button
-                        key={tool.key}
-                        type="button"
-                        className="trade-chat-tool"
-                        onClick={tool.action}
-                        disabled={!activeConversation}
-                        title={tool.label}
-                        aria-label={tool.label}
-                      >
-                        {tool.icon}
-                      </button>
-                    ))}
+              </>
+            ) : pendingDraft ? (
+              <>
+                <div className="trade-chat-main-head">
+                  <div className="trade-chat-main-user">
+                    <div className="trade-chat-main-title-row">
+                      <strong>{pendingDraft.participant.displayName}</strong>
+                      <span className="trade-chat-role-tag">卖家</span>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="trade-chat-compose-row">
-                    <Input.TextArea
-                      rows={3}
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      onKeyDown={handleComposerKeyDown}
-                      placeholder="请输入消息，按 Enter 发送，Shift + Enter 换行"
-                      disabled={!activeConversation}
+                <div className="trade-chat-context-slot">
+                  <div className="trade-chat-product-card">
+                    <img
+                      src={getProductImage({
+                        title: pendingDraft.product.title,
+                        category: '其他',
+                        price: pendingDraft.product.price,
+                        imageUrl: pendingDraft.product.imageUrl ?? undefined
+                      })}
+                      alt={pendingDraft.product.title}
+                      className="trade-chat-product-image"
                     />
-                    <button
-                      type="button"
-                      className="trade-chat-send-button"
-                      onClick={() => void handleSend()}
-                      disabled={!draft.trim() || sending}
-                    >
-                      <SendOutlined />
-                      发送
-                    </button>
+                    <div className="trade-chat-product-copy">
+                      <strong>{pendingDraft.product.title}</strong>
+                      <b>¥{pendingDraft.product.price.toFixed(2)}</b>
+                    </div>
+                    <div className="trade-chat-product-actions">
+                      <button
+                        type="button"
+                        className="trade-chat-buy-button secondary"
+                        onClick={() => navigate(`/products/${pendingDraft.product.id}`)}
+                      >
+                        商品详情
+                      </button>
+                      <button
+                        type="button"
+                        className="trade-chat-buy-button"
+                        onClick={() => navigate(`/orders/checkout?type=product&productId=${pendingDraft.product.id}`)}
+                      >
+                        立即下单
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="trade-chat-thread">
+                  <div className="trade-chat-empty-shell thread">
+                    <Empty description="暂无消息" />
                   </div>
                 </div>
               </>
+            ) : null}
+
+            {activeConversation || pendingDraft ? (
+              <div className="trade-chat-compose">
+                <div className="trade-chat-tools">
+                  <div className="trade-chat-emoji" ref={emojiRef}>
+                    <button
+                      type="button"
+                      className={emojiOpen ? 'trade-chat-tool active' : 'trade-chat-tool'}
+                      onClick={() => setEmojiOpen((open) => !open)}
+                      disabled={!composerEnabled}
+                      title="表情"
+                      aria-label="表情"
+                      aria-haspopup="menu"
+                      aria-expanded={emojiOpen}
+                    >
+                      <SmileOutlined />
+                    </button>
+                    {emojiOpen ? (
+                      <div className="trade-chat-emoji-panel" role="menu" aria-label="表情">
+                        {EMOJI_CHOICES.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="trade-chat-emoji-option"
+                            onClick={() => insertEmoji(emoji)}
+                            aria-label={`插入表情 ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="trade-chat-compose-row">
+                  <Input.TextArea
+                    rows={3}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={handleComposerKeyDown}
+                    placeholder="输入消息…"
+                    disabled={!composerEnabled}
+                  />
+                  <button
+                    type="button"
+                    className="trade-chat-send-button"
+                    onClick={() => void handleSend()}
+                    disabled={!draft.trim() || sending}
+                  >
+                    <SendOutlined />
+                    发送
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="trade-chat-empty-shell main">
-                <Empty description="从左侧选择一个会话开始沟通" />
+                <Empty description="暂无会话" />
               </div>
             )}
           </section>
         </section>
       ) : (
         <div className="trade-chat-guest-card">
-          <strong>{isGuestUser(currentUser) ? '游客不可查看私聊' : '登录后查看私聊消息'}</strong>
-          <span>
-            {isGuestUser(currentUser)
-              ? '如需联系卖家、继续砍价或约面交，请先登录普通用户账号。'
-              : '登录后可查看最近联系、发送消息、进入商品详情并继续交易。'}
-          </span>
+          <strong>{isGuestUser(currentUser) ? '游客不可查看私聊' : '请先登录'}</strong>
         </div>
       )}
     </div>

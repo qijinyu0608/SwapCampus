@@ -79,6 +79,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  vendure:
+    build:
+      context: ./vendure
+    restart: unless-stopped
+    environment:
+      APP_ENV: dev
+      PORT: 3000
+      COOKIE_SECRET: vendure-dev-cookie-secret
+      SUPERADMIN_USERNAME: superadmin
+      SUPERADMIN_PASSWORD: superadmin
+    ports:
+      - "3002:3000"
+
   backend:
     build:
       context: ./backend
@@ -99,6 +113,10 @@ services:
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_API_KEY: swapcampus-meili-dev-key
       ENABLE_DEV_AUTH_FALLBACK: ${ENABLE_DEV_AUTH_FALLBACK:-true}
+      VENDURE_ENABLED: ${VENDURE_ENABLED:-true}
+      VENDURE_ADMIN_API_URL: ${VENDURE_ADMIN_API_URL:-http://vendure:3000/admin-api}
+      VENDURE_ADMIN_USERNAME: ${VENDURE_ADMIN_USERNAME:-superadmin}
+      VENDURE_ADMIN_PASSWORD: ${VENDURE_ADMIN_PASSWORD:-superadmin}
     ports:
       - "3001:3000"
     depends_on:
@@ -110,6 +128,8 @@ services:
         condition: service_started
       supertokens:
         condition: service_healthy
+      vendure:
+        condition: service_started
 
   db-init:
     profiles: ["init"]

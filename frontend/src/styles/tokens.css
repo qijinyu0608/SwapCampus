@@ -117,6 +117,6 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
-  --content-width: min(1320px, calc(100vw - 32px));
-  --content-width-wide: min(1880px, calc(100vw - 96px));
+  --content-width: min(1320px, calc(100% - 32px));
+  --content-width-wide: min(1880px, calc(100% - 96px));
 }

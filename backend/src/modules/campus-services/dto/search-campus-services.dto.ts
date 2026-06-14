@@ -10,12 +10,12 @@ import {
 } from 'class-validator';
 import {
   CampusServiceCategory,
-  CampusServiceStatus,
-  VerificationStatus
+  CampusServiceIntent,
+  CampusServiceListingStatus
 } from '@prisma/client';
 
 const CAMPUS_SERVICE_SORT_OPTIONS = ['composite', 'price_asc', 'price_desc', 'newest'] as const;
-const CAMPUS_SERVICE_CREDIT_OPTIONS = ['ALL', 'HIGH', 'VERIFIED'] as const;
+const CAMPUS_SERVICE_CREDIT_OPTIONS = ['OUTSTANDING', 'EXCELLENT', 'GOOD', 'STABLE', 'IMPROVE'] as const;
 
 export type CampusServiceSortOption = (typeof CAMPUS_SERVICE_SORT_OPTIONS)[number];
 export type CampusServiceCreditOption = (typeof CAMPUS_SERVICE_CREDIT_OPTIONS)[number];
@@ -29,14 +29,38 @@ function toNumber(value: unknown) {
   return Number.isFinite(next) ? next : value;
 }
 
+function toStringArray(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const values = Array.isArray(value) ? value : [value];
+  const normalized = values
+    .flatMap((item) => String(item).split(','))
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return normalized.length ? normalized : undefined;
+}
+
 export class SearchCampusServicesDto {
+  @IsOptional()
+  @Transform(({ value }) => toNumber(value))
+  @IsInt()
+  @Min(1)
+  ownerId?: number;
+
+  @IsOptional()
+  @IsEnum(CampusServiceIntent)
+  intent?: CampusServiceIntent;
+
   @IsOptional()
   @IsEnum(CampusServiceCategory)
   category?: CampusServiceCategory;
 
   @IsOptional()
-  @IsEnum(CampusServiceStatus)
-  status?: CampusServiceStatus;
+  @IsEnum(CampusServiceListingStatus)
+  status?: CampusServiceListingStatus;
 
   @IsOptional()
   @IsString()
@@ -59,8 +83,9 @@ export class SearchCampusServicesDto {
   maxReward?: number;
 
   @IsOptional()
-  @IsIn(CAMPUS_SERVICE_CREDIT_OPTIONS)
-  credit?: CampusServiceCreditOption;
+  @Transform(({ value }) => toStringArray(value))
+  @IsIn(CAMPUS_SERVICE_CREDIT_OPTIONS, { each: true })
+  credit?: CampusServiceCreditOption[];
 
   @IsOptional()
   @Transform(({ value }) => toNumber(value))
@@ -76,5 +101,7 @@ export class SearchCampusServicesDto {
   pageSize?: number;
 }
 
-export const HIGH_CREDIT_SCORE = 85;
-export const VERIFIED_STATUS = VerificationStatus.APPROVED;
+export const OUTSTANDING_CREDIT_SCORE = 90;
+export const EXCELLENT_CREDIT_SCORE = 80;
+export const GOOD_CREDIT_SCORE = 70;
+export const STABLE_CREDIT_SCORE = 60;

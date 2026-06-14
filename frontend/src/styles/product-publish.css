@@ -3,12 +3,89 @@
   gap: 12px;
 }
 
+.publish-type-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.publish-type-panel-head {
+  display: grid;
+  gap: 4px;
+}
+
+.publish-type-panel-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.publish-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.publish-type-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-height: 124px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper) 96%, var(--primary-soft) 4%);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.publish-type-card:hover {
+  border-color: color-mix(in srgb, var(--primary-border) 42%, var(--line) 58%);
+  background: color-mix(in srgb, var(--paper) 90%, var(--primary-soft) 10%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.publish-type-card.is-active {
+  border-color: color-mix(in srgb, var(--primary-border) 58%, var(--line) 42%);
+  background: color-mix(in srgb, #ffffff 84%, var(--primary-soft) 16%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-soft) 42%, transparent);
+}
+
+.publish-type-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.publish-type-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.publish-type-card .publish-type-eyebrow {
+  color: var(--primary-deep);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .publish-workbench-page {
   gap: 14px;
 }
 
 .publish-main-card,
 .publish-editor-card {
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--line) 36%, transparent);
+}
+
+.service-publish-workbench .soft-card {
   border-radius: 18px;
   background: #fff;
   box-shadow: none;
@@ -372,13 +449,22 @@
 }
 
 .publish-rules-link-row {
-  display: grid;
-  justify-content: start;
+  display: flex;
+  justify-content: flex-end;
   padding-left: 2px;
 }
 
-.publish-rules-page-card {
+.publish-rules-page-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 24px;
+}
+
+.publish-rules-page-body {
+  border: 0;
   box-shadow: none;
+  background: transparent;
 }
 
 @media (max-width: 1200px) {
@@ -389,6 +475,10 @@
 }
 
 @media (max-width: 960px) {
+  .publish-type-grid {
+    grid-template-columns: 1fr;
+  }
+
   .publish-image-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;

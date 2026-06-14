@@ -24,7 +24,7 @@ export type UserPresentationModel = {
   creditScore: number;
   creditBadge: UserCreditBadge;
   verificationLabel: string;
-  publicIdentityLabel: string;
+  publicIdentityLabel: string | null;
 };
 
 export function getUserCreditBadge(score?: number): UserCreditBadge {
@@ -62,7 +62,7 @@ export function getVerificationLabel(status?: VerificationStatus) {
 }
 
 export function getPublicIdentityLabel(status?: VerificationStatus) {
-  return status === 'APPROVED' ? '实名认证' : '普通账号';
+  return status === 'APPROVED' ? '实名认证' : null;
 }
 
 export function getUserDisplayName(user?: UserLike | null, fallback = '同校用户') {

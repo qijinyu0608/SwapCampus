@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from './users.service';
@@ -9,7 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
-import type { SessionRequest } from '../auth/supertokens.types';
+import type { SessionRequest, SessionResponse } from '../auth/supertokens.types';
 import { resolveOptionalAuthUser } from '../auth/auth-request.utils';
 
 @Controller('users')
@@ -41,8 +41,16 @@ export class UsersController {
   }
 
   @Get(':id/trust-summary')
-  getTrustSummary(@Param('id', ParseIntPipe) id: number, @Req() request?: SessionRequest) {
-    return resolveOptionalAuthUser(this.prisma, (request ?? {}) as SessionRequest & { user?: AuthenticatedUser })
+  getTrustSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() request?: SessionRequest,
+    @Res({ passthrough: true }) response?: SessionResponse
+  ) {
+    return resolveOptionalAuthUser(
+      this.prisma,
+      (request ?? {}) as SessionRequest & { user?: AuthenticatedUser },
+      response
+    )
       .then((user) => this.usersService.getTrustSummary(id, user));
   }
 

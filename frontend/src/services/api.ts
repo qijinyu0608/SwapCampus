@@ -76,6 +76,7 @@ export type ListingSummary = {
 export type ListingParticipantBase = {
   id: number;
   displayName: string;
+  avatarUrl?: string | null;
   creditScore: number;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   accountStatus: 'ACTIVE' | 'BANNED';
@@ -96,6 +97,7 @@ export type ListingTimelineItem = {
 export type ListingDetailBase = ListingSummary & {
   type: 'PRODUCT' | 'CAMPUS_SERVICE';
   amountLabel: string;
+  images?: string[];
   statusLabel: string;
   publisher: ListingParticipantBase;
   summaryTags: string[];
@@ -111,6 +113,7 @@ export type ProductSummary = ListingSummary & {
   sellerVerified?: boolean;
   sellerId?: number;
   favoriteCount?: number;
+  wantCount?: number;
   isFavorited?: boolean;
   favoritedAt?: string | null;
 };
@@ -119,11 +122,9 @@ export type ProductDetail = ProductSummary & {
   images: string[];
   publishedAt: string;
   seller: ListingParticipantBase & {
-    creditScore: number;
     creditLevel: string;
     college: string;
-    responseRate: number;
-    averageRating: number;
+    averageRating: number | null;
     completedOrders: number;
   };
   stats: {
@@ -168,7 +169,7 @@ export type ProductSearchParams = {
   condition?: string;
   sellerId?: number;
   ids?: number[];
-  status?: 'ALL' | 'PENDING' | 'ON_SALE' | 'SOLD' | 'OFFLINE';
+  status?: 'ALL' | 'ON_SALE' | 'SOLD' | 'OFFLINE';
   trade?: 'all' | 'meetup' | 'dorm_pickup' | 'available_today';
   sort?: 'relevance' | 'newest' | 'price_asc' | 'price_desc';
   minPrice?: number;
@@ -190,7 +191,7 @@ export type PaginatedProductsResponse = {
 export type DashboardStats = {
   userCount: number;
   productCount: number;
-  pendingCount: number;
+  onSaleCount: number;
 };
 
 export type RegisterPayload = {
@@ -226,6 +227,90 @@ export type AuthSessionResponse = {
   user: AuthUser;
 };
 
+export type CreditCenterSummary = {
+  userId: number;
+  creditScore: number;
+  creditLevel: string;
+  verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  availablePoints: number;
+  totalEarnedPoints: number;
+  totalSpentPoints: number;
+  signInStreak: number;
+  checkedInToday: boolean;
+  nextCheckInBasePoints: number;
+  nextCheckInBonusPoints: number;
+};
+
+export type CreditCenterCheckInResult = {
+  success: boolean;
+  rewardPoints: number;
+  basePoints: number;
+  bonusPoints: number;
+  signInStreak: number;
+  availablePoints: number;
+};
+
+export type CreditMissionItem = {
+  code: string;
+  title: string;
+  description: string;
+  cycleType: 'once' | 'daily' | 'weekly' | 'monthly';
+  rewardPoints: number;
+  creditScoreDelta: number;
+  progressCurrent: number;
+  progressTarget: number;
+  completed: boolean;
+  claimed: boolean;
+  cycleKey: string;
+};
+
+export type CreditMissionListResponse = {
+  items: CreditMissionItem[];
+};
+
+export type CreditMissionClaimResult = {
+  missionCode: string;
+  rewardPoints: number;
+  creditScoreDelta: number;
+  availablePoints: number;
+};
+
+export type CreditLedgerItem = {
+  id: number;
+  changeType: 'EARN' | 'SPEND' | 'ADJUST';
+  sourceType: 'SIGNIN' | 'MISSION' | 'REDEEM' | 'ADMIN';
+  sourceId: string | null;
+  pointsDelta: number;
+  balanceAfter: number;
+  remark: string | null;
+  createdAt: string;
+};
+
+export type CreditLedgerResponse = {
+  items: CreditLedgerItem[];
+};
+
+export type CreditRewardItem = {
+  code: string;
+  title: string;
+  description: string;
+  pointsCost: number;
+  minCreditScore: number;
+  canRedeem: boolean;
+};
+
+export type CreditRewardListResponse = {
+  items: CreditRewardItem[];
+};
+
+export type CreditRedeemResult = {
+  id: number;
+  rewardCode: string;
+  pointsCost: number;
+  availablePoints: number;
+  status: 'CREATED' | 'FULFILLED' | 'CANCELED' | 'REJECTED';
+};
+
 export type ProductCreatePayload = {
   title: string;
   description: string;
@@ -239,6 +324,8 @@ export type ProductCreatePayload = {
 export type OrderPayload = {
   productId: number;
   meetupLocation?: string;
+  meetupTime?: string;
+  paymentIntent?: string;
   note?: string;
 };
 
@@ -282,23 +369,43 @@ export type PaginatedOrdersResponse = {
   };
 };
 
+export type CampusServiceConversationListing = {
+  id: number;
+  title: string;
+  category: CampusServiceCategory;
+  intent: CampusServiceIntent;
+  intentLabel: string;
+  reward: number;
+  locationFrom: string;
+  locationTo: string;
+  deadlineLabel: string;
+  estimatedMinutes: number;
+  status: AdminCampusServiceStatus;
+};
+
+export type CampusServiceConversationDisplay = {
+  title: string;
+  category: CampusServiceCategory | null;
+  categoryLabel: string | null;
+  intent: CampusServiceIntent | null;
+  intentLabel: string | null;
+  reward: number | null;
+  routeLabel: string | null;
+  locationFrom: string | null;
+  locationTo: string | null;
+  deadlineLabel: string | null;
+  estimatedMinutes: number | null;
+  status: AdminCampusServiceStatus | null;
+  statusLabel: string | null;
+};
+
 export type ConversationSummary = {
   id: number;
   orderId: number | null;
   productId: number | null;
-  campusServiceTaskId: number | null;
-  campusServiceTaskTitle: string | null;
-  campusServiceTask: {
-    id: number;
-    title: string;
-    category: CampusServiceCategory;
-    reward: number;
-    locationFrom: string;
-    locationTo: string;
-    deadlineLabel: string;
-    estimatedMinutes: number;
-    status: CampusServiceStatus;
-  } | null;
+  campusServiceOrderId: number | null;
+  campusServiceListing: CampusServiceConversationListing | null;
+  campusServiceDisplay: CampusServiceConversationDisplay | null;
   preview: string;
   updatedAt: string;
   latestMessageSenderId: number | null;
@@ -307,6 +414,7 @@ export type ConversationSummary = {
   participant: {
     id: number | null;
     displayName: string;
+    avatarUrl: string | null;
     college: string | null;
     isSeller: boolean;
   };
@@ -326,6 +434,7 @@ export type ConversationMessage = {
   id: number;
   senderId: number;
   senderName: string;
+  senderAvatarUrl?: string | null;
   content: string;
   type: string;
   createdAt: string;
@@ -340,32 +449,63 @@ export type CreateConversationPayload = {
   initialMessage?: string;
 };
 
-export type CampusServiceCategory = 'ERRAND' | 'AGENCY' | 'GROUP_BUY' | 'HELP';
-export type CampusServiceStatus = 'OPEN' | 'MATCHED' | 'DONE' | 'CANCELED';
+export type CampusServiceCategory =
+  | 'ERRAND'
+  | 'AGENCY'
+  | 'GROUP_BUY'
+  | 'MOVING'
+  | 'TUTORING'
+  | 'SKILL'
+  | 'REPAIR'
+  | 'EVENT'
+  | 'OTHER'
+  | 'HELP';
+export type CampusServiceStatus = 'OPEN' | 'BUSY' | 'PAUSED' | 'ENDED' | 'CANCELED';
+export type AdminCampusServiceStatus = 'OPEN' | 'BUSY' | 'PAUSED' | 'ENDED' | 'CANCELED' | 'MATCHED' | 'DONE';
+export type AdminCampusServiceAction = 'REOPEN' | 'FORCE_MATCH' | 'FORCE_COMPLETE' | 'CANCEL';
+export type CampusServiceIntent = 'REQUEST' | 'OFFER';
+export type CampusServicePattern = 'ONE_TIME' | 'REUSABLE';
+export type CampusServicePriceMode = 'FIXED' | 'NEGOTIABLE' | 'FREE';
+export type CampusServiceLocationMode = 'ONLINE' | 'ON_SITE' | 'DELIVERY' | 'FLEXIBLE';
 export type CampusServiceUrgency = 'NORMAL' | 'TODAY' | 'URGENT';
 export type CampusServiceFulfillmentMode = 'DROP_OFF' | 'FACE_TO_FACE' | 'FLEXIBLE';
 export type CampusServiceContactPreference = 'CHAT_ONLY' | 'PHONE_AFTER_MATCH' | 'FLEXIBLE';
 
 export type CampusServiceViewerContext = {
-  role: 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'ACCEPTER' | 'OTHER';
+  role: 'GUEST' | 'DISCOVER' | 'PUBLISHER' | 'PARTICIPANT' | 'OTHER';
   canAccept: boolean;
+  canConfirm: boolean;
+  canReject: boolean;
   canComplete: boolean;
+  canPause: boolean;
+  canReopen: boolean;
+  canEnd: boolean;
   canCancel: boolean;
   canOpenConversation: boolean;
 };
 
 export type CampusServiceActionState = {
   isPublisher: boolean;
-  isAccepter: boolean;
+  isParticipant: boolean;
   canAccept: boolean;
+  canConfirm: boolean;
+  canReject: boolean;
   canComplete: boolean;
+  canPause: boolean;
+  canReopen: boolean;
+  canEnd: boolean;
   canCancel: boolean;
   canOpenConversation: boolean;
 };
 
 export type CampusServiceActionLabels = {
   accept: string | null;
+  confirm: string | null;
+  reject: string | null;
   complete: string | null;
+  pause: string | null;
+  reopen: string | null;
+  end: string | null;
   cancel: string | null;
   conversation: string | null;
 };
@@ -377,6 +517,9 @@ export type CampusServiceListItem = ListingSummary & {
   title: string;
   category: CampusServiceCategory;
   categoryLabel: string;
+  intent: CampusServiceIntent;
+  intentLabel: string;
+  pattern: CampusServicePattern;
   serviceType: {
     key: CampusServiceCategory;
     label: string;
@@ -409,19 +552,34 @@ export type CampusServiceListItem = ListingSummary & {
   summaryTags: string[];
   participantSummary: {
     publisherLabel: string;
-    accepterLabel: string | null;
+    participantLabel: string | null;
   };
   viewerContext: CampusServiceViewerContext;
   actionState: CampusServiceActionState;
   actionLabels: CampusServiceActionLabels;
+  latestOrderId: number | null;
+  actionOrderId: number | null;
+  activeOrderCount: number;
+  pendingOrderCount: number;
+  waitingCompleteOrderCount: number;
+  endedOrderCount: number;
+  totalOrderCount: number;
   createdAt: string;
   updatedAt: string;
   conversationId: number | null;
   publisher: CampusServiceParticipant;
-  accepter: CampusServiceParticipant | null;
+  participant: CampusServiceParticipant | null;
 };
 
 export type CampusServiceDetail = CampusServiceListItem & {
+  stats: {
+    favoriteCount: number;
+    reportCount: number;
+    wantCount: number;
+    viewCount: number;
+  };
+  isFavorited: boolean;
+  images?: string[];
   preview: {
     title: string;
     subtitle: string;
@@ -450,11 +608,21 @@ export type CampusServiceDetail = CampusServiceListItem & {
     trustNote: string | null;
     cancelReason: string | null;
     canceledById: number | null;
+    intent: CampusServiceIntent;
+    intentLabel: string;
+    pattern: CampusServicePattern;
+    maxTotalOrders: number | null;
+    maxConcurrentOrders: number | null;
+    validFromAt: string;
+    validUntilAt: string;
+    totalOrderCount: number;
+    activeOrderCount: number;
   };
 };
 
 export type CampusServiceDetailView = CampusServiceDetail & {
   detailBase: ListingDetailBase;
+  autoConfirm: boolean;
 };
 
 export type PaginatedCampusServicesResponse = {
@@ -468,23 +636,98 @@ export type PaginatedCampusServicesResponse = {
 };
 
 export type CampusServiceCreatePayload = {
+  intent?: CampusServiceIntent;
+  pattern?: CampusServicePattern;
   title: string;
   category: CampusServiceCategory;
   description: string;
-  reward: number;
-  locationFrom: string;
-  locationTo: string;
-  deadlineLabel: string;
+  reward?: number;
+  amount?: number;
+  priceMode?: CampusServicePriceMode;
+  locationFrom?: string;
+  locationTo?: string;
+  locationMode?: CampusServiceLocationMode;
+  locationNote?: string;
+  deadlineLabel?: string;
+  validFromAt?: string;
+  validUntilAt?: string;
   estimatedMinutes: number;
   urgency?: CampusServiceUrgency;
   fulfillmentMode?: CampusServiceFulfillmentMode;
   contactPreference?: CampusServiceContactPreference;
   itemCount?: number;
+  maxTotalOrders?: number;
+  maxConcurrentOrders?: number;
+  autoConfirm?: boolean;
   trustNote?: string;
+  imageUrls?: string[];
+};
+
+export type CampusServiceOrderListParams = {
+  listingId?: number;
+  role?: 'REQUESTER' | 'PROVIDER';
+  intent?: CampusServiceIntent;
+  status?: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'WAITING_COMPLETE_CONFIRM' | 'COMPLETED' | 'REJECTED' | 'CANCELED' | 'EXPIRED';
+  group?: 'PENDING' | 'ACTIVE' | 'WAITING_COMPLETE' | 'ENDED';
+  page?: number;
+  pageSize?: number;
+};
+
+export type CampusServiceOrderParticipant = ListingParticipantBase;
+
+export type CampusServiceOrderListItem = {
+  id: number;
+  listingId: number;
+  title: string;
+  description: string;
+  price: number;
+  imageUrl?: string;
+  tags: string[];
+  status: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'WAITING_COMPLETE_CONFIRM' | 'COMPLETED' | 'REJECTED' | 'CANCELED' | 'EXPIRED';
+  statusLabel: string;
+  orderStatus: 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'WAITING_COMPLETE_CONFIRM' | 'COMPLETED' | 'REJECTED' | 'CANCELED' | 'EXPIRED';
+  orderStatusLabel: string;
+  listingStatus: AdminCampusServiceStatus;
+  listingStatusLabel: string;
+  intent: CampusServiceIntent;
+  intentLabel: string;
+  category: CampusServiceCategory;
+  categoryLabel: string;
+  reward: number;
+  rewardLabel: string;
+  route: {
+    from: string;
+    to: string;
+    label: string;
+  };
+  deadlineLabel: string;
+  estimatedMinutes: number;
+  role: 'REQUESTER' | 'PROVIDER';
+  roleLabel: string;
+  summaryTags: string[];
+  actionState: {
+    canComplete: boolean;
+    canCancel: boolean;
+    canOpenConversation: boolean;
+    canConfirm: boolean;
+    canReject: boolean;
+  };
+  actionLabels: {
+    confirm: string | null;
+    reject: string | null;
+    complete: string | null;
+    cancel: string | null;
+    conversation: string | null;
+  };
+  conversationId: number | null;
+  counterpart: CampusServiceOrderParticipant;
+  publisher: CampusServiceOrderParticipant;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AdminOverview = {
-  pendingProducts: number;
+  onSaleProducts: number;
   totalUsers: number;
   reportCount: number;
   activeOrders: number;
@@ -531,8 +774,7 @@ export type UserTrustSummary = {
   reportCount: number;
   followerCount: number;
   isFollowing: boolean;
-  responseRate: number;
-  averageRating: number;
+  averageRating: number | null;
 };
 
 export type UserProfile = {
@@ -550,9 +792,35 @@ export type UserProfile = {
   phone: string;
 };
 
-export type HistoryItem = ProductSummary & {
+export type ProductHistoryItem = ProductSummary & {
+  type?: 'product';
   viewedAt: string | null;
 };
+
+export type CampusServiceHistoryItem = {
+  type: 'campus-service';
+  id: number;
+  title: string;
+  description: string;
+  category: CampusServiceCategory;
+  categoryLabel: string;
+  intent: CampusServiceIntent;
+  intentLabel: string;
+  status: CampusServiceStatus;
+  statusLabel: string;
+  imageUrl?: string;
+  price: number;
+  rewardLabel: string;
+  sellerName: string;
+  publisher: {
+    id: number;
+    displayName: string;
+  };
+  summaryTags: string[];
+  viewedAt: string | null;
+};
+
+export type HistoryItem = ProductHistoryItem | CampusServiceHistoryItem;
 
 export type BrowsingHistoryResponse = {
   items: HistoryItem[];
@@ -634,7 +902,6 @@ export type ModerationUserItem = {
   openReportCount: number;
   activeProductCount: number;
   totalProductCount: number;
-  pendingProductCount: number;
   offlineProductCount: number;
   orderCount: number;
   activeOrderCount: number;
@@ -684,12 +951,14 @@ export type AdminCampusServiceItem = {
   id: number;
   title: string;
   category: CampusServiceCategory;
+  intent: CampusServiceIntent;
+  intentLabel: string;
   reward: number;
   publisherId: number;
   publisherName: string;
-  accepterId: number | null;
-  accepterName: string | null;
-  status: CampusServiceStatus;
+  participantId: number | null;
+  participantName: string | null;
+  status: AdminCampusServiceStatus;
   locationFrom: string;
   locationTo: string;
   deadlineLabel: string;
@@ -714,6 +983,11 @@ export async function fetchHomeRecommendations() {
 
 export async function fetchProductDetail(id: number) {
   const response = await apiClient.get<ProductDetailView>(`/products/${id}`);
+  return response.data;
+}
+
+export async function recordProductContact(productId: number) {
+  const response = await apiClient.post<{ productId: number; recorded: boolean }>(`/products/${productId}/contact`);
   return response.data;
 }
 
@@ -912,7 +1186,7 @@ export async function fetchAdminCampusServices() {
 export async function updateAdminCampusServiceStatus(
   id: number,
   payload: {
-    status: CampusServiceStatus;
+    action: AdminCampusServiceAction;
     reason?: string;
   }
 ) {
@@ -930,9 +1204,48 @@ export async function fetchUserProfile(id: number) {
   return response.data;
 }
 
+export async function fetchCreditCenterSummary() {
+  const response = await apiClient.get<CreditCenterSummary>('/credit-center/summary');
+  return response.data;
+}
+
+export async function checkInCreditCenter() {
+  const response = await apiClient.post<CreditCenterCheckInResult>('/credit-center/check-in', {});
+  return response.data;
+}
+
+export async function fetchCreditCenterMissions() {
+  const response = await apiClient.get<CreditMissionListResponse>('/credit-center/missions');
+  return response.data;
+}
+
+export async function claimCreditMission(missionCode: string) {
+  const response = await apiClient.post<CreditMissionClaimResult>(`/credit-center/missions/${missionCode}/claim`, {});
+  return response.data;
+}
+
+export async function fetchCreditCenterLedger() {
+  const response = await apiClient.get<CreditLedgerResponse>('/credit-center/ledger');
+  return response.data;
+}
+
+export async function fetchCreditCenterRewards() {
+  const response = await apiClient.get<CreditRewardListResponse>('/credit-center/rewards');
+  return response.data;
+}
+
+export async function redeemCreditReward(rewardCode: string, payload?: { note?: string }) {
+  const response = await apiClient.post<CreditRedeemResult>(
+    `/credit-center/rewards/${rewardCode}/redeem`,
+    payload ?? {}
+  );
+  return response.data;
+}
+
 export async function updateUserProfile(
   id: number,
   payload: {
+    studentId?: string | null;
     displayName: string;
     email: string;
     realName: string;
@@ -987,11 +1300,31 @@ export async function updateUserBanStatus(
 
 export async function createReport(payload: {
   productId?: number;
+  campusServiceListingId?: number;
   targetUserId?: number;
   reason: string;
 }) {
   const response = await apiClient.post('/reports', payload);
   return response.data;
+}
+
+export async function addCampusServiceFavorite(listingId: number) {
+  const response = await apiClient.post(`/campus-service-favorites/${listingId}`);
+  return response.data as {
+    listingId: number;
+    isFavorited: boolean;
+    favoritedAt?: string;
+    favoriteCount: number;
+  };
+}
+
+export async function removeCampusServiceFavorite(listingId: number) {
+  const response = await apiClient.delete(`/campus-service-favorites/${listingId}`);
+  return response.data as {
+    listingId: number;
+    isFavorited: boolean;
+    favoriteCount: number;
+  };
 }
 
 export async function fetchReports() {
@@ -1012,18 +1345,25 @@ export async function fetchAuditLogs() {
   return response.data;
 }
 
-export async function fetchCampusServiceTasks(params?: {
+export async function fetchCampusServiceListings(params?: {
+  intent?: CampusServiceIntent;
   category?: CampusServiceCategory;
   status?: CampusServiceStatus;
+  ownerId?: number;
   keyword?: string;
   sort?: 'composite' | 'price_asc' | 'price_desc' | 'newest';
   minReward?: number;
   maxReward?: number;
-  credit?: 'ALL' | 'HIGH' | 'VERIFIED';
+  credit?: Array<'OUTSTANDING' | 'EXCELLENT' | 'GOOD' | 'STABLE' | 'NORMAL' | 'IMPROVE'>;
   page?: number;
   pageSize?: number;
 }) {
-  const response = await apiClient.get<PaginatedCampusServicesResponse>('/campus-services', { params });
+  const response = await apiClient.get<PaginatedCampusServicesResponse>('/campus-services', {
+    params,
+    paramsSerializer: {
+      indexes: null
+    }
+  });
   return response.data;
 }
 
@@ -1032,25 +1372,78 @@ export async function fetchCampusServiceDetail(id: number) {
   return response.data;
 }
 
-export async function createCampusServiceTask(payload: CampusServiceCreatePayload) {
+export async function createCampusServiceListing(payload: CampusServiceCreatePayload) {
   const response = await apiClient.post<CampusServiceDetailView>('/campus-services', payload);
   return response.data;
 }
 
-export async function acceptCampusServiceTask(taskId: number, payload: {
+export async function acceptCampusServiceListing(listingId: number, payload: {
   initialMessage?: string;
+  serviceLocation?: string;
+  serviceTime?: string;
+  paymentIntent?: string;
 }) {
-  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/accept`, payload);
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/orders`, payload);
   return response.data;
 }
 
-export async function completeCampusServiceTask(taskId: number) {
+export async function pauseCampusServiceListing(listingId: number) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/pause`, {});
+  return response.data;
+}
+
+export async function reopenCampusServiceListing(listingId: number) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/reopen`, {});
+  return response.data;
+}
+
+export async function endCampusServiceListing(listingId: number, payload?: { reason?: string }) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/end`, payload ?? {});
+  return response.data;
+}
+
+export async function completeCampusServiceListing(listingId: number) {
   const payload = {};
-  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/complete`, payload);
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/complete`, payload);
   return response.data;
 }
 
-export async function cancelCampusServiceTask(taskId: number, payload?: { reason?: string }) {
-  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${taskId}/cancel`, payload ?? {});
+export async function cancelCampusServiceListing(listingId: number, payload?: { reason?: string }) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-services/${listingId}/cancel`, payload ?? {});
+  return response.data;
+}
+
+export async function confirmCampusServiceOrder(orderId: number) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-service-orders/${orderId}/confirm`, {});
+  return response.data;
+}
+
+export async function rejectCampusServiceOrder(orderId: number, payload?: { reason?: string }) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-service-orders/${orderId}/reject`, payload ?? {});
+  return response.data;
+}
+
+export async function completeCampusServiceOrder(orderId: number) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-service-orders/${orderId}/complete`, {});
+  return response.data;
+}
+
+export async function cancelCampusServiceOrder(orderId: number, payload?: { reason?: string }) {
+  const response = await apiClient.post<CampusServiceDetailView>(`/campus-service-orders/${orderId}/cancel`, payload ?? {});
+  return response.data;
+}
+
+export async function fetchCampusServiceOrders(params?: CampusServiceOrderListParams) {
+  const response = await apiClient.get<{
+    items: CampusServiceOrderListItem[];
+    pagination: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+  }>('/campus-service-orders', {
+    params
+  });
   return response.data;
 }

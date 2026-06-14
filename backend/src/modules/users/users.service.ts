@@ -1,10 +1,26 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { AccountStatus, CampusServiceStatus, OrderStatus, Prisma, ProductStatus, UserRole, VerificationStatus } from '@prisma/client';
+import {
+  AccountStatus,
+  BehaviorEventType,
+  CampusServiceCategory,
+  CampusServiceIntent,
+  CampusServiceListingStatus,
+  CampusServicePriceMode,
+  OrderStatus,
+  Prisma,
+  ProductStatus,
+  UserRole,
+  VerificationStatus
+} from '@prisma/client';
 import { convertToRecipeUserId } from 'supertokens-node';
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAdminUser, requireAuthenticatedUser } from '../auth/auth.utils';
+import {
+  cancelCampusServicesForUser,
+  loadCampusServiceActivityStats
+} from '../campus-services/campus-service-moderation';
 import { SearchService } from '../search/search.service';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -43,6 +59,32 @@ const collegeOptions = [
   '国际学院'
 ];
 
+const campusServiceCategoryLabelMap: Record<CampusServiceCategory, string> = {
+  ERRAND: '跑腿',
+  AGENCY: '代办',
+  GROUP_BUY: '拼单',
+  MOVING: '搬运',
+  TUTORING: '辅导',
+  SKILL: '技能',
+  REPAIR: '维修',
+  EVENT: '活动协助',
+  OTHER: '其他',
+  HELP: '临时帮忙'
+};
+
+const campusServiceIntentLabelMap: Record<CampusServiceIntent, string> = {
+  REQUEST: '找人帮我',
+  OFFER: '我来提供'
+};
+
+const campusServiceListingStatusLabelMap: Record<CampusServiceListingStatus, string> = {
+  OPEN: '可接单',
+  BUSY: '名额已满',
+  PAUSED: '已暂停',
+  ENDED: '已结束',
+  CANCELED: '已关闭'
+};
+
 function normalizePagination(page?: number, pageSize?: number) {
   const normalizedPage = Number.isFinite(page) && page && page > 0 ? Math.floor(page) : 1;
   const normalizedPageSize = Number.isFinite(pageSize) && pageSize && pageSize > 0
@@ -64,6 +106,39 @@ function normalizeTags(tags: Prisma.JsonValue | null) {
   return tags
     .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
     .filter(Boolean);
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const next = Number(value);
+    return Number.isFinite(next) ? next : 0;
+  }
+
+  if (value && typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+    return value.toNumber();
+  }
+
+  return 0;
+}
+
+function formatCurrency(amount: unknown) {
+  return `¥${toNumber(amount).toFixed(2)}`;
+}
+
+function formatCampusServiceReward(priceMode: CampusServicePriceMode, amount: unknown) {
+  if (priceMode === CampusServicePriceMode.NEGOTIABLE) {
+    return '面议';
+  }
+
+  if (priceMode === CampusServicePriceMode.FREE) {
+    return '免费';
+  }
+
+  return formatCurrency(amount);
 }
 
 type UserHistoryListParams = {
@@ -296,7 +371,7 @@ export class UsersService {
       throw new NotFoundException('用户不存在');
     }
 
-    const [allOrders, reviews, reports, sentMessages, followerCount, isFollowing] = await Promise.all([
+    const [allOrders, reviews, reports, followerCount, isFollowing] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           OR: [{ buyerId: userId }, { sellerId: userId }]
@@ -309,9 +384,6 @@ export class UsersService {
       }),
       this.prisma.report.count({
         where: { targetUserId: userId }
-      }),
-      this.prisma.message.count({
-        where: { senderId: userId }
       }),
       this.prisma.userFollow.count({
         where: { followingId: userId }
@@ -334,8 +406,7 @@ export class UsersService {
     const waitingReviews = allOrders.filter((order: { status: OrderStatus }) => order.status === OrderStatus.WAITING_REVIEW).length;
     const averageRating = reviews.length
       ? Number((reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length).toFixed(1))
-      : 4.8;
-    const responseRate = Math.min(99, user.verificationStatus === VerificationStatus.APPROVED ? 88 + Math.min(10, Math.floor(sentMessages / 4)) : 72 + Math.min(12, Math.floor(sentMessages / 5)));
+      : null;
 
     return {
       id: user.id,
@@ -354,7 +425,6 @@ export class UsersService {
       reportCount: reports,
       followerCount,
       isFollowing: Boolean(isFollowing),
-      responseRate,
       averageRating
     };
   }
@@ -363,47 +433,132 @@ export class UsersService {
     const authUser = requireAuthenticatedUser(params.currentUser);
     const { page, pageSize, skip } = normalizePagination(params.page, params.pageSize);
 
-    const behaviorRows = await this.prisma.userBehavior.findMany({
-      where: {
-        userId: authUser.id,
-        eventType: 'VIEW'
-      },
-      orderBy: [{ createdAt: 'desc' }],
-      select: {
-        productId: true,
-        createdAt: true
-      }
-    });
+    const [productRows, serviceRows] = await Promise.all([
+      this.prisma.userBehavior.findMany({
+        where: {
+          userId: authUser.id,
+          eventType: BehaviorEventType.VIEW
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        select: {
+          productId: true,
+          createdAt: true
+        }
+      }),
+      this.prisma.campusServiceBehavior.findMany({
+        where: {
+          userId: authUser.id,
+          eventType: BehaviorEventType.VIEW
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        select: {
+          listingId: true,
+          createdAt: true
+        }
+      })
+    ]);
 
     const latestByProduct = new Map<number, Date>();
-    behaviorRows.forEach((item) => {
+    productRows.forEach((item) => {
       if (!latestByProduct.has(item.productId)) {
         latestByProduct.set(item.productId, item.createdAt);
       }
     });
 
-    const allProductIds = [...latestByProduct.keys()];
-    const total = allProductIds.length;
-    const pagedProductIds = allProductIds.slice(skip, skip + pageSize);
+    const latestByService = new Map<number, Date>();
+    serviceRows.forEach((item) => {
+      const current = latestByService.get(item.listingId);
+      if (!current || item.createdAt > current) {
+        latestByService.set(item.listingId, item.createdAt);
+      }
+    });
 
-    const products = pagedProductIds.length
-      ? await this.prisma.product.findMany({
-          where: { id: { in: pagedProductIds } }
-        })
-      : [];
+    const historyRefs = [
+      ...[...latestByProduct.entries()].map(([id, viewedAt]) => ({ type: 'product' as const, id, viewedAt })),
+      ...[...latestByService.entries()].map(([id, viewedAt]) => ({ type: 'campus-service' as const, id, viewedAt }))
+    ].sort((left, right) => right.viewedAt.getTime() - left.viewedAt.getTime());
+
+    const total = historyRefs.length;
+    const pagedRefs = historyRefs.slice(skip, skip + pageSize);
+    const pagedProductIds = pagedRefs.filter((item) => item.type === 'product').map((item) => item.id);
+    const pagedServiceIds = pagedRefs.filter((item) => item.type === 'campus-service').map((item) => item.id);
+
+    const [products, campusServices] = await Promise.all([
+      pagedProductIds.length
+        ? this.prisma.product.findMany({
+            where: { id: { in: pagedProductIds } }
+          })
+        : Promise.resolve([]),
+      pagedServiceIds.length
+        ? this.prisma.campusServiceListing.findMany({
+            where: { id: { in: pagedServiceIds } },
+            include: {
+              images: {
+                orderBy: { sortOrder: 'asc' },
+                select: { imageUrl: true }
+              },
+              owner: {
+                select: {
+                  id: true,
+                  displayName: true
+                }
+              }
+            }
+          })
+        : Promise.resolve([])
+    ]);
 
     const cards = await this.buildProductCards(products, authUser.id);
-    const cardMap = new Map(cards.map((item) => [item.id, item]));
-    const items = pagedProductIds
-      .map((productId) => {
-        const product = cardMap.get(productId);
-        if (!product) {
+    const productMap = new Map(cards.map((item) => [item.id, item]));
+    const serviceMap = new Map(campusServices.map((item) => [item.id, item]));
+    const items = pagedRefs
+      .map((ref) => {
+        if (ref.type === 'product') {
+          const product = productMap.get(ref.id);
+          if (!product) {
+            return null;
+          }
+
+          return {
+            ...product,
+            type: 'product',
+            viewedAt: ref.viewedAt.toISOString()
+          };
+        }
+
+        const listing = serviceMap.get(ref.id);
+        if (!listing) {
           return null;
         }
 
+        const imageUrl = listing.images[0]?.imageUrl;
+        const rewardLabel = formatCampusServiceReward(listing.priceMode, listing.amount);
+
         return {
-          ...product,
-          viewedAt: latestByProduct.get(productId)?.toISOString() ?? null
+          type: 'campus-service',
+          id: listing.id,
+          title: listing.title,
+          description: listing.description,
+          category: listing.category,
+          categoryLabel: campusServiceCategoryLabelMap[listing.category],
+          intent: listing.intent,
+          intentLabel: campusServiceIntentLabelMap[listing.intent],
+          status: listing.status,
+          statusLabel: campusServiceListingStatusLabelMap[listing.status],
+          imageUrl,
+          price: toNumber(listing.amount),
+          rewardLabel,
+          sellerName: listing.owner.displayName,
+          publisher: {
+            id: listing.owner.id,
+            displayName: listing.owner.displayName
+          },
+          summaryTags: [
+            campusServiceIntentLabelMap[listing.intent],
+            campusServiceCategoryLabelMap[listing.category],
+            rewardLabel
+          ],
+          viewedAt: ref.viewedAt.toISOString()
         };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item));
@@ -590,6 +745,7 @@ export class UsersService {
     }
 
     const nextDisplayName = payload.displayName?.trim();
+    const nextStudentId = payload.studentId?.trim();
     const nextEmail = payload.email?.trim();
     const nextRealName = payload.realName?.trim();
     const nextCollege = payload.college?.trim();
@@ -598,6 +754,10 @@ export class UsersService {
 
     if (payload.displayName !== undefined && !nextDisplayName) {
       throw new BadRequestException('展示名不能为空');
+    }
+
+    if (payload.studentId !== undefined && !nextStudentId) {
+      throw new BadRequestException('学号不能为空');
     }
 
     if (payload.email !== undefined) {
@@ -627,6 +787,7 @@ export class UsersService {
       const updated = await this.prisma.user.update({
         where: { id: userId },
         data: {
+          studentId: payload.studentId !== undefined ? nextStudentId : undefined,
           displayName: nextDisplayName ?? undefined,
           email: nextEmail ?? undefined,
           avatarUrl: payload.avatarUrl !== undefined ? (nextAvatarUrl || null) : undefined,
@@ -747,7 +908,7 @@ export class UsersService {
       };
     }
 
-    const [reports, activeProducts, allProducts, orders, campusServices, messages] = await Promise.all([
+    const [reports, activeProducts, allProducts, orders, campusServiceStats, messages] = await Promise.all([
       this.prisma.report.findMany({
         where: { targetUserId: { in: userIds } },
         select: { targetUserId: true, status: true }
@@ -755,7 +916,7 @@ export class UsersService {
       this.prisma.product.findMany({
         where: {
           sellerId: { in: userIds },
-          status: { in: [ProductStatus.PENDING, ProductStatus.ON_SALE] }
+          status: ProductStatus.ON_SALE
         },
         select: { sellerId: true }
       }),
@@ -769,12 +930,7 @@ export class UsersService {
         },
         select: { buyerId: true, sellerId: true, status: true, updatedAt: true }
       }),
-      this.prisma.campusServiceTask.findMany({
-        where: {
-          OR: [{ publisherId: { in: userIds } }, { accepterId: { in: userIds } }]
-        },
-        select: { publisherId: true, accepterId: true, status: true, updatedAt: true }
-      }),
+      loadCampusServiceActivityStats(this.prisma, userIds),
       this.prisma.message.findMany({
         where: { senderId: { in: userIds } },
         select: { senderId: true, createdAt: true }
@@ -797,13 +953,10 @@ export class UsersService {
       activeProductMap.set(product.sellerId, (activeProductMap.get(product.sellerId) ?? 0) + 1);
     });
 
-    const productStats = new Map<number, { total: number; pending: number; offline: number; lastActiveAt: Date | null }>();
+    const productStats = new Map<number, { total: number; offline: number; lastActiveAt: Date | null }>();
     allProducts.forEach((product) => {
-      const current = productStats.get(product.sellerId) ?? { total: 0, pending: 0, offline: 0, lastActiveAt: null };
+      const current = productStats.get(product.sellerId) ?? { total: 0, offline: 0, lastActiveAt: null };
       current.total += 1;
-      if (product.status === ProductStatus.PENDING) {
-        current.pending += 1;
-      }
       if (product.status === ProductStatus.OFFLINE) {
         current.offline += 1;
       }
@@ -838,27 +991,6 @@ export class UsersService {
       }
     });
 
-    const campusServiceStats = new Map<number, { total: number; active: number; lastActiveAt: Date | null }>();
-    const addCampusService = (userId: number | null, status: CampusServiceStatus, updatedAt: Date) => {
-      if (!userId) {
-        return;
-      }
-
-      const current = campusServiceStats.get(userId) ?? { total: 0, active: 0, lastActiveAt: null };
-      current.total += 1;
-      if (status === CampusServiceStatus.OPEN || status === CampusServiceStatus.MATCHED) {
-        current.active += 1;
-      }
-      if (!current.lastActiveAt || updatedAt > current.lastActiveAt) {
-        current.lastActiveAt = updatedAt;
-      }
-      campusServiceStats.set(userId, current);
-    };
-    campusServices.forEach((task) => {
-      addCampusService(task.publisherId, task.status, task.updatedAt);
-      addCampusService(task.accepterId, task.status, task.updatedAt);
-    });
-
     const messageStats = new Map<number, { total: number; lastActiveAt: Date | null }>();
     messages.forEach((item) => {
       const current = messageStats.get(item.senderId) ?? { total: 0, lastActiveAt: null };
@@ -871,7 +1003,7 @@ export class UsersService {
 
     const items = users.map((user) => {
       const report = reportStats.get(user.id) ?? { total: 0, open: 0 };
-      const product = productStats.get(user.id) ?? { total: 0, pending: 0, offline: 0, lastActiveAt: null };
+      const product = productStats.get(user.id) ?? { total: 0, offline: 0, lastActiveAt: null };
       const order = orderStats.get(user.id) ?? { total: 0, active: 0, completed: 0, canceled: 0, lastActiveAt: null };
       const campusService = campusServiceStats.get(user.id) ?? { total: 0, active: 0, lastActiveAt: null };
       const message = messageStats.get(user.id) ?? { total: 0, lastActiveAt: null };
@@ -913,7 +1045,6 @@ export class UsersService {
         openReportCount: report.open,
         activeProductCount: activeProductMap.get(user.id) ?? 0,
         totalProductCount: product.total,
-        pendingProductCount: product.pending,
         offlineProductCount: product.offline,
         orderCount: order.total,
         activeOrderCount: order.active,
@@ -963,7 +1094,7 @@ export class UsersService {
           tx.product.updateMany({
             where: {
               sellerId: userId,
-              status: { in: [ProductStatus.PENDING, ProductStatus.ON_SALE] }
+              status: ProductStatus.ON_SALE
             },
             data: { status: ProductStatus.OFFLINE }
           }),
@@ -974,13 +1105,7 @@ export class UsersService {
             },
             data: { status: OrderStatus.CANCELED }
           }),
-          tx.campusServiceTask.updateMany({
-            where: {
-              OR: [{ publisherId: userId }, { accepterId: userId }],
-              status: { in: [CampusServiceStatus.OPEN, CampusServiceStatus.MATCHED] }
-            },
-            data: { status: CampusServiceStatus.CANCELED }
-          })
+          cancelCampusServicesForUser(tx, userId, payload.reason?.trim() || '账号封禁处理')
         ]);
       }
 

@@ -109,7 +109,8 @@ async function main() {
   await prisma.conversation.deleteMany();
   await prisma.review.deleteMany();
   await prisma.order.deleteMany();
-  await prisma.campusServiceTask.deleteMany();
+  await prisma.campusServiceOrder.deleteMany();
+  await prisma.campusServiceListing.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.favorite.deleteMany();
   await prisma.userFollow.deleteMany();
