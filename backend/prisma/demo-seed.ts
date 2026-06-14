@@ -18,6 +18,7 @@ import {
   MessageType,
   OrderStatus,
   PrismaClient,
+  ProductOfflineReason,
   ProductStatus,
   UserRole,
   VerificationStatus
@@ -1102,6 +1103,7 @@ export async function seedDemoData(prisma: PrismaClient, plan = buildDemoSeedPla
         condition: formatProductConditionValue(seed.conditionScore),
         tags: seed.tags,
         status: seed.status,
+        offlineReason: null,
         createdAt,
         images: {
           create: [{ imageUrl: seed.imageUrl, sortOrder: 0 }]
@@ -1172,7 +1174,8 @@ export async function seedDemoData(prisma: PrismaClient, plan = buildDemoSeedPla
       await prisma.product.update({
         where: { id: product.id },
         data: {
-          status: seed.status === OrderStatus.COMPLETED ? ProductStatus.SOLD : ProductStatus.OFFLINE
+          status: seed.status === OrderStatus.COMPLETED ? ProductStatus.SOLD : ProductStatus.OFFLINE,
+          offlineReason: seed.status === OrderStatus.COMPLETED ? null : ProductOfflineReason.ORDER_RESERVED
         }
       });
     }

@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe
 import { OrdersService } from './orders.service';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CompleteOrderDto } from './dto/complete-order.dto';
+import { CreateOrderAppealDto } from './dto/create-order-appeal.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateMeetupDto } from './dto/update-meetup.dto';
@@ -96,5 +97,15 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser
   ) {
     return this.ordersService.createReview(id, payload, user);
+  }
+
+  @Post(':id/appeals')
+  @UseGuards(JwtAuthGuard)
+  createAppeal(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: CreateOrderAppealDto,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.ordersService.createAppeal(id, payload, user);
   }
 }

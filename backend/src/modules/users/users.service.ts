@@ -7,6 +7,7 @@ import {
   CampusServiceListingStatus,
   CampusServicePriceMode,
   OrderStatus,
+  ProductOfflineReason,
   Prisma,
   ProductStatus,
   UserRole,
@@ -23,8 +24,16 @@ import {
 } from '../campus-services/campus-service-moderation';
 import { SearchService } from '../search/search.service';
 import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
+import { normalizeProductConditionValue } from '../products/product-conditions';
+import { cancelOrdersForUserAndReconcileProducts } from '../orders/order-cancel-reconciliation';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateVerificationStatusDto } from './dto/update-verification-status.dto';
+import {
+  applyCreditScoreDelta,
+  APPROVED_USER_CREDIT_SCORE,
+  MANUAL_BAN_CREDIT_PENALTY
+} from './user-credit.utils';
 
 type ReceivedReviewItem = {
   id: number;
@@ -89,8 +98,8 @@ const campusServiceCategoryLabelMap: Record<CampusServiceCategory, string> = {
 };
 
 const campusServiceIntentLabelMap: Record<CampusServiceIntent, string> = {
-  REQUEST: '找人帮我',
-  OFFER: '我来提供'
+  REQUEST: '我要购买服务',
+  OFFER: '我要接单挣钱'
 };
 
 const campusServiceListingStatusLabelMap: Record<CampusServiceListingStatus, string> = {
@@ -418,7 +427,7 @@ export class UsersService {
         title: product.title,
         category: product.category,
         price: Number(product.price),
-        condition: product.condition,
+        condition: normalizeProductConditionValue(product.condition),
         tags: normalizeTags(product.tags),
         status: product.status,
         description: product.description,
@@ -1221,7 +1230,11 @@ export class UsersService {
         verificationStatus: user.verificationStatus,
         accountStatus: user.accountStatus,
         isBanned: user.accountStatus === AccountStatus.BANNED,
+        realName: user.verification?.realName ?? user.displayName,
         college: user.verification?.college ?? '待填写',
+        graduationYear: user.verification?.graduationYear ?? null,
+        phone: user.verification?.phone ?? '待填写',
+        studentCardPhotoUrl: user.verification?.studentCardPhotoUrl ?? null,
         reportCount: report.total,
         openReportCount: report.open,
         activeProductCount: activeProductMap.get(user.id) ?? 0,
@@ -1265,49 +1278,122 @@ export class UsersService {
         throw new NotFoundException('用户不存在');
       }
 
+      if (payload.banned && user.accountStatus === AccountStatus.BANNED) {
+        throw new BadRequestException('用户已处于封禁状态');
+      }
+
+      if (!payload.banned && user.accountStatus === AccountStatus.ACTIVE) {
+        throw new BadRequestException('用户当前未被封禁');
+      }
+
       const updated = await tx.user.update({
         where: { id: userId },
         data: { accountStatus: payload.banned ? AccountStatus.BANNED : AccountStatus.ACTIVE }
       });
 
       if (payload.banned) {
-        await Promise.all([
+        const operationAt = new Date();
+        const [reconciledProductIds] = await Promise.all([
+          cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
           tx.product.updateMany({
             where: {
               sellerId: userId,
               status: ProductStatus.ON_SALE
             },
-            data: { status: ProductStatus.OFFLINE }
+            data: {
+              status: ProductStatus.OFFLINE,
+              offlineReason: ProductOfflineReason.USER_BANNED
+            }
           }),
-          tx.order.updateMany({
-            where: {
-              OR: [{ buyerId: userId }, { sellerId: userId }],
-              status: { in: [OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.WAITING_REVIEW] }
-            },
-            data: { status: OrderStatus.CANCELED }
-          }),
-          cancelCampusServicesForUser(tx, userId, payload.reason?.trim() || '账号封禁处理')
+          cancelCampusServicesForUser(tx, userId, payload.reason?.trim() || '账号封禁处理'),
+          applyCreditScoreDelta(tx, userId, MANUAL_BAN_CREDIT_PENALTY)
         ]);
+
+        await tx.auditLog.create({
+          data: {
+            actorId: adminUser.id,
+            actorName: `管理员#${adminUser.id}`,
+            action: 'BAN_USER',
+            targetType: 'USER',
+            targetId: userId,
+            detail: payload.reason?.trim() || '账号封禁处理'
+          }
+        });
+
+        return {
+          id: updated.id,
+          isBanned: updated.accountStatus === AccountStatus.BANNED,
+          reconciledProductIds
+        };
       }
 
       await tx.auditLog.create({
         data: {
           actorId: adminUser.id,
           actorName: `管理员#${adminUser.id}`,
-          action: payload.banned ? 'BAN_USER' : 'UNBAN_USER',
+          action: 'UNBAN_USER',
           targetType: 'USER',
           targetId: userId,
-          detail: payload.reason?.trim() || (payload.banned ? '账号封禁处理' : '账号恢复使用')
+          detail: payload.reason?.trim() || '账号恢复使用'
         }
       });
 
       return {
         id: updated.id,
-        isBanned: updated.accountStatus === AccountStatus.BANNED
+        isBanned: updated.accountStatus === AccountStatus.BANNED,
+        reconciledProductIds: [] as number[]
       };
     });
 
-    await this.searchService.syncSellerProducts(userId);
+    await Promise.all([
+      this.searchService.syncSellerProducts(userId),
+      ...result.reconciledProductIds.map((productId) => this.searchService.syncProduct(productId))
+    ]);
     return result;
+  }
+
+  async updateVerificationStatus(userId: number, payload: UpdateVerificationStatusDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, verificationStatus: true }
+      });
+
+      if (!user) {
+        throw new NotFoundException('用户不存在');
+      }
+
+      if (user.verificationStatus !== VerificationStatus.PENDING) {
+        throw new BadRequestException('当前实名审核已处理，不能重复操作');
+      }
+
+      const nextStatus = payload.status === 'APPROVED' ? VerificationStatus.APPROVED : VerificationStatus.REJECTED;
+      const data = nextStatus === VerificationStatus.APPROVED
+        ? { verificationStatus: nextStatus, creditScore: APPROVED_USER_CREDIT_SCORE }
+        : { verificationStatus: nextStatus };
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminUser.id,
+          actorName: `管理员#${adminUser.id}`,
+          action: nextStatus === VerificationStatus.APPROVED ? 'APPROVE_VERIFICATION' : 'REJECT_VERIFICATION',
+          targetType: 'USER',
+          targetId: userId,
+          detail: payload.reason?.trim() || (nextStatus === VerificationStatus.APPROVED ? '注册审核通过' : '注册审核驳回')
+        }
+      });
+
+      return {
+        id: updated.id,
+        verificationStatus: updated.verificationStatus,
+        creditScore: updated.creditScore
+      };
+    });
   }
 }

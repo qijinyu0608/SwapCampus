@@ -17,6 +17,7 @@
     "db:migrate-product-statuses": "tsx prisma/migrate-product-statuses.ts",
     "db:generate-product-samples": "tsx prisma/generate-product-samples.ts",
     "db:migrate-product-categories": "tsx prisma/migrate-product-categories.ts",
+    "db:backfill-product-offline-reasons": "tsx prisma/backfill-product-offline-reasons.ts",
     "db:clean-domain-data": "tsx prisma/clean-domain-data.ts",
     "db:verify-category-products": "tsx prisma/verify-category-products.ts"
   },

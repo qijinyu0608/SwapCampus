@@ -1,13 +1,15 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AccountStatus, MessageType, OrderStatus, Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
+import { AccountStatus, MessageType, OrderStatus, Prisma, PrismaClient, ProductOfflineReason, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { SearchService } from '../search/search.service';
 import { VendureService } from '../vendure/vendure.service';
+import { normalizeProductConditionValue } from '../products/product-conditions';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CompleteOrderDto } from './dto/complete-order.dto';
+import { CreateOrderAppealDto } from './dto/create-order-appeal.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateMeetupDto } from './dto/update-meetup.dto';
@@ -99,6 +101,10 @@ export class OrdersService {
     private readonly vendureService: VendureService
   ) {}
 
+  private get orderAppealClient() {
+    return this.prisma as PrismaService & Pick<PrismaClient, 'orderAppeal'>;
+  }
+
   async createOrder(payload: CreateOrderDto, currentUser: AuthenticatedUser) {
     const buyerUser = requireAuthenticatedUser(currentUser);
     const [product, buyer, productImages] = await Promise.all([
@@ -145,7 +151,7 @@ export class OrdersService {
       description: product.description,
       price: Number(product.price),
       category: product.category,
-      condition: product.condition,
+      condition: normalizeProductConditionValue(product.condition),
       imageUrl: productImages[0]?.imageUrl ?? null,
       sellerId: product.sellerId,
       sellerName: null
@@ -170,7 +176,10 @@ export class OrdersService {
 
       await tx.product.update({
         where: { id: product.id },
-        data: { status: ProductStatus.OFFLINE }
+        data: {
+          status: ProductStatus.OFFLINE,
+          offlineReason: ProductOfflineReason.ORDER_RESERVED
+        }
       });
 
       const existingConversation = await tx.conversation.findFirst({
@@ -400,12 +409,77 @@ export class OrdersService {
             }
           }
         },
+        appeals: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            appellantId: true,
+            respondentId: true,
+            issueType: true,
+            reason: true,
+            expectedAction: true,
+            status: true,
+            resolutionNote: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        },
         conversations: {
           orderBy: { updatedAt: 'desc' },
           select: { id: true }
         }
       }
-    });
+    }) as (Awaited<ReturnType<typeof this.prisma.order.findUnique>> & {
+      product: {
+        id: number;
+        title: string;
+        price: Prisma.Decimal;
+        category: string;
+        condition: string;
+        status: ProductStatus;
+        description: string;
+      };
+      buyer: {
+        id: number;
+        displayName: string;
+        avatarUrl: string | null;
+        avatarFrame: string | null;
+        creditScore: number;
+        verificationStatus: VerificationStatus;
+      };
+      seller: {
+        id: number;
+        displayName: string;
+        avatarUrl: string | null;
+        avatarFrame: string | null;
+        creditScore: number;
+        verificationStatus: VerificationStatus;
+      };
+      reviews: Array<{
+        id: number;
+        rating: number;
+        content: string;
+        createdAt: Date;
+        reviewerId: number;
+        reviewer: {
+          id: number;
+          displayName: string;
+        };
+      }>;
+      appeals: Array<{
+        id: number;
+        appellantId: number;
+        respondentId: number;
+        issueType: string;
+        reason: string;
+        expectedAction: string | null;
+        status: string;
+        resolutionNote: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>;
+      conversations: Array<{ id: number }>;
+    }) | null;
 
     if (!order) {
       throw new NotFoundException('订单不存在');
@@ -430,7 +504,7 @@ export class OrdersService {
       description: order.product.description,
       price: Number(order.product.price),
       category: order.product.category,
-      condition: order.product.condition,
+      condition: normalizeProductConditionValue(order.product.condition),
       imageUrl: images[0]?.imageUrl ?? null,
       sellerId: order.sellerId,
       sellerName: order.seller.displayName
@@ -467,12 +541,92 @@ export class OrdersService {
         reviewerId: review.reviewerId,
         reviewerName: review.reviewer.displayName
       })),
+      appeals: order.appeals.map((appeal) => ({
+        id: appeal.id,
+        appellantId: appeal.appellantId,
+        respondentId: appeal.respondentId,
+        issueType: appeal.issueType,
+        reason: appeal.reason,
+        expectedAction: appeal.expectedAction,
+        status: appeal.status,
+        resolutionNote: appeal.resolutionNote,
+        createdAt: appeal.createdAt,
+        updatedAt: appeal.updatedAt
+      })),
       actionState: {
         canComplete: order.buyerId === authUser.id && order.status !== OrderStatus.CANCELED && order.status !== OrderStatus.COMPLETED,
         canReview: order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED,
         canAppeal: order.status !== OrderStatus.CANCELED,
         canOpenConversation: Boolean(order.conversations[0]?.id)
       }
+    };
+  }
+
+  async createAppeal(orderId: number, payload: CreateOrderAppealDto, currentUser: AuthenticatedUser) {
+    const authUser = requireAuthenticatedUser(currentUser);
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        buyerId: true,
+        sellerId: true,
+        status: true
+      }
+    });
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    this.assertParticipant(order, authUser.id);
+
+    if (order.status === OrderStatus.CANCELED) {
+      throw new BadRequestException('已取消订单不能发起申诉');
+    }
+
+    const respondentId = order.buyerId === authUser.id ? order.sellerId : order.buyerId;
+    const duplicatedOpenAppeal = await this.orderAppealClient.orderAppeal.findFirst({
+      where: {
+        orderId,
+        appellantId: authUser.id,
+        respondentId,
+        status: 'OPEN'
+      },
+      select: { id: true }
+    });
+
+    if (duplicatedOpenAppeal) {
+      throw new BadRequestException('你已经针对该订单提交过待处理申诉');
+    }
+
+    const appeal = await this.orderAppealClient.orderAppeal.create({
+      data: {
+        orderId,
+        appellantId: authUser.id,
+        respondentId,
+        issueType: payload.issueType.trim(),
+        reason: payload.reason.trim(),
+        expectedAction: payload.expectedAction?.trim() || null,
+        status: 'OPEN'
+      }
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: authUser.id,
+        actorName: `用户#${authUser.id}`,
+        action: 'CREATE_ORDER_APPEAL',
+        targetType: 'ORDER_APPEAL',
+        targetId: appeal.id,
+        detail: `${payload.issueType.trim()}：${payload.reason.trim()}`
+      }
+    });
+
+    return {
+      id: appeal.id,
+      status: appeal.status,
+      issueType: appeal.issueType,
+      reason: appeal.reason
     };
   }
 
@@ -572,10 +726,29 @@ export class OrdersService {
       });
 
       if (!activeOrder && !finishedOrder) {
-        await tx.product.update({
+        const product = await tx.product.findUnique({
           where: { id: existingOrder.productId },
-          data: { status: ProductStatus.ON_SALE }
+          select: { id: true, sellerId: true, offlineReason: true, status: true }
         });
+
+        const seller = product
+          ? await tx.user.findUnique({
+              where: { id: product.sellerId },
+              select: { accountStatus: true }
+            })
+          : null;
+
+        if (
+          product
+          && seller?.accountStatus !== AccountStatus.BANNED
+          && product.status === ProductStatus.OFFLINE
+          && product.offlineReason === ProductOfflineReason.ORDER_RESERVED
+        ) {
+          await tx.product.update({
+            where: { id: existingOrder.productId },
+            data: { status: ProductStatus.ON_SALE, offlineReason: null }
+          });
+        }
       }
 
       await this.appendOrderEventMessage(tx, {
@@ -704,7 +877,9 @@ export class OrdersService {
       description: typeof parsed.description === 'string' ? parsed.description : fallback.description,
       price: typeof parsed.price === 'number' ? parsed.price : fallback.price,
       category: typeof parsed.category === 'string' ? parsed.category : fallback.category,
-      condition: typeof parsed.condition === 'string' ? parsed.condition : fallback.condition,
+      condition: typeof parsed.condition === 'string'
+        ? normalizeProductConditionValue(parsed.condition)
+        : fallback.condition,
       imageUrl: typeof parsed.imageUrl === 'string' || parsed.imageUrl === null ? parsed.imageUrl : fallback.imageUrl,
       sellerId: typeof parsed.sellerId === 'number' ? parsed.sellerId : fallback.sellerId,
       sellerName: typeof parsed.sellerName === 'string' || parsed.sellerName === null ? parsed.sellerName : fallback.sellerName
@@ -848,7 +1023,7 @@ export class OrdersService {
 
       await tx.product.update({
         where: { id: currentOrder.productId },
-        data: { status: ProductStatus.SOLD }
+        data: { status: ProductStatus.SOLD, offlineReason: null }
       });
 
       await this.appendOrderEventMessage(tx, {

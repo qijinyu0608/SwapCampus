@@ -4,6 +4,9 @@ import {
   CampusServiceListingEndReason,
   CampusServiceListingStatus,
   CampusServiceOrderStatus,
+  OrderStatus,
+  ProductOfflineReason,
+  ProductStatus,
   UserRole
 } from '@prisma/client';
 import { AdminService } from './admin.service';
@@ -56,21 +59,42 @@ describe('AdminService', () => {
 
   function createPrisma(overrides: Record<string, unknown> = {}) {
     const tx = {
-      campusServiceListing: {
+      order: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        findFirst: jest.fn(),
+        updateMany: jest.fn()
+      },
+      product: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn()
+      },
+      orderAppeal: {
         findUnique: jest.fn(),
         update: jest.fn()
+      },
+      campusServiceListing: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([])
       },
       campusServiceOrder: {
         findFirst: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
-        findMany: jest.fn()
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([])
       },
       auditLog: {
         create: jest.fn().mockResolvedValue(undefined)
       },
       user: {
-        findMany: jest.fn().mockResolvedValue([])
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        update: jest.fn()
       }
     } as any;
 
@@ -87,46 +111,395 @@ describe('AdminService', () => {
     return new AdminService(prisma, {
       syncProduct: jest.fn(),
       syncSellerProducts: jest.fn()
+    } as any, {
+      syncProduct: jest.fn(),
+      syncSellerProducts: jest.fn()
+    } as any, {
+      syncListing: jest.fn(),
+      syncOrder: jest.fn()
     } as any);
   }
 
-  it('should reopen listing and clear end markers', async () => {
+  it('should cancel active order and reopen product when no other active order exists', async () => {
     const { prisma, tx } = createPrisma();
-    const completedOrder = createOrder({
-      status: CampusServiceOrderStatus.COMPLETED
+    tx.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.PENDING
     });
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      sellerId: 21,
+      status: ProductStatus.OFFLINE,
+      offlineReason: ProductOfflineReason.ORDER_RESERVED
+    });
+    tx.order.update.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.CANCELED
+    });
+    tx.order.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    tx.user.findUnique.mockResolvedValue({
+      accountStatus: 'ACTIVE'
+    });
+
+    const service = createService(prisma);
+    const result = await service.updateOrderStatus(91, {
+      status: OrderStatus.CANCELED,
+      reason: '管理员取消'
+    }, adminUser);
+
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: { id: 91 },
+      data: { status: OrderStatus.CANCELED, canceledAt: expect.any(Date) }
+    });
+    expect(tx.product.update).toHaveBeenCalledWith({
+      where: { id: 18 },
+      data: { status: ProductStatus.ON_SALE, offlineReason: null }
+    });
+    expect(tx.auditLog.create).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.CANCELED
+    });
+  });
+
+  it('should reject duplicate product offline action', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      title: '二手教材',
+      sellerId: 21,
+      status: ProductStatus.OFFLINE
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.updateProductStatus(18, {
+      status: ProductStatus.OFFLINE
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.product.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject duplicate product restore action', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      title: '二手教材',
+      sellerId: 21,
+      status: ProductStatus.ON_SALE
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.updateProductStatus(18, {
+      status: ProductStatus.ON_SALE
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.product.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject product restore when active order exists', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      title: '二手教材',
+      sellerId: 21,
+      status: ProductStatus.OFFLINE
+    });
+    tx.user.findUnique.mockResolvedValue({
+      accountStatus: 'ACTIVE'
+    });
+    tx.order.findFirst.mockResolvedValue({
+      id: 91
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.updateProductStatus(18, {
+      status: ProductStatus.ON_SALE
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.product.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject non-cancel admin order status updates', async () => {
+    const { prisma } = createPrisma();
+    const service = createService(prisma);
+
+    await expect(service.updateOrderStatus(91, {
+      status: 'COMPLETED' as any
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('should reject archived order admin updates', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.COMPLETED
+    });
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      sellerId: 21,
+      status: ProductStatus.SOLD
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.updateOrderStatus(91, {
+      status: OrderStatus.CANCELED
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.order.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should resolve appeal by canceling active order once', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 51,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+    tx.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.PENDING
+    });
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      sellerId: 21,
+      status: ProductStatus.OFFLINE,
+      offlineReason: ProductOfflineReason.ORDER_RESERVED
+    });
+    tx.order.update.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.CANCELED
+    });
+    tx.order.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    tx.orderAppeal.update.mockResolvedValue({
+      id: 51,
+      status: 'RESOLVED',
+      resolutionNote: '申诉成立'
+    });
+    tx.user.findUnique.mockResolvedValue({
+      accountStatus: 'ACTIVE'
+    });
+    tx.user.update.mockResolvedValue({
+      id: 32,
+      creditScore: 54
+    });
+
+    const service = createService(prisma);
+    const result = await service.resolveOrderAppeal(51, {
+      nextStatus: 'CANCELED_ORDER',
+      resolutionNote: '申诉成立'
+    }, adminUser);
+
+    expect(tx.order.update).toHaveBeenCalledWith({
+      where: { id: 91 },
+      data: { status: OrderStatus.CANCELED, canceledAt: expect.any(Date) }
+    });
+    expect(tx.product.update).toHaveBeenCalledWith({
+      where: { id: 18 },
+      data: { status: ProductStatus.ON_SALE, offlineReason: null }
+    });
+    expect(tx.orderAppeal.update).toHaveBeenCalledWith({
+      where: { id: 51 },
+      data: {
+        status: 'RESOLVED',
+        resolutionNote: '申诉成立',
+        handledBy: adminUser.id
+      }
+    });
+    expect(result).toEqual({
+      id: 51,
+      status: 'RESOLVED',
+      resolutionNote: '申诉成立'
+    });
+  });
+
+  it('should reject repeated appeal resolution', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 51,
+      orderId: 91,
+      respondentId: 32,
+      status: 'RESOLVED'
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.resolveOrderAppeal(51, {
+      nextStatus: 'RESOLVED'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.orderAppeal.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject appeal cancel when linked order is archived', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 51,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+    tx.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      status: OrderStatus.COMPLETED
+    });
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      sellerId: 21,
+      status: ProductStatus.SOLD
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.resolveOrderAppeal(51, {
+      nextStatus: 'CANCELED_ORDER'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.order.update).not.toHaveBeenCalled();
+    expect(tx.orderAppeal.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject BAN_RESPONDENT when respondent is already banned', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 52,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+    tx.user.findUnique.mockResolvedValue({
+      id: 32,
+      accountStatus: 'BANNED'
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.resolveOrderAppeal(52, {
+      nextStatus: 'BAN_RESPONDENT'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.orderAppeal.update).not.toHaveBeenCalled();
+  });
+
+  it('should reject UNBAN_RESPONDENT when respondent is already active', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 53,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+    tx.user.findUnique.mockResolvedValue({
+      id: 32,
+      accountStatus: 'ACTIVE'
+    });
+
+    const service = createService(prisma);
+
+    await expect(service.resolveOrderAppeal(53, {
+      nextStatus: 'UNBAN_RESPONDENT'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.orderAppeal.update).not.toHaveBeenCalled();
+  });
+
+  it('should ban respondent with the same cascading effects as admin ban', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 54,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+    tx.user.findUnique.mockResolvedValue({
+      id: 32,
+      accountStatus: 'ACTIVE',
+      creditScore: 60
+    });
+    tx.orderAppeal.update.mockResolvedValue({
+      id: 54,
+      status: 'RESOLVED',
+      resolutionNote: '申诉封禁'
+    });
+    tx.user.update.mockResolvedValue({
+      id: 32,
+      accountStatus: 'BANNED'
+    });
+    tx.order.findMany.mockResolvedValue([
+      { id: 91, productId: 18 }
+    ]);
+    tx.product.findUnique.mockResolvedValue({
+      id: 18,
+      sellerId: 45,
+      status: ProductStatus.OFFLINE
+    });
+    tx.order.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    const service = createService(prisma);
+    const result = await service.resolveOrderAppeal(54, {
+      nextStatus: 'BAN_RESPONDENT',
+      resolutionNote: '申诉封禁'
+    }, adminUser);
+
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 32 },
+      data: { accountStatus: 'BANNED' }
+    });
+    expect(tx.product.updateMany).toHaveBeenCalled();
+    expect(tx.order.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [91] } },
+      data: { status: OrderStatus.CANCELED, canceledAt: expect.any(Date) }
+    });
+    expect(tx.campusServiceListing.updateMany).toHaveBeenCalled();
+    expect(result).toEqual({
+      id: 54,
+      status: 'RESOLVED',
+      resolutionNote: '申诉封禁'
+    });
+  });
+
+  it('should reject removed reopen action', async () => {
+    const { prisma, tx } = createPrisma();
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing({
       status: CampusServiceListingStatus.PAUSED,
       endReason: CampusServiceListingEndReason.ADMIN_CLOSE,
       endedAt: new Date('2026-06-12T09:00:00.000Z')
     }));
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(completedOrder)
-      .mockResolvedValueOnce(null);
-    tx.campusServiceListing.update.mockResolvedValue(createListing({
-      status: CampusServiceListingStatus.OPEN
-    }));
 
     const service = createService(prisma);
-    const result = await service.updateCampusServiceStatus(18, {
-      action: AdminCampusServiceAction.REOPEN,
-      reason: '重新开放'
-    }, adminUser);
 
-    expect(tx.campusServiceListing.update).toHaveBeenCalledWith({
-      where: { id: 18 },
-      data: {
-        status: CampusServiceListingStatus.OPEN,
-        endReason: null,
-        endedAt: null
-      }
-    });
-    expect(tx.campusServiceOrder.update).not.toHaveBeenCalled();
-    expect(tx.campusServiceOrder.updateMany).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      id: 18,
-      action: AdminCampusServiceAction.REOPEN
-    });
+    await expect(service.updateCampusServiceStatus(18, {
+      action: 'REOPEN' as AdminCampusServiceAction,
+      reason: '重新开放'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.campusServiceListing.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('should cancel listing and all active orders', async () => {
@@ -135,9 +508,6 @@ describe('AdminService', () => {
       status: CampusServiceOrderStatus.CONFIRMED
     });
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing());
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(confirmedOrder)
-      .mockResolvedValueOnce(confirmedOrder);
 
     const service = createService(prisma);
     const result = await service.updateCampusServiceStatus(18, {
@@ -176,114 +546,49 @@ describe('AdminService', () => {
     });
   });
 
-  it('should force match listing and confirm pending order', async () => {
+  it('should reject removed force match action', async () => {
     const { prisma, tx } = createPrisma();
-    const pendingOrder = createOrder({
-      status: CampusServiceOrderStatus.PENDING_CONFIRMATION,
-      confirmedAt: null
-    });
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing({
       status: CampusServiceListingStatus.OPEN
     }));
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(pendingOrder)
-      .mockResolvedValueOnce(pendingOrder);
-
-    const service = createService(prisma);
-    const result = await service.updateCampusServiceStatus(18, {
-      action: AdminCampusServiceAction.FORCE_MATCH
-    }, adminUser);
-
-    expect(tx.campusServiceListing.update).toHaveBeenCalledWith({
-      where: { id: 18 },
-      data: {
-        status: CampusServiceListingStatus.BUSY,
-        endReason: null,
-        endedAt: null
-      }
-    });
-    expect(tx.campusServiceOrder.update).toHaveBeenCalledWith({
-      where: { id: 301 },
-      data: {
-        status: CampusServiceOrderStatus.CONFIRMED,
-        confirmedAt: expect.any(Date)
-      }
-    });
-    expect(result).toEqual({
-      id: 18,
-      action: AdminCampusServiceAction.FORCE_MATCH
-    });
-  });
-
-  it('should force complete latest order and close listing', async () => {
-    const { prisma, tx } = createPrisma();
-    const confirmedOrder = createOrder({
-      status: CampusServiceOrderStatus.CONFIRMED,
-      completedAt: null
-    });
-    tx.campusServiceListing.findUnique.mockResolvedValue(createListing({
-      status: CampusServiceListingStatus.BUSY
-    }));
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(confirmedOrder)
-      .mockResolvedValueOnce(confirmedOrder);
-
-    const service = createService(prisma);
-    const result = await service.updateCampusServiceStatus(18, {
-      action: AdminCampusServiceAction.FORCE_COMPLETE
-    }, adminUser);
-
-    expect(tx.campusServiceOrder.update).toHaveBeenCalledWith({
-      where: { id: 301 },
-      data: {
-        status: CampusServiceOrderStatus.COMPLETED,
-        completedAt: expect.any(Date)
-      }
-    });
-    expect(tx.campusServiceListing.update).toHaveBeenCalledWith({
-      where: { id: 18 },
-      data: {
-        status: CampusServiceListingStatus.ENDED,
-        endReason: CampusServiceListingEndReason.MANUAL_END,
-        endedAt: expect.any(Date)
-      }
-    });
-    expect(result).toEqual({
-      id: 18,
-      action: AdminCampusServiceAction.FORCE_COMPLETE
-    });
-  });
-
-  it('should reject force match when there is no active order', async () => {
-    const { prisma, tx } = createPrisma();
-    tx.campusServiceListing.findUnique.mockResolvedValue(createListing());
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(createOrder({
-      status: CampusServiceOrderStatus.COMPLETED
-    }))
-      .mockResolvedValueOnce(null);
 
     const service = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
-      action: AdminCampusServiceAction.FORCE_MATCH
+      action: 'FORCE_MATCH' as AdminCampusServiceAction
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.campusServiceListing.update).not.toHaveBeenCalled();
+    expect(tx.campusServiceOrder.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('should reject archived campus service admin updates', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.campusServiceListing.findUnique.mockResolvedValue(createListing({
+      status: CampusServiceListingStatus.ENDED,
+      endReason: CampusServiceListingEndReason.MANUAL_END,
+      endedAt: new Date('2026-06-12T09:00:00.000Z')
+    }));
+
+    const service = createService(prisma);
+
+    await expect(service.updateCampusServiceStatus(18, {
+      action: AdminCampusServiceAction.CANCEL
     }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(tx.campusServiceListing.update).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it('should reject force complete when there is no order', async () => {
+  it('should reject removed force complete action', async () => {
     const { prisma, tx } = createPrisma();
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing());
-    tx.campusServiceOrder.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
 
     const service = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
-      action: AdminCampusServiceAction.FORCE_COMPLETE
+      action: 'FORCE_COMPLETE' as AdminCampusServiceAction
     }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(tx.campusServiceOrder.update).not.toHaveBeenCalled();
@@ -373,7 +678,7 @@ describe('AdminService', () => {
     expect(result[0]).toMatchObject({
       id: 18,
       intent: CampusServiceIntent.OFFER,
-      intentLabel: '我来提供',
+      intentLabel: '我要接单挣钱',
       status: CampusServiceListingStatus.OPEN,
       participantId: 81,
       participantName: '陈远',

@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UsersService } from './users.service';
 import { UpdateBanStatusDto } from './dto/update-ban-status.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateVerificationStatusDto } from './dto/update-verification-status.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -129,5 +130,16 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser
   ) {
     return this.usersService.updateBanStatus(id, payload, user);
+  }
+
+  @Patch(':id/verification-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  updateVerificationStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpdateVerificationStatusDto,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.usersService.updateVerificationStatus(id, payload, user);
   }
 }

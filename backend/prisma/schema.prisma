@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-arm64-openssl-1.1.x", "linux-arm64-openssl-1.1.x"]
+  binaryTargets = ["native", "linux-musl-arm64-openssl-1.1.x", "linux-arm64-openssl-1.1.x", "debian-openssl-3.0.x"]
   engineType    = "binary"
 }
 
@@ -30,6 +30,13 @@ enum ProductStatus {
   ON_SALE
   SOLD
   OFFLINE
+}
+
+enum ProductOfflineReason {
+  ORDER_RESERVED
+  ADMIN_OFFLINE
+  REPORT_OFFLINE
+  USER_BANNED
 }
 
 enum OrderStatus {
@@ -186,6 +193,9 @@ model User {
   reportsFiled                Report[]             @relation("ReportReporter")
   reportsTargeted             Report[]             @relation("ReportTargetUser")
   reportsHandled              Report[]             @relation("ReportHandler")
+  orderAppealsFiled           OrderAppeal[]        @relation("OrderAppealAppellant")
+  orderAppealsTargeted        OrderAppeal[]        @relation("OrderAppealRespondent")
+  orderAppealsHandled         OrderAppeal[]        @relation("OrderAppealHandler")
   auditLogs                   AuditLog[]           @relation("AuditLogActor")
   behaviors                   UserBehavior[]
   following                   UserFollow[]         @relation("UserFollowing")
@@ -221,6 +231,7 @@ model Product {
   condition     String
   tags          Json
   status        ProductStatus  @default(PENDING)
+  offlineReason ProductOfflineReason?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   seller        User           @relation("ProductSeller", fields: [sellerId], references: [id])
@@ -280,12 +291,38 @@ model Order {
   seller         User           @relation("OrderSeller", fields: [sellerId], references: [id])
   conversations  Conversation[]
   reviews        Review[]
+  appeals        OrderAppeal[]
 
   @@index([productId])
   @@index([buyerId, status, updatedAt])
   @@index([sellerId, status, updatedAt])
   @@index([status, createdAt])
   @@index([autoConfirmAt, status])
+}
+
+model OrderAppeal {
+  id             Int      @id @default(autoincrement())
+  orderId        Int
+  appellantId    Int
+  respondentId   Int
+  issueType      String
+  reason         String
+  expectedAction String?
+  status         String   @default("OPEN")
+  resolutionNote String?
+  handledBy      Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  order          Order    @relation(fields: [orderId], references: [id])
+  appellant      User     @relation("OrderAppealAppellant", fields: [appellantId], references: [id])
+  respondent     User     @relation("OrderAppealRespondent", fields: [respondentId], references: [id])
+  handler        User?    @relation("OrderAppealHandler", fields: [handledBy], references: [id])
+
+  @@index([orderId, status, createdAt])
+  @@index([appellantId, status, createdAt])
+  @@index([respondentId, status, createdAt])
+  @@index([handledBy, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model CampusServiceListing {

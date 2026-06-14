@@ -6,6 +6,8 @@ import {
   CampusServiceListingStatus,
   CampusServiceOrderStatus,
   OrderStatus,
+  ProductOfflineReason,
+  PrismaClient,
   ProductStatus
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,9 +17,19 @@ import { SearchService } from '../search/search.service';
 import {
   AdminCampusServiceAction,
   UpdateAdminCampusServiceStatusDto
-} from './dto/update-admin-campus-service-status.dto';
+  } from './dto/update-admin-campus-service-status.dto';
 import { UpdateAdminOrderStatusDto } from './dto/update-admin-order-status.dto';
 import { UpdateAdminProductStatusDto } from './dto/update-admin-product-status.dto';
+import { ProductsService } from '../products/products.service';
+import { CampusServicesService } from '../campus-services/campus-services.service';
+import { cancelCampusServicesForUser } from '../campus-services/campus-service-moderation';
+import { cancelOrdersForUserAndReconcileProducts } from '../orders/order-cancel-reconciliation';
+import { ResolveOrderAppealDto } from '../orders/dto/resolve-order-appeal.dto';
+import {
+  applyCreditScoreDelta,
+  ORDER_APPEAL_BAN_CREDIT_PENALTY,
+  ORDER_APPEAL_RESOLVED_CREDIT_PENALTY
+} from '../users/user-credit.utils';
 
 const activeOrderStatuses: OrderStatus[] = [
   OrderStatus.PENDING,
@@ -43,7 +55,11 @@ export class AdminService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(SearchService)
-    private readonly searchService: SearchService
+    private readonly searchService: SearchService,
+    @Inject(ProductsService)
+    private readonly productsService: ProductsService,
+    @Inject(CampusServicesService)
+    private readonly campusServicesService: CampusServicesService
   ) {}
 
   private getActorName(user: AuthenticatedUser) {
@@ -54,12 +70,122 @@ export class AdminService {
     return reason?.trim() || fallback;
   }
 
+  private get orderAppealClient() {
+    return this.prisma as PrismaService & Pick<PrismaClient, 'orderAppeal'>;
+  }
+
+  private async cancelOrderAsAdmin(
+    tx: any,
+    orderId: number
+  ) {
+    const order = await tx.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      throw new NotFoundException('订单不存在');
+    }
+
+    const product = await tx.product.findUnique({
+      where: { id: order.productId },
+      select: { id: true, sellerId: true, status: true, offlineReason: true }
+    });
+
+    if (!product) {
+      throw new NotFoundException('订单关联商品不存在');
+    }
+
+    if (!activeOrderStatuses.includes(order.status)) {
+      throw new BadRequestException('当前订单已归档，不能再由后台修改');
+    }
+
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.CANCELED, canceledAt: new Date() }
+    });
+
+    const [otherFinishedOrder, otherActiveOrder, seller] = await Promise.all([
+      tx.order.findFirst({
+        where: {
+          productId: order.productId,
+          id: { not: orderId },
+          status: OrderStatus.COMPLETED
+        },
+        select: { id: true }
+      }),
+      tx.order.findFirst({
+        where: {
+          productId: order.productId,
+          id: { not: orderId },
+          status: { in: activeOrderStatuses }
+        },
+        select: { id: true }
+      }),
+      tx.user.findUnique({
+        where: { id: product.sellerId },
+        select: { accountStatus: true }
+      })
+    ]);
+
+    if (otherFinishedOrder) {
+      await tx.product.update({
+        where: { id: order.productId },
+        data: { status: ProductStatus.SOLD, offlineReason: null }
+      });
+    } else if (
+      !otherActiveOrder
+      && seller?.accountStatus !== AccountStatus.BANNED
+      && product.offlineReason === ProductOfflineReason.ORDER_RESERVED
+      && product.status !== ProductStatus.SOLD
+    ) {
+      await tx.product.update({
+        where: { id: order.productId },
+        data: { status: ProductStatus.ON_SALE, offlineReason: null }
+      });
+    }
+
+    return updated;
+  }
+
+  private async banUserForAdmin(
+    tx: any,
+    userId: number,
+    reason: string,
+    creditPenalty: number
+  ) {
+    const operationAt = new Date();
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { accountStatus: AccountStatus.BANNED }
+    });
+
+    const [reconciledProductIds] = await Promise.all([
+      cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
+      tx.product.updateMany({
+        where: {
+          sellerId: userId,
+          status: ProductStatus.ON_SALE
+        },
+        data: {
+          status: ProductStatus.OFFLINE,
+          offlineReason: ProductOfflineReason.USER_BANNED
+        }
+      }),
+      cancelCampusServicesForUser(tx, userId, reason),
+      applyCreditScoreDelta(tx, userId, creditPenalty)
+    ]);
+
+    return reconciledProductIds;
+  }
+
   async getOverview(currentUser: AuthenticatedUser) {
     requireAdminUser(currentUser);
-    const [onSaleProducts, totalUsers, reportCount, activeOrders, activeCampusServices] = await Promise.all([
+    const [onSaleProducts, totalUsers, reportCount, appealCount, activeOrders, activeCampusServices] = await Promise.all([
       this.prisma.product.count({ where: { status: ProductStatus.ON_SALE } }),
       this.prisma.user.count(),
       this.prisma.report.count({ where: { status: 'OPEN' } }),
+      this.orderAppealClient.orderAppeal.count({ where: { status: 'OPEN' } }),
       this.prisma.order.count({
         where: { status: { in: activeOrderStatuses } }
       }),
@@ -83,6 +209,7 @@ export class AdminService {
       onSaleProducts,
       totalUsers,
       reportCount,
+      appealCount,
       activeOrders,
       activeCampusServices,
       recentProducts: recentProducts.map((product) => ({
@@ -101,6 +228,16 @@ export class AdminService {
     };
   }
 
+  async getProductPreview(productId: number, currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
+    return this.productsService.getProductDetail(productId);
+  }
+
+  async getCampusServicePreview(listingId: number, currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
+    return this.campusServicesService.getCampusServiceDetail(listingId);
+  }
+
   async updateProductStatus(productId: number, payload: UpdateAdminProductStatusDto, currentUser: AuthenticatedUser) {
     const adminUser = requireAdminUser(currentUser);
     const normalized = payload.status;
@@ -112,7 +249,7 @@ export class AdminService {
     const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.product.findUnique({
         where: { id: productId },
-        select: { id: true, title: true, sellerId: true, status: true }
+        select: { id: true, title: true, sellerId: true, status: true, offlineReason: true }
       });
 
       if (!current) {
@@ -123,29 +260,50 @@ export class AdminService {
         throw new BadRequestException('已售商品不能通过审核操作改为上架或下架');
       }
 
+      if (current.status === normalized) {
+        throw new BadRequestException(normalized === ProductStatus.ON_SALE ? '商品当前已在上架状态' : '商品当前已下架');
+      }
+
       if (normalized === ProductStatus.ON_SALE) {
-        const seller = await tx.user.findUnique({
-          where: { id: current.sellerId },
-          select: { accountStatus: true }
-        });
+        const [seller, activeOrder] = await Promise.all([
+          tx.user.findUnique({
+            where: { id: current.sellerId },
+            select: { accountStatus: true }
+          }),
+          tx.order.findFirst({
+            where: {
+              productId,
+              status: { in: activeOrderStatuses }
+            },
+            select: { id: true }
+          })
+        ]);
 
         if (seller?.accountStatus === AccountStatus.BANNED) {
           throw new BadRequestException('卖家已被封禁，不能恢复商品展示');
+        }
+
+        if (activeOrder) {
+          throw new BadRequestException('商品存在进行中的订单，不能恢复上架');
         }
       }
 
       const product = await tx.product.update({
         where: { id: productId },
-        data: { status: normalized }
+        data: {
+          status: normalized,
+          offlineReason: normalized === ProductStatus.OFFLINE ? ProductOfflineReason.ADMIN_OFFLINE : null
+        }
       });
 
       if (normalized === ProductStatus.OFFLINE) {
+        const operationAt = new Date();
         await tx.order.updateMany({
           where: {
             productId,
             status: { in: activeOrderStatuses }
           },
-          data: { status: OrderStatus.CANCELED }
+          data: { status: OrderStatus.CANCELED, canceledAt: operationAt }
         });
       }
 
@@ -211,92 +369,12 @@ export class AdminService {
 
   async updateOrderStatus(orderId: number, payload: UpdateAdminOrderStatusDto, currentUser: AuthenticatedUser) {
     const adminUser = requireAdminUser(currentUser);
-    const supportedStatuses = [
-      OrderStatus.PENDING,
-      OrderStatus.IN_PROGRESS,
-      OrderStatus.WAITING_REVIEW,
-      OrderStatus.COMPLETED,
-      OrderStatus.CANCELED
-    ];
-
-    if (!supportedStatuses.includes(payload.status)) {
-      throw new BadRequestException('订单状态不支持');
+    if (payload.status !== OrderStatus.CANCELED) {
+      throw new BadRequestException('后台仅支持取消订单');
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: orderId }
-      });
-
-      if (!order) {
-        throw new NotFoundException('订单不存在');
-      }
-
-      const product = await tx.product.findUnique({
-        where: { id: order.productId },
-        select: { id: true, sellerId: true, status: true }
-      });
-
-      if (!product) {
-        throw new NotFoundException('订单关联商品不存在');
-      }
-
-      const updated = await tx.order.update({
-        where: { id: orderId },
-        data: { status: payload.status }
-      });
-
-      if (payload.status === OrderStatus.COMPLETED) {
-        await tx.product.update({
-          where: { id: order.productId },
-          data: { status: ProductStatus.SOLD }
-        });
-      } else if (payload.status === OrderStatus.CANCELED) {
-        const [otherFinishedOrder, otherActiveOrder, seller] = await Promise.all([
-          tx.order.findFirst({
-            where: {
-              productId: order.productId,
-              id: { not: orderId },
-              status: OrderStatus.COMPLETED
-            },
-            select: { id: true }
-          }),
-          tx.order.findFirst({
-            where: {
-              productId: order.productId,
-              id: { not: orderId },
-              status: { in: activeOrderStatuses }
-            },
-            select: { id: true }
-          }),
-          tx.user.findUnique({
-            where: { id: product.sellerId },
-            select: { accountStatus: true }
-          })
-        ]);
-
-        if (otherFinishedOrder) {
-          await tx.product.update({
-            where: { id: order.productId },
-            data: { status: ProductStatus.SOLD }
-          });
-        } else if (
-          activeOrderStatuses.includes(order.status) &&
-          !otherActiveOrder &&
-          seller?.accountStatus !== AccountStatus.BANNED &&
-          product.status !== ProductStatus.SOLD
-        ) {
-          await tx.product.update({
-            where: { id: order.productId },
-            data: { status: ProductStatus.ON_SALE }
-          });
-        }
-      } else {
-        await tx.product.update({
-          where: { id: order.productId },
-          data: { status: ProductStatus.OFFLINE }
-        });
-      }
+      const updated = await this.cancelOrderAsAdmin(tx, orderId);
 
       await tx.auditLog.create({
         data: {
@@ -318,6 +396,172 @@ export class AdminService {
 
     await this.searchService.syncProduct(result.productId);
     return result;
+  }
+
+  async listOrderAppeals(currentUser: AuthenticatedUser) {
+    requireAdminUser(currentUser);
+    const appeals = await this.orderAppealClient.orderAppeal.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    }) as Array<{
+      id: number;
+      orderId: number;
+      appellantId: number;
+      respondentId: number;
+      issueType: string;
+      reason: string;
+      expectedAction: string | null;
+      status: string;
+      resolutionNote: string | null;
+      handledBy: number | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+    const userIds = [...new Set<number>(appeals.flatMap((appeal) => [appeal.appellantId, appeal.respondentId]))];
+    const orderIds = [...new Set<number>(appeals.map((appeal) => appeal.orderId))];
+    const [users, orders] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, displayName: true }
+      }),
+      this.prisma.order.findMany({
+        where: { id: { in: orderIds } },
+        select: { id: true, status: true, productId: true }
+      })
+    ]);
+    const userMap = new Map(users.map((user) => [user.id, user.displayName]));
+    const orderMap = new Map(orders.map((order) => [order.id, order]));
+
+    return appeals.map((appeal) => ({
+      id: appeal.id,
+      orderId: appeal.orderId,
+      orderStatus: orderMap.get(appeal.orderId)?.status ?? null,
+      productId: orderMap.get(appeal.orderId)?.productId ?? null,
+      appellantId: appeal.appellantId,
+      appellantName: userMap.get(appeal.appellantId) ?? `用户#${appeal.appellantId}`,
+      respondentId: appeal.respondentId,
+      respondentName: userMap.get(appeal.respondentId) ?? `用户#${appeal.respondentId}`,
+      issueType: appeal.issueType,
+      reason: appeal.reason,
+      expectedAction: appeal.expectedAction,
+      status: appeal.status,
+      resolutionNote: appeal.resolutionNote,
+      handledBy: appeal.handledBy,
+      createdAt: appeal.createdAt,
+      updatedAt: appeal.updatedAt
+    }));
+  }
+
+  async resolveOrderAppeal(appealId: number, payload: ResolveOrderAppealDto, currentUser: AuthenticatedUser) {
+    const adminUser = requireAdminUser(currentUser);
+    const affectedProductIds = new Set<number>();
+    let affectedUserId: number | null = null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const appealClient = tx as typeof tx & Pick<PrismaClient, 'orderAppeal'>;
+      const appeal = await appealClient.orderAppeal.findUnique({
+        where: { id: appealId }
+      });
+
+      if (!appeal) {
+        throw new NotFoundException('申诉不存在');
+      }
+
+      if (appeal.status !== 'OPEN') {
+        throw new BadRequestException('申诉已处理，不能重复操作');
+      }
+
+      if (payload.nextStatus === 'BAN_RESPONDENT') {
+        const respondent = await tx.user.findUnique({
+          where: { id: appeal.respondentId },
+          select: { id: true, accountStatus: true }
+        });
+
+        if (!respondent) {
+          throw new NotFoundException('申诉关联用户不存在');
+        }
+
+        if (respondent.accountStatus === AccountStatus.BANNED) {
+          throw new BadRequestException('申诉关联用户已处于封禁状态');
+        }
+
+        const productIds = await this.banUserForAdmin(
+          tx,
+          appeal.respondentId,
+          payload.resolutionNote?.trim() || '申诉封禁处理',
+          ORDER_APPEAL_BAN_CREDIT_PENALTY
+        );
+        affectedUserId = appeal.respondentId;
+        productIds.forEach((id: number) => affectedProductIds.add(id));
+      }
+
+      if (payload.nextStatus === 'UNBAN_RESPONDENT') {
+        const respondent = await tx.user.findUnique({
+          where: { id: appeal.respondentId },
+          select: { id: true, accountStatus: true }
+        });
+
+        if (!respondent) {
+          throw new NotFoundException('申诉关联用户不存在');
+        }
+
+        if (respondent.accountStatus === AccountStatus.ACTIVE) {
+          throw new BadRequestException('申诉关联用户当前未被封禁');
+        }
+
+        await tx.user.update({
+          where: { id: appeal.respondentId },
+          data: { accountStatus: AccountStatus.ACTIVE }
+        });
+        affectedUserId = appeal.respondentId;
+      }
+
+      if (payload.nextStatus === 'CANCELED_ORDER') {
+        const updatedOrder = await this.cancelOrderAsAdmin(tx, appeal.orderId);
+        affectedProductIds.add(updatedOrder.productId);
+        await applyCreditScoreDelta(tx, appeal.respondentId, ORDER_APPEAL_RESOLVED_CREDIT_PENALTY);
+      }
+
+      if (payload.nextStatus === 'RESOLVED') {
+        await applyCreditScoreDelta(tx, appeal.respondentId, ORDER_APPEAL_RESOLVED_CREDIT_PENALTY);
+      }
+
+      const finalStatus = ['CANCELED_ORDER', 'BAN_RESPONDENT', 'UNBAN_RESPONDENT'].includes(payload.nextStatus)
+        ? 'RESOLVED'
+        : payload.nextStatus;
+
+      const updated = await appealClient.orderAppeal.update({
+        where: { id: appealId },
+        data: {
+          status: finalStatus,
+          resolutionNote: payload.resolutionNote?.trim() || null,
+          handledBy: adminUser.id
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminUser.id,
+          actorName: this.getActorName(adminUser),
+          action: payload.nextStatus,
+          targetType: 'ORDER_APPEAL',
+          targetId: appealId,
+          detail: this.getDetail(payload.resolutionNote, `订单申诉处理：${payload.nextStatus}`)
+        }
+      });
+
+      return {
+        id: updated.id,
+        status: updated.status,
+        resolutionNote: updated.resolutionNote
+      };
+    }).then(async (result) => {
+      await Promise.all([
+        ...Array.from(affectedProductIds).map((id) => this.searchService.syncProduct(id)),
+        ...(affectedUserId ? [this.searchService.syncSellerProducts(affectedUserId)] : [])
+      ]);
+      return result;
+    });
   }
 
   async listCampusServices(currentUser: AuthenticatedUser) {
@@ -406,7 +650,7 @@ export class AdminService {
         title: listing.title,
         category: listing.category,
         intent: listing.intent,
-        intentLabel: listing.intent === CampusServiceIntent.REQUEST ? '找人帮我' : '我来提供',
+        intentLabel: listing.intent === CampusServiceIntent.REQUEST ? '我要购买服务' : '我要接单挣钱',
         reward: Number(reward),
         publisherId,
         publisherName: userMap.get(publisherId) ?? `用户#${publisherId}`,
@@ -438,46 +682,16 @@ export class AdminService {
         throw new NotFoundException('校园服务发布不存在');
       }
 
-      const latestOrder = await tx.campusServiceOrder.findFirst({
-        where: { listingId },
-        orderBy: { createdAt: 'desc' }
-      });
-      const activeOrder = await tx.campusServiceOrder.findFirst({
-        where: {
-          listingId,
-          status: {
-            in: activeCampusOrderStatuses
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
       const actionLabelMap: Record<AdminCampusServiceAction, string> = {
-        [AdminCampusServiceAction.REOPEN]: '恢复开放',
-        [AdminCampusServiceAction.FORCE_MATCH]: '强制设为进行中',
-        [AdminCampusServiceAction.FORCE_COMPLETE]: '强制完成',
         [AdminCampusServiceAction.CANCEL]: '关闭发布'
       };
 
-      if (
-        payload.action === AdminCampusServiceAction.FORCE_MATCH
-        && !activeOrder
-      ) {
-        throw new BadRequestException('没有可推进的服务单，不能强制设为进行中');
+      if (!(payload.action in actionLabelMap)) {
+        throw new BadRequestException('不支持的校园服务后台操作');
       }
 
-      if (payload.action === AdminCampusServiceAction.FORCE_COMPLETE && !activeOrder) {
-        throw new BadRequestException('没有服务单，不能直接强制完成');
-      }
-
-      if (payload.action === AdminCampusServiceAction.REOPEN) {
-        await tx.campusServiceListing.update({
-          where: { id: listingId },
-          data: {
-            status: CampusServiceListingStatus.OPEN,
-            endReason: null,
-            endedAt: null
-          }
-        });
+      if (!activeCampusListingStatuses.includes(listing.status)) {
+        throw new BadRequestException('当前校园服务已归档，不能再由后台修改');
       }
 
       if (payload.action === AdminCampusServiceAction.CANCEL) {
@@ -500,44 +714,6 @@ export class AdminService {
             status: CampusServiceOrderStatus.CANCELED,
             canceledAt: new Date(),
             cancelReason: this.getDetail(payload.reason, '管理员关闭发布')
-          }
-        });
-      }
-
-      if (payload.action === AdminCampusServiceAction.FORCE_MATCH && activeOrder) {
-        await tx.campusServiceListing.update({
-          where: { id: listingId },
-          data: {
-            status: CampusServiceListingStatus.BUSY,
-            endReason: null,
-            endedAt: null
-          }
-        });
-        if (activeOrder.status === CampusServiceOrderStatus.PENDING_CONFIRMATION) {
-          await tx.campusServiceOrder.update({
-            where: { id: activeOrder.id },
-            data: {
-              status: CampusServiceOrderStatus.CONFIRMED,
-              confirmedAt: activeOrder.confirmedAt ?? new Date()
-            }
-          });
-        }
-      }
-
-      if (payload.action === AdminCampusServiceAction.FORCE_COMPLETE && activeOrder) {
-        await tx.campusServiceOrder.update({
-          where: { id: activeOrder.id },
-          data: {
-            status: CampusServiceOrderStatus.COMPLETED,
-            completedAt: activeOrder.completedAt ?? new Date()
-          }
-        });
-        await tx.campusServiceListing.update({
-          where: { id: listingId },
-          data: {
-            status: CampusServiceListingStatus.ENDED,
-            endReason: CampusServiceListingEndReason.MANUAL_END,
-            endedAt: new Date()
           }
         });
       }
