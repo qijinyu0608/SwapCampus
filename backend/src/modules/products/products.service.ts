@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { hasAvatarFrameRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { OutboxService } from '../outbox/outbox.service';
 import { SearchService } from '../search/search.service';
 import { OrdersService } from '../orders/orders.service';
 import { VendureService } from '../vendure/vendure.service';
@@ -167,6 +168,8 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     @Inject(SearchService)
     private readonly searchService: SearchService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService,
     @Inject(VendureService)
     private readonly vendureService: VendureService,
     @Inject(PublishingReviewService)
@@ -819,42 +822,48 @@ export class ProductsService {
       throw new ForbiddenException('账号已被封禁，无法发布商品');
     }
 
-    const product = await this.prisma.product.create({
-      data: {
-        sellerId: sellerUser.id,
-        title: payload.title,
-        description: payload.description,
-        price: payload.price,
-        category: selectedCategory,
-        condition: normalizeProductConditionValue(payload.condition),
-        tags: normalizedTags,
-        status: ProductStatus.ON_SALE,
-        images: normalizedImageUrls.length
-          ? {
-              create: normalizedImageUrls.map((imageUrl, index) => ({
-                imageUrl,
-                sortOrder: index
-              }))
-            }
-          : undefined
-      }
-    });
+    const product = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          sellerId: sellerUser.id,
+          title: payload.title,
+          description: payload.description,
+          price: payload.price,
+          category: selectedCategory,
+          condition: normalizeProductConditionValue(payload.condition),
+          tags: normalizedTags,
+          status: ProductStatus.ON_SALE,
+          commerceSyncStatus: 'PENDING',
+          commerceSyncError: null,
+          images: normalizedImageUrls.length
+            ? {
+                create: normalizedImageUrls.map((imageUrl, index) => ({
+                  imageUrl,
+                  sortOrder: index
+                }))
+              }
+            : undefined
+        }
+      });
 
-    const vendureProduct = await this.vendureService.ensureProductVariant(product);
-    const syncedProduct = await this.prisma.product.update({
-      where: { id: product.id },
-      data: {
-        vendureProductId: vendureProduct.id,
-        vendureVariantId: vendureProduct.variantId
-      }
-    });
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: created.id,
+        eventType: 'ProductPublished'
+      }, tx);
+      await this.outboxService.publishProductSearchEvent({
+        productId: created.id,
+        eventType: 'ProductCreated',
+        changedBy: 'products',
+        reason: 'PRODUCT_CREATED'
+      }, tx);
 
-    await this.searchService.syncProduct(product.id);
+      return created;
+    });
 
     return {
-      id: syncedProduct.id,
-      title: syncedProduct.title,
-      status: syncedProduct.status,
+      id: product.id,
+      title: product.title,
+      status: product.status,
       review: llmReview
     };
   }

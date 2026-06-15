@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAdminUser, requireAuthenticatedUser } from '../auth/auth.utils';
 import { cancelCampusServicesForUser } from '../campus-services/campus-service-moderation';
-import { SearchService } from '../search/search.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 import { cancelOrdersForUserAndReconcileProducts } from '../orders/order-cancel-reconciliation';
@@ -19,8 +19,8 @@ export class ReportsService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(SearchService)
-    private readonly searchService: SearchService
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService
   ) {}
 
   async listReports(currentUser: AuthenticatedUser) {
@@ -199,6 +199,13 @@ export class ReportsService {
           })
         ]);
         affectedProductIds.add(report.productId);
+
+        await this.outboxService.publishProductSearchEvent({
+          productId: report.productId,
+          eventType: 'ProductStatusChanged',
+          changedBy: 'reports',
+          reason: 'REPORT_PRODUCT_OFFLINE'
+        }, tx);
       }
 
       if (payload.nextStatus === 'BAN_USER' && report.targetUserId) {
@@ -239,6 +246,22 @@ export class ReportsService {
 
         reconciledProductIds[0].forEach((id) => affectedProductIds.add(id));
         affectedUserId = report.targetUserId;
+
+        await this.outboxService.publishSellerSearchEvent({
+          sellerId: report.targetUserId,
+          eventType: 'SellerStatusChanged',
+          changedBy: 'reports',
+          reason: 'REPORT_USER_BANNED'
+        }, tx);
+
+        for (const productId of reconciledProductIds[0]) {
+          await this.outboxService.publishProductSearchEvent({
+            productId,
+            eventType: 'ProductStatusChanged',
+            changedBy: 'reports',
+            reason: 'REPORT_USER_BANNED'
+          }, tx);
+        }
       }
 
       if (
@@ -267,6 +290,13 @@ export class ReportsService {
           data: { accountStatus: AccountStatus.ACTIVE }
         });
         affectedUserId = report.targetUserId;
+
+        await this.outboxService.publishSellerSearchEvent({
+          sellerId: report.targetUserId,
+          eventType: 'SellerStatusChanged',
+          changedBy: 'reports',
+          reason: 'REPORT_USER_UNBANNED'
+        }, tx);
       }
 
       const updated = await tx.report.update({
@@ -292,20 +322,11 @@ export class ReportsService {
       return {
         id: updated.id,
         status: updated.status,
-        resolutionNote: updated.resolutionNote
+        resolutionNote: updated.resolutionNote,
+        affectedProductIds: Array.from(affectedProductIds),
+        affectedUserId
       };
     });
-
-    const resolvedReport = await this.prisma.report.findUnique({
-      where: { id: reportId },
-      select: { productId: true, targetUserId: true }
-    });
-    const syncProductIds = new Set<number>(resolvedReport?.productId ? [resolvedReport.productId] : []);
-    affectedProductIds.forEach((id) => syncProductIds.add(id));
-    await Promise.all([
-      ...Array.from(syncProductIds).map((id) => this.searchService.syncProduct(id)),
-      ...(resolvedReport?.targetUserId || affectedUserId ? [this.searchService.syncSellerProducts(resolvedReport?.targetUserId ?? affectedUserId!)] : [])
-    ]);
     return result;
   }
 

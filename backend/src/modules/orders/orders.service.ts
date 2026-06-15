@@ -1,11 +1,10 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountStatus, MessageType, OrderStatus, Prisma, PrismaClient, ProductOfflineReason, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
-import { SearchService } from '../search/search.service';
-import { VendureService } from '../vendure/vendure.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { normalizeProductConditionValue } from '../products/product-conditions';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { CompleteOrderDto } from './dto/complete-order.dto';
@@ -90,15 +89,11 @@ function formatDateTimeLabel(date: Date | string | null | undefined) {
 
 @Injectable()
 export class OrdersService {
-  private readonly logger = new Logger(OrdersService.name);
-
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(SearchService)
-    private readonly searchService: SearchService,
-    @Inject(VendureService)
-    private readonly vendureService: VendureService
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService
   ) {}
 
   private get orderAppealClient() {
@@ -143,7 +138,6 @@ export class OrdersService {
     }
 
     const orderNote = buildOrderConfirmationNote(payload, product.title);
-    const vendureOrder = await this.tryCreateVendureOrder(product, buyer, orderNote);
     const autoConfirmAt = buildAutoConfirmAt(new Date());
     const orderSnapshot: ProductOrderSnapshot = {
       productId: product.id,
@@ -160,8 +154,8 @@ export class OrdersService {
     const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
-          vendureOrderId: vendureOrder?.id ?? null,
-          vendureOrderCode: vendureOrder?.code ?? null,
+          vendureOrderId: null,
+          vendureOrderCode: null,
           productId: product.id,
           buyerId: buyerUser.id,
           sellerId: product.sellerId,
@@ -170,7 +164,9 @@ export class OrdersService {
           paymentIntent: payload.paymentIntent?.trim() || null,
           orderSnapshot,
           autoConfirmAt,
-          status: OrderStatus.PENDING
+          status: OrderStatus.PENDING,
+          commerceSyncStatus: 'PENDING',
+          commerceSyncError: null
         }
       });
 
@@ -181,6 +177,17 @@ export class OrdersService {
           offlineReason: ProductOfflineReason.ORDER_RESERVED
         }
       });
+
+      await this.outboxService.publishProductSearchEvent({
+        productId: product.id,
+        eventType: 'ProductStatusChanged',
+        changedBy: 'orders',
+        reason: 'ORDER_RESERVED'
+      }, tx);
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId: order.id,
+        eventType: 'OrderCreated'
+      }, tx);
 
       const existingConversation = await tx.conversation.findFirst({
         where: {
@@ -218,7 +225,7 @@ export class OrdersService {
             event: 'CREATED',
             orderId: order.id,
             productId: product.id,
-            orderCode: vendureOrder?.code ?? formatOrderCode(order.id),
+            orderCode: formatOrderCode(order.id),
             title: '已提交订单',
             summary: `订单已创建，等待卖家确认线下交付安排。${AUTO_CONFIRM_RECEIPT_HOURS} 小时后将自动确认收货。`,
             badge: '已下单',
@@ -235,8 +242,6 @@ export class OrdersService {
 
       return order;
     });
-
-    await this.searchService.syncProduct(payload.productId);
     return result;
   }
 
@@ -632,7 +637,7 @@ export class OrdersService {
 
   async confirmMeetup(orderId: number, payload: UpdateMeetupDto, currentUser: AuthenticatedUser) {
     const authUser = requireAuthenticatedUser(currentUser);
-    const result = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
@@ -673,9 +678,6 @@ export class OrdersService {
 
       return updated;
     });
-
-    await this.searchService.syncProduct(result.productId);
-    return result;
   }
 
   async cancelOrder(orderId: number, payload: CancelOrderDto, currentUser: AuthenticatedUser) {
@@ -694,16 +696,14 @@ export class OrdersService {
       throw new BadRequestException('当前订单不能取消');
     }
 
-    if (existingOrder.vendureOrderId) {
-      await this.tryCancelVendureOrder(existingOrder.vendureOrderId, payload.reason);
-    }
-
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id: orderId },
         data: {
           status: OrderStatus.CANCELED,
-          canceledAt: new Date()
+          canceledAt: new Date(),
+          commerceSyncStatus: 'PENDING',
+          commerceSyncError: null
         }
       });
 
@@ -725,6 +725,7 @@ export class OrdersService {
         select: { id: true }
       });
 
+      let restoredProduct = false;
       if (!activeOrder && !finishedOrder) {
         const product = await tx.product.findUnique({
           where: { id: existingOrder.productId },
@@ -748,8 +749,22 @@ export class OrdersService {
             where: { id: existingOrder.productId },
             data: { status: ProductStatus.ON_SALE, offlineReason: null }
           });
+          restoredProduct = true;
         }
       }
+
+      if (restoredProduct) {
+        await this.outboxService.publishProductSearchEvent({
+          productId: existingOrder.productId,
+          eventType: 'ProductStatusChanged',
+          changedBy: 'orders',
+          reason: 'ORDER_CANCELED'
+        }, tx);
+      }
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId,
+        eventType: 'OrderCanceled'
+      }, tx);
 
       await this.appendOrderEventMessage(tx, {
         orderId,
@@ -763,8 +778,6 @@ export class OrdersService {
 
       return updated;
     });
-
-    await this.searchService.syncProduct(result.productId);
     return result;
   }
 
@@ -786,14 +799,7 @@ export class OrdersService {
       throw new BadRequestException('当前订单状态不能确认收货');
     }
 
-    if (existingOrder.vendureOrderId) {
-      await this.trySettleVendureOrderPayment(existingOrder.vendureOrderId);
-    }
-
-    const result = await this.completeOrderAndOpenReview(orderId, authUser.id, 'BUYER_COMPLETED');
-
-    await this.searchService.syncProduct(result.productId);
-    return result;
+    return this.completeOrderAndOpenReview(orderId, authUser.id, 'BUYER_COMPLETED');
   }
 
   async createReview(orderId: number, payload: CreateReviewDto, currentUser: AuthenticatedUser) {
@@ -1017,7 +1023,9 @@ export class OrdersService {
         where: { id: orderId },
         data: {
           status: OrderStatus.WAITING_REVIEW,
-          completedAt
+          completedAt,
+          commerceSyncStatus: 'PENDING',
+          commerceSyncError: null
         }
       });
 
@@ -1025,6 +1033,17 @@ export class OrdersService {
         where: { id: currentOrder.productId },
         data: { status: ProductStatus.SOLD, offlineReason: null }
       });
+
+      await this.outboxService.publishProductSearchEvent({
+        productId: currentOrder.productId,
+        eventType: 'ProductStatusChanged',
+        changedBy: 'orders',
+        reason: event === 'AUTO_COMPLETED' ? 'ORDER_AUTO_COMPLETED' : 'ORDER_COMPLETED'
+      }, tx);
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId,
+        eventType: 'OrderCompleted'
+      }, tx);
 
       await this.appendOrderEventMessage(tx, {
         orderId,
@@ -1066,89 +1085,7 @@ export class OrdersService {
     }
 
     for (const order of expiredOrders) {
-      if (order.vendureOrderId) {
-        await this.trySettleVendureOrderPayment(order.vendureOrderId);
-      }
-      const result = await this.completeOrderAndOpenReview(order.id, order.buyerId, 'AUTO_COMPLETED');
-      await this.searchService.syncProduct(result.productId);
-    }
-  }
-
-  private async tryCreateVendureOrder(
-    product: {
-      id: number;
-      vendureProductId?: string | null;
-      vendureVariantId?: string | null;
-      title: string;
-      description: string;
-      price: unknown;
-    },
-    buyer: {
-      id: number;
-      vendureCustomerId?: string | null;
-      displayName: string;
-      email: string;
-    },
-    orderNote: string
-  ) {
-    try {
-      const [vendureProduct, vendureCustomer] = await Promise.all([
-        this.vendureService.ensureProductVariant(product),
-        this.vendureService.ensureCustomer(buyer)
-      ]);
-
-      if (!product.vendureProductId || !product.vendureVariantId) {
-        await this.prisma.product.update({
-          where: { id: product.id },
-          data: {
-            vendureProductId: vendureProduct.id,
-            vendureVariantId: vendureProduct.variantId
-          }
-        });
-      }
-
-      if (!buyer.vendureCustomerId) {
-        await this.prisma.user.update({
-          where: { id: buyer.id },
-          data: {
-            vendureCustomerId: vendureCustomer.id
-          }
-        });
-      }
-
-      return await this.vendureService.createPlacedOrder({
-        customerId: vendureCustomer.id,
-        productVariantId: vendureProduct.variantId,
-        note: orderNote || `SwapCampus 商品 ${product.id} 购买订单`
-      });
-    } catch (error) {
-      this.logger.warn(
-        `Vendure create order failed for product ${product.id}, buyer ${buyer.id}; fallback to local order only.`,
-        error instanceof Error ? error.stack : undefined
-      );
-      return null;
-    }
-  }
-
-  private async tryCancelVendureOrder(orderId: string, reason?: string) {
-    try {
-      await this.vendureService.cancelOrder(orderId, reason);
-    } catch (error) {
-      this.logger.warn(
-        `Vendure cancel order failed for ${orderId}; continue with local cancel.`,
-        error instanceof Error ? error.stack : undefined
-      );
-    }
-  }
-
-  private async trySettleVendureOrderPayment(orderId: string) {
-    try {
-      await this.vendureService.settleOrderPayment(orderId);
-    } catch (error) {
-      this.logger.warn(
-        `Vendure settle payment failed for ${orderId}; continue with local completion.`,
-        error instanceof Error ? error.stack : undefined
-      );
+      await this.completeOrderAndOpenReview(order.id, order.buyerId, 'AUTO_COMPLETED');
     }
   }
 

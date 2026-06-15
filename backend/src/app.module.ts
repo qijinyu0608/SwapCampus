@@ -30,6 +30,7 @@ import { ProductsService } from './modules/products/products.service';
 import { ReportsController } from './modules/reports/reports.controller';
 import { ReportsService } from './modules/reports/reports.service';
 import { PublishingReviewService } from './modules/moderation/publishing-review.service';
+import { OutboxModule } from './modules/outbox/outbox.module';
 import { SearchService } from './modules/search/search.service';
 import { UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
@@ -37,7 +38,7 @@ import { VendureService } from './modules/vendure/vendure.service';
 import { PrismaService } from './prisma/prisma.service';
 
 @Module({
-  imports: [],
+  imports: [OutboxModule],
   controllers: [
     AdminController,
     HealthController,

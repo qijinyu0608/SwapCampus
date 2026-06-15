@@ -13,7 +13,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAdminUser } from '../auth/auth.utils';
-import { SearchService } from '../search/search.service';
+import { OutboxService } from '../outbox/outbox.service';
 import {
   AdminCampusServiceAction,
   UpdateAdminCampusServiceStatusDto
@@ -54,8 +54,8 @@ export class AdminService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(SearchService)
-    private readonly searchService: SearchService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService,
     @Inject(ProductsService)
     private readonly productsService: ProductsService,
     @Inject(CampusServicesService)
@@ -127,11 +127,13 @@ export class AdminService {
       })
     ]);
 
+    let productStatusChanged = false;
     if (otherFinishedOrder) {
       await tx.product.update({
         where: { id: order.productId },
         data: { status: ProductStatus.SOLD, offlineReason: null }
       });
+      productStatusChanged = true;
     } else if (
       !otherActiveOrder
       && seller?.accountStatus !== AccountStatus.BANNED
@@ -142,9 +144,13 @@ export class AdminService {
         where: { id: order.productId },
         data: { status: ProductStatus.ON_SALE, offlineReason: null }
       });
+      productStatusChanged = true;
     }
 
-    return updated;
+    return {
+      ...updated,
+      productStatusChanged
+    };
   }
 
   private async banUserForAdmin(
@@ -318,14 +324,19 @@ export class AdminService {
         }
       });
 
+      await this.outboxService.publishProductSearchEvent({
+        productId,
+        eventType: 'ProductStatusChanged',
+        changedBy: 'admin',
+        reason: 'ADMIN_PRODUCT_STATUS_CHANGED'
+      }, tx);
+
       return {
         id: product.id,
         status: product.status,
         title: product.title
       };
     });
-
-    await this.searchService.syncProduct(productId);
     return result;
   }
 
@@ -387,14 +398,22 @@ export class AdminService {
         }
       });
 
+      if (updated.productStatusChanged) {
+        await this.outboxService.publishProductSearchEvent({
+          productId: updated.productId,
+          eventType: 'ProductStatusChanged',
+          changedBy: 'admin',
+          reason: 'ADMIN_ORDER_CANCELED'
+        }, tx);
+      }
+
       return {
         id: updated.id,
         status: updated.status,
-        productId: updated.productId
+        productId: updated.productId,
+        productStatusChanged: updated.productStatusChanged
       };
     });
-
-    await this.searchService.syncProduct(result.productId);
     return result;
   }
 
@@ -550,17 +569,37 @@ export class AdminService {
         }
       });
 
+      for (const productId of Array.from(affectedProductIds)) {
+        await this.outboxService.publishProductSearchEvent({
+          productId,
+          eventType: 'ProductStatusChanged',
+          changedBy: 'admin',
+          reason: payload.nextStatus === 'CANCELED_ORDER'
+            ? 'ORDER_APPEAL_RESOLVED'
+            : payload.nextStatus === 'BAN_RESPONDENT'
+              ? 'ORDER_APPEAL_BANNED'
+              : 'ORDER_APPEAL_UNBANNED'
+        }, tx);
+      }
+
+      if (affectedUserId) {
+        await this.outboxService.publishSellerSearchEvent({
+          sellerId: affectedUserId,
+          eventType: 'SellerStatusChanged',
+          changedBy: 'admin',
+          reason: payload.nextStatus === 'BAN_RESPONDENT'
+            ? 'ORDER_APPEAL_BANNED'
+            : 'ORDER_APPEAL_UNBANNED'
+        }, tx);
+      }
+
       return {
         id: updated.id,
         status: updated.status,
-        resolutionNote: updated.resolutionNote
+        resolutionNote: updated.resolutionNote,
+        affectedProductIds: Array.from(affectedProductIds),
+        affectedUserId
       };
-    }).then(async (result) => {
-      await Promise.all([
-        ...Array.from(affectedProductIds).map((id) => this.searchService.syncProduct(id)),
-        ...(affectedUserId ? [this.searchService.syncSellerProducts(affectedUserId)] : [])
-      ]);
-      return result;
     });
   }
 

@@ -22,7 +22,7 @@ import {
   cancelCampusServicesForUser,
   loadCampusServiceActivityStats
 } from '../campus-services/campus-service-moderation';
-import { SearchService } from '../search/search.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import { normalizeProductConditionValue } from '../products/product-conditions';
 import { cancelOrdersForUserAndReconcileProducts } from '../orders/order-cancel-reconciliation';
@@ -202,8 +202,8 @@ export class UsersService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
-    @Inject(SearchService)
-    private readonly searchService: SearchService
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService
   ) {}
 
   private async listReceivedReviews(userId: number): Promise<{
@@ -968,37 +968,46 @@ export class UsersService {
 
     try {
       await this.syncCredentialEmail(user, nextEmail);
-      const updated = await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          studentId: payload.studentId !== undefined ? nextStudentId : undefined,
-          displayName: nextDisplayName ?? undefined,
-          email: nextEmail ?? undefined,
-          avatarUrl: payload.avatarUrl !== undefined ? (nextAvatarUrl || null) : undefined,
-          avatarFrame: payload.avatarFrame !== undefined ? (nextAvatarFrame || null) : undefined,
-          verification: {
-            upsert: {
-              update: {
-                realName: nextRealName ?? undefined,
-                college: nextCollege ?? undefined,
-                graduationYear: payload.graduationYear !== undefined ? nextGraduationYear : undefined,
-                phone: nextPhone ?? undefined,
-                studentCardPhotoUrl: payload.studentCardPhotoUrl !== undefined ? (nextStudentCardPhotoUrl || null) : undefined
-              },
-              create: {
-                realName: nextRealName ?? (nextDisplayName ?? user.displayName),
-                college: nextCollege ?? '待填写',
-                graduationYear: nextGraduationYear ?? null,
-                phone: nextPhone ?? '待填写',
-                studentCardPhotoUrl: nextStudentCardPhotoUrl || null
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const nextUser = await tx.user.update({
+          where: { id: userId },
+          data: {
+            studentId: payload.studentId !== undefined ? nextStudentId : undefined,
+            displayName: nextDisplayName ?? undefined,
+            email: nextEmail ?? undefined,
+            avatarUrl: payload.avatarUrl !== undefined ? (nextAvatarUrl || null) : undefined,
+            avatarFrame: payload.avatarFrame !== undefined ? (nextAvatarFrame || null) : undefined,
+            verification: {
+              upsert: {
+                update: {
+                  realName: nextRealName ?? undefined,
+                  college: nextCollege ?? undefined,
+                  graduationYear: payload.graduationYear !== undefined ? nextGraduationYear : undefined,
+                  phone: nextPhone ?? undefined,
+                  studentCardPhotoUrl: payload.studentCardPhotoUrl !== undefined ? (nextStudentCardPhotoUrl || null) : undefined
+                },
+                create: {
+                  realName: nextRealName ?? (nextDisplayName ?? user.displayName),
+                  college: nextCollege ?? '待填写',
+                  graduationYear: nextGraduationYear ?? null,
+                  phone: nextPhone ?? '待填写',
+                  studentCardPhotoUrl: nextStudentCardPhotoUrl || null
+                }
               }
             }
-          }
-        },
-        include: { verification: true }
-      });
+          },
+          include: { verification: true }
+        });
 
-      await this.searchService.syncSellerProducts(userId);
+        await this.outboxService.publishSellerSearchEvent({
+          sellerId: userId,
+          eventType: 'SellerProfileChanged',
+          changedBy: 'users',
+          reason: 'USER_PROFILE_UPDATED'
+        }, tx);
+
+        return nextUser;
+      });
 
       return this.mapProfile(updated, { avatarFrameUnlocked, trustedBadgeUnlocked });
     } catch (error) {
@@ -1309,6 +1318,22 @@ export class UsersService {
           applyCreditScoreDelta(tx, userId, MANUAL_BAN_CREDIT_PENALTY)
         ]);
 
+        await this.outboxService.publishSellerSearchEvent({
+          sellerId: userId,
+          eventType: 'SellerStatusChanged',
+          changedBy: 'users',
+          reason: 'USER_BANNED'
+        }, tx);
+
+        for (const productId of reconciledProductIds) {
+          await this.outboxService.publishProductSearchEvent({
+            productId,
+            eventType: 'ProductStatusChanged',
+            changedBy: 'users',
+            reason: 'USER_BANNED'
+          }, tx);
+        }
+
         await tx.auditLog.create({
           data: {
             actorId: adminUser.id,
@@ -1338,17 +1363,19 @@ export class UsersService {
         }
       });
 
+      await this.outboxService.publishSellerSearchEvent({
+        sellerId: userId,
+        eventType: 'SellerStatusChanged',
+        changedBy: 'users',
+        reason: 'USER_UNBANNED'
+      }, tx);
+
       return {
         id: updated.id,
         isBanned: updated.accountStatus === AccountStatus.BANNED,
         reconciledProductIds: [] as number[]
       };
     });
-
-    await Promise.all([
-      this.searchService.syncSellerProducts(userId),
-      ...result.reconciledProductIds.map((productId) => this.searchService.syncProduct(productId))
-    ]);
     return result;
   }
 
@@ -1388,6 +1415,13 @@ export class UsersService {
           detail: payload.reason?.trim() || (nextStatus === VerificationStatus.APPROVED ? '注册审核通过' : '注册审核驳回')
         }
       });
+
+      await this.outboxService.publishSellerSearchEvent({
+        sellerId: userId,
+        eventType: 'SellerProfileChanged',
+        changedBy: 'users',
+        reason: 'USER_VERIFICATION_CHANGED'
+      }, tx);
 
       return {
         id: updated.id,

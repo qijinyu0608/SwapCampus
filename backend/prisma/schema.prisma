@@ -39,12 +39,32 @@ enum ProductOfflineReason {
   USER_BANNED
 }
 
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum OutboxAggregateType {
+  PRODUCT
+  USER
+  ORDER
+}
+
 enum OrderStatus {
   PENDING
   IN_PROGRESS
   WAITING_REVIEW
   COMPLETED
   CANCELED
+}
+
+enum ExternalSyncStatus {
+  PENDING
+  PROCESSING
+  SYNCED
+  FAILED
 }
 
 enum CampusServiceCategory {
@@ -166,6 +186,8 @@ model User {
   id                          Int                  @id @default(autoincrement())
   supertokensUserId           String?              @unique
   vendureCustomerId           String?
+  commerceSyncStatus          ExternalSyncStatus   @default(PENDING)
+  commerceSyncError           String?              @db.Text
   studentId                   String?              @unique
   displayName                 String
   email                       String               @unique
@@ -224,6 +246,8 @@ model Product {
   sellerId      Int
   vendureProductId String?
   vendureVariantId String?
+  commerceSyncStatus ExternalSyncStatus @default(PENDING)
+  commerceSyncError String?    @db.Text
   title         String
   description   String
   price         Decimal        @db.Decimal(10, 2)
@@ -273,6 +297,8 @@ model Order {
   id             Int            @id @default(autoincrement())
   vendureOrderId String?
   vendureOrderCode String?
+  commerceSyncStatus ExternalSyncStatus @default(PENDING)
+  commerceSyncError String?     @db.Text
   productId      Int
   buyerId        Int
   sellerId       Int
@@ -517,6 +543,27 @@ model AuditLog {
 
   @@index([actorId, createdAt])
   @@index([targetType, targetId, createdAt])
+}
+
+model OutboxEvent {
+  id                  Int                 @id @default(autoincrement())
+  topic               String
+  eventType           String
+  aggregateType       OutboxAggregateType
+  aggregateId         Int
+  payload             Json
+  status              OutboxEventStatus   @default(PENDING)
+  availableAt         DateTime            @default(now())
+  retryCount          Int                 @default(0)
+  lastError           String?             @db.Text
+  processingStartedAt DateTime?
+  createdAt           DateTime            @default(now())
+  processedAt         DateTime?
+
+  @@index([status, availableAt])
+  @@index([topic, status, availableAt])
+  @@index([aggregateType, aggregateId, createdAt])
+  @@index([status, processingStartedAt])
 }
 
 model UserBehavior {
