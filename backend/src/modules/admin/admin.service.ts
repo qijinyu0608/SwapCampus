@@ -176,7 +176,7 @@ export class AdminService {
       })
     ).map((product: { id: number }) => product.id);
 
-    const [reconciledProductIds] = await Promise.all([
+    const [{ canceledOrderIds, reconciledProductIds }] = await Promise.all([
       cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
       onSaleProductIds.length
         ? tx.product.updateMany({
@@ -193,7 +193,10 @@ export class AdminService {
       applyCreditScoreDelta(tx, userId, creditPenalty)
     ]);
 
-    return [...new Set([...reconciledProductIds, ...onSaleProductIds])];
+    return {
+      canceledOrderIds,
+      affectedProductIds: [...new Set([...reconciledProductIds, ...onSaleProductIds])]
+    };
   }
 
   async getOverview(currentUser: AuthenticatedUser) {
@@ -345,6 +348,10 @@ export class AdminService {
         productId,
         eventType: 'ProductAvailabilityChanged'
       }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId,
+        eventType: 'ProductInventoryChanged'
+      }, tx);
 
       return {
         id: product.id,
@@ -423,6 +430,10 @@ export class AdminService {
         await this.outboxService.publishProductCommerceSyncEvent({
           productId: updated.productId,
           eventType: 'ProductAvailabilityChanged'
+        }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: updated.productId,
+          eventType: 'ProductInventoryChanged'
         }, tx);
       }
       await this.outboxService.publishOrderCommerceSyncEvent({
@@ -527,14 +538,20 @@ export class AdminService {
           throw new BadRequestException('申诉关联用户已处于封禁状态');
         }
 
-        const productIds = await this.banUserForAdmin(
+        const result = await this.banUserForAdmin(
           tx,
           appeal.respondentId,
           payload.resolutionNote?.trim() || '申诉封禁处理',
           ORDER_APPEAL_BAN_CREDIT_PENALTY
         );
         affectedUserId = appeal.respondentId;
-        productIds.forEach((id: number) => affectedProductIds.add(id));
+        result.affectedProductIds.forEach((id: number) => affectedProductIds.add(id));
+        for (const canceledOrderId of result.canceledOrderIds) {
+          await this.outboxService.publishOrderCommerceSyncEvent({
+            orderId: canceledOrderId,
+            eventType: 'OrderCanceled'
+          }, tx);
+        }
       }
 
       if (payload.nextStatus === 'UNBAN_RESPONDENT') {
@@ -606,6 +623,10 @@ export class AdminService {
         await this.outboxService.publishProductCommerceSyncEvent({
           productId,
           eventType: 'ProductAvailabilityChanged'
+        }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId,
+          eventType: 'ProductInventoryChanged'
         }, tx);
       }
 

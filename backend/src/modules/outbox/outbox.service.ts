@@ -79,6 +79,10 @@ export class OutboxService {
     }, tx);
   }
 
+  async publishProductInventorySyncEvent(input: PublishProductCommerceSyncEventInput, tx?: OutboxTransactionClient) {
+    return this.publishProductCommerceSyncEvent(input, tx);
+  }
+
   async publishOrderCommerceSyncEvent(input: PublishOrderCommerceSyncEventInput, tx?: OutboxTransactionClient) {
     return this.publishEvent({
       topic: COMMERCE_SYNC_OUTBOX_TOPIC,
@@ -89,6 +93,20 @@ export class OutboxService {
         orderId: input.orderId
       } satisfies Prisma.InputJsonObject,
       availableAt: input.availableAt
+    }, tx);
+  }
+
+  async publishOrderPaymentSettledEvent(input: Omit<PublishOrderCommerceSyncEventInput, 'eventType'>, tx?: OutboxTransactionClient) {
+    return this.publishOrderCommerceSyncEvent({
+      ...input,
+      eventType: 'OrderPaymentSettled'
+    }, tx);
+  }
+
+  async publishOrderFulfillmentCompletedEvent(input: Omit<PublishOrderCommerceSyncEventInput, 'eventType'>, tx?: OutboxTransactionClient) {
+    return this.publishOrderCommerceSyncEvent({
+      ...input,
+      eventType: 'OrderFulfillmentCompleted'
     }, tx);
   }
 

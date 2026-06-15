@@ -120,7 +120,7 @@ describe('UsersService admin status updates', () => {
   });
 
   it('should write audit log when banning user succeeds', async () => {
-    const { service, tx } = createService();
+    const { service, tx, outboxService } = createService();
     tx.user.findUnique.mockResolvedValue({
       id: 18,
       accountStatus: AccountStatus.ACTIVE
@@ -155,6 +155,10 @@ describe('UsersService admin status updates', () => {
         offlineReason: ProductOfflineReason.USER_BANNED
       }
     });
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
     expect(result).toEqual({
       id: 18,
       isBanned: true,

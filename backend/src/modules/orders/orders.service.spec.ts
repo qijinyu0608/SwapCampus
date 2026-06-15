@@ -263,6 +263,10 @@ describe('OrdersService', () => {
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
     }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 401,
       eventType: 'OrderCreated'
@@ -500,6 +504,10 @@ describe('OrdersService', () => {
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
     }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 93,
       eventType: 'OrderCanceled'
@@ -663,6 +671,18 @@ describe('OrdersService', () => {
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 94,
+      eventType: 'OrderPaymentSettled'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 94,
+      eventType: 'OrderFulfillmentCompleted'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 94,
@@ -843,6 +863,18 @@ describe('OrdersService', () => {
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 97,
+      eventType: 'OrderPaymentSettled'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 97,
+      eventType: 'OrderFulfillmentCompleted'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 97,

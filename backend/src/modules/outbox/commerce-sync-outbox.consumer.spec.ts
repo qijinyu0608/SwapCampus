@@ -54,6 +54,7 @@ describe('CommerceSyncOutboxConsumer', () => {
         variantId: 'vendure-variant-1'
       }),
       setProductAvailability: jest.fn().mockResolvedValue(undefined),
+      setProductInventory: jest.fn().mockResolvedValue(undefined),
       ensureCustomer: jest.fn().mockResolvedValue({
         id: 'vendure-customer-1'
       }),
@@ -63,6 +64,7 @@ describe('CommerceSyncOutboxConsumer', () => {
       }),
       cancelOrder: jest.fn().mockResolvedValue(undefined),
       settleOrderPayment: jest.fn().mockResolvedValue(undefined),
+      completeOrderFulfillment: jest.fn().mockResolvedValue(undefined),
       ...vendureServiceOverrides
     };
 
@@ -156,6 +158,47 @@ describe('CommerceSyncOutboxConsumer', () => {
     });
   });
 
+  it('should sync product inventory and mark product synced', async () => {
+    const prisma = createPrisma();
+    prisma.product.findUnique.mockResolvedValue({
+      id: 18,
+      title: '二手教材',
+      status: ProductStatus.ON_SALE
+    });
+    const { consumer, vendureService } = createConsumer(prisma);
+
+    await consumer.handleEvent({
+      id: 12,
+      topic: 'commerce.sync',
+      eventType: 'ProductInventoryChanged',
+      aggregateType: 'PRODUCT' as any,
+      aggregateId: 18,
+      payload: { productId: 18 },
+      status: OutboxEventStatus.PENDING,
+      availableAt: new Date(),
+      retryCount: 0,
+      lastError: null,
+      processingStartedAt: null,
+      createdAt: new Date(),
+      processedAt: null
+    });
+
+    expect(vendureService.setProductInventory).toHaveBeenCalledWith(
+      'vendure-product-1',
+      'vendure-variant-1',
+      1
+    );
+    expect(prisma.product.update).toHaveBeenCalledWith({
+      where: { id: 18 },
+      data: {
+        vendureProductId: 'vendure-product-1',
+        vendureVariantId: 'vendure-variant-1',
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  });
+
   it('should ensure vendure order before canceling and mark order synced', async () => {
     const prisma = createPrisma();
     prisma.order.findUnique.mockResolvedValue({
@@ -189,6 +232,84 @@ describe('CommerceSyncOutboxConsumer', () => {
     expect(vendureService.ensureCustomer).toHaveBeenCalled();
     expect(vendureService.createPlacedOrder).toHaveBeenCalled();
     expect(vendureService.cancelOrder).toHaveBeenCalledWith('vendure-order-1');
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 91 },
+      data: {
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  });
+
+  it('should settle vendure payment for payment event', async () => {
+    const prisma = createPrisma();
+    prisma.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      buyerId: 11,
+      note: '线下面交',
+      vendureOrderId: null,
+      product: { id: 18 },
+      buyer: { id: 11, role: UserRole.USER }
+    });
+    const { consumer, vendureService } = createConsumer(prisma);
+
+    await consumer.handleEvent({
+      id: 13,
+      topic: 'commerce.sync',
+      eventType: 'OrderPaymentSettled',
+      aggregateType: 'ORDER' as any,
+      aggregateId: 91,
+      payload: { orderId: 91 },
+      status: OutboxEventStatus.PENDING,
+      availableAt: new Date(),
+      retryCount: 0,
+      lastError: null,
+      processingStartedAt: null,
+      createdAt: new Date(),
+      processedAt: null
+    });
+
+    expect(vendureService.settleOrderPayment).toHaveBeenCalledWith('vendure-order-1');
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 91 },
+      data: {
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  });
+
+  it('should complete vendure fulfillment for fulfillment event', async () => {
+    const prisma = createPrisma();
+    prisma.order.findUnique.mockResolvedValue({
+      id: 91,
+      productId: 18,
+      buyerId: 11,
+      note: '线下面交',
+      vendureOrderId: null,
+      product: { id: 18 },
+      buyer: { id: 11, role: UserRole.USER }
+    });
+    const { consumer, vendureService } = createConsumer(prisma);
+
+    await consumer.handleEvent({
+      id: 14,
+      topic: 'commerce.sync',
+      eventType: 'OrderFulfillmentCompleted',
+      aggregateType: 'ORDER' as any,
+      aggregateId: 91,
+      payload: { orderId: 91 },
+      status: OutboxEventStatus.PENDING,
+      availableAt: new Date(),
+      retryCount: 0,
+      lastError: null,
+      processingStartedAt: null,
+      createdAt: new Date(),
+      processedAt: null
+    });
+
+    expect(vendureService.completeOrderFulfillment).toHaveBeenCalledWith('vendure-order-1');
     expect(prisma.order.update).toHaveBeenCalledWith({
       where: { id: 91 },
       data: {

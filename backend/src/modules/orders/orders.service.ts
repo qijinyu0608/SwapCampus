@@ -192,6 +192,10 @@ export class OrdersService {
         productId: product.id,
         eventType: 'ProductAvailabilityChanged'
       }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: product.id,
+        eventType: 'ProductInventoryChanged'
+      }, tx);
 
       const existingConversation = await tx.conversation.findFirst({
         where: {
@@ -768,6 +772,10 @@ export class OrdersService {
           productId: existingOrder.productId,
           eventType: 'ProductAvailabilityChanged'
         }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: existingOrder.productId,
+          eventType: 'ProductInventoryChanged'
+        }, tx);
       }
       await this.outboxService.publishOrderCommerceSyncEvent({
         orderId,
@@ -1051,6 +1059,18 @@ export class OrdersService {
       await this.outboxService.publishProductCommerceSyncEvent({
         productId: currentOrder.productId,
         eventType: 'ProductAvailabilityChanged'
+      }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: currentOrder.productId,
+        eventType: 'ProductInventoryChanged'
+      }, tx);
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId,
+        eventType: 'OrderPaymentSettled'
+      }, tx);
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId,
+        eventType: 'OrderFulfillmentCompleted'
       }, tx);
       await this.outboxService.publishOrderCommerceSyncEvent({
         orderId,

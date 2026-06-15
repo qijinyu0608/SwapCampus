@@ -133,7 +133,8 @@ describe('ReportsService', () => {
     const outboxService = {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
-      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
+      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
     const service = new ReportsService(prisma, outboxService);
@@ -175,6 +176,10 @@ describe('ReportsService', () => {
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 201,
       eventType: 'ProductAvailabilityChanged'
+    }, prisma);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductInventoryChanged'
     }, prisma);
   });
 
@@ -222,7 +227,8 @@ describe('ReportsService', () => {
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
       publishProductCommerceSyncEvent: jest.fn(),
-      publishSellerSearchEvent: jest.fn()
+      publishSellerSearchEvent: jest.fn(),
+      publishOrderCommerceSyncEvent: jest.fn()
     } as any);
 
     await expect(

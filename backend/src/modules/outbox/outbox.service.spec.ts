@@ -123,6 +123,30 @@ describe('OutboxService', () => {
     });
   });
 
+  it('should publish product inventory sync event with product aggregate', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishProductCommerceSyncEvent({
+      productId: 35,
+      eventType: 'ProductInventoryChanged'
+    });
+
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        topic: COMMERCE_SYNC_OUTBOX_TOPIC,
+        eventType: 'ProductInventoryChanged',
+        aggregateType: OutboxAggregateType.PRODUCT,
+        aggregateId: 35,
+        payload: {
+          productId: 35
+        },
+        status: OutboxEventStatus.PENDING,
+        availableAt: expect.any(Date)
+      })
+    });
+  });
+
   it('should publish order commerce sync event with order aggregate', async () => {
     const prisma = createPrisma();
     const service = new OutboxService(prisma);
@@ -169,5 +193,36 @@ describe('OutboxService', () => {
       })
     });
     expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('should publish dedicated order payment and fulfillment events', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishOrderPaymentSettledEvent({ orderId: 101 });
+    await service.publishOrderFulfillmentCompletedEvent({ orderId: 101 });
+
+    expect(prisma.outboxEvent.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({
+        topic: COMMERCE_SYNC_OUTBOX_TOPIC,
+        eventType: 'OrderPaymentSettled',
+        aggregateType: OutboxAggregateType.ORDER,
+        aggregateId: 101,
+        payload: {
+          orderId: 101
+        }
+      })
+    });
+    expect(prisma.outboxEvent.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({
+        topic: COMMERCE_SYNC_OUTBOX_TOPIC,
+        eventType: 'OrderFulfillmentCompleted',
+        aggregateType: OutboxAggregateType.ORDER,
+        aggregateId: 101,
+        payload: {
+          orderId: 101
+        }
+      })
+    });
   });
 });

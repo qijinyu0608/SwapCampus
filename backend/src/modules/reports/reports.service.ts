@@ -210,6 +210,10 @@ export class ReportsService {
           productId: report.productId,
           eventType: 'ProductAvailabilityChanged'
         }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: report.productId,
+          eventType: 'ProductInventoryChanged'
+        }, tx);
       }
 
       if (payload.nextStatus === 'BAN_USER' && report.targetUserId) {
@@ -242,7 +246,7 @@ export class ReportsService {
           })
         ).map((product: { id: number }) => product.id);
 
-        const reconciledProductIds = await Promise.all([
+        const [{ canceledOrderIds, reconciledProductIds }] = await Promise.all([
           cancelOrdersForUserAndReconcileProducts(tx, report.targetUserId, operationAt),
           onSaleProductIds.length
             ? tx.product.updateMany({
@@ -259,9 +263,16 @@ export class ReportsService {
           applyCreditScoreDelta(tx, report.targetUserId, REPORT_BAN_CREDIT_PENALTY)
         ]);
 
-        reconciledProductIds[0].forEach((id) => affectedProductIds.add(id));
+        reconciledProductIds.forEach((id) => affectedProductIds.add(id));
         onSaleProductIds.forEach((id) => affectedProductIds.add(id));
         affectedUserId = report.targetUserId;
+
+        for (const orderId of canceledOrderIds) {
+          await this.outboxService.publishOrderCommerceSyncEvent({
+            orderId,
+            eventType: 'OrderCanceled'
+          }, tx);
+        }
 
         await this.outboxService.publishSellerSearchEvent({
           sellerId: report.targetUserId,
@@ -280,6 +291,10 @@ export class ReportsService {
           await this.outboxService.publishProductCommerceSyncEvent({
             productId,
             eventType: 'ProductAvailabilityChanged'
+          }, tx);
+          await this.outboxService.publishProductCommerceSyncEvent({
+            productId,
+            eventType: 'ProductInventoryChanged'
           }, tx);
         }
       }

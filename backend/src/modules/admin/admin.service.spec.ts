@@ -172,6 +172,10 @@ describe('AdminService', () => {
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
     }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
+    }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 91,
       eventType: 'OrderCanceled'
@@ -343,6 +347,10 @@ describe('AdminService', () => {
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductInventoryChanged'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 91,

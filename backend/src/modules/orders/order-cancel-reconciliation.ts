@@ -22,7 +22,10 @@ export async function cancelOrdersForUserAndReconcileProducts(
   });
 
   if (!activeOrders.length) {
-    return [];
+    return {
+      canceledOrderIds: [],
+      reconciledProductIds: []
+    };
   }
 
   await prisma.order.updateMany({
@@ -90,5 +93,8 @@ export async function cancelOrdersForUserAndReconcileProducts(
     }
   }
 
-  return reconciledProductIds;
+  return {
+    canceledOrderIds: activeOrders.map((order) => order.id),
+    reconciledProductIds
+  };
 }

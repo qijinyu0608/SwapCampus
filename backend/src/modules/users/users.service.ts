@@ -1312,7 +1312,7 @@ export class UsersService {
           })
         ).map((product: { id: number }) => product.id);
 
-        const [reconciledProductIds] = await Promise.all([
+        const [{ canceledOrderIds, reconciledProductIds }] = await Promise.all([
           cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
           onSaleProductIds.length
             ? tx.product.updateMany({
@@ -1331,6 +1331,13 @@ export class UsersService {
 
         const affectedProductIds = [...new Set([...reconciledProductIds, ...onSaleProductIds])];
 
+        for (const orderId of canceledOrderIds) {
+          await this.outboxService.publishOrderCommerceSyncEvent({
+            orderId,
+            eventType: 'OrderCanceled'
+          }, tx);
+        }
+
         await this.outboxService.publishSellerSearchEvent({
           sellerId: userId,
           eventType: 'SellerStatusChanged',
@@ -1348,6 +1355,10 @@ export class UsersService {
           await this.outboxService.publishProductCommerceSyncEvent({
             productId,
             eventType: 'ProductAvailabilityChanged'
+          }, tx);
+          await this.outboxService.publishProductCommerceSyncEvent({
+            productId,
+            eventType: 'ProductInventoryChanged'
           }, tx);
         }
 

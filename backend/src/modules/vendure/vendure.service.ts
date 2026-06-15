@@ -20,6 +20,32 @@ type VendureOrderProjection = {
   state: string;
 };
 
+type VendurePaymentProjection = {
+  id: string;
+  state: string;
+};
+
+type VendureFulfillmentProjection = {
+  id: string;
+  state: string;
+  nextStates: string[];
+};
+
+type VendureOrderLineProjection = {
+  id: string;
+  quantity: number;
+  fulfillmentLines: Array<{
+    fulfillmentId: string;
+    quantity: number;
+  }>;
+};
+
+type VendureOrderDetailProjection = VendureOrderProjection & {
+  payments: VendurePaymentProjection[];
+  fulfillments: VendureFulfillmentProjection[];
+  lines: VendureOrderLineProjection[];
+};
+
 type VendureOrderResult = {
   __typename?: string;
   id?: string;
@@ -29,8 +55,36 @@ type VendureOrderResult = {
   errorCode?: string;
 };
 
+type VendureFulfillmentResult = {
+  __typename?: string;
+  id?: string;
+  state?: string;
+  nextStates?: string[];
+  message?: string;
+  errorCode?: string;
+};
+
+type VendureFulfillmentHandlerDefinition = {
+  code: string;
+  args: Array<{
+    name: string;
+    required: boolean;
+    defaultValue?: unknown;
+  }>;
+};
+
 const DEFAULT_LANGUAGE_CODE = 'zh_Hans';
 const DEFAULT_PAYMENT_METHOD_CODE = 'swapcampus-offline-payment';
+const DEFAULT_FULFILLMENT_HANDLER_CODE = 'manual-fulfillment';
+const KNOWN_PAID_ORDER_STATES = new Set([
+  'PaymentSettled',
+  'PartiallyShipped',
+  'Shipped',
+  'PartiallyDelivered',
+  'Delivered'
+]);
+const KNOWN_PAYABLE_ORDER_STATES = new Set(['ArrangingPayment', 'ArrangingAdditionalPayment']);
+const MAX_FULFILLMENT_STATE_TRANSITIONS = 5;
 
 function slugify(value: string) {
   return value
@@ -62,6 +116,10 @@ export class VendureService {
   private authToken: string | null = process.env.VENDURE_ADMIN_TOKEN || null;
   private authPromise: Promise<string> | null = null;
   private paymentMethodCodePromise: Promise<string> | null = null;
+  private fulfillmentHandlerPromise: Promise<{
+    code: string;
+    arguments: Array<{ name: string; value: string }>;
+  }> | null = null;
 
   private get enabled() {
     return process.env.VENDURE_ENABLED !== 'false';
@@ -142,7 +200,7 @@ export class VendureService {
             sku,
             price: this.toVendureMoney(product.price),
             stockOnHand: 1,
-            trackInventory: 'FALSE',
+            trackInventory: 'TRUE',
             translations: [
               {
                 languageCode: DEFAULT_LANGUAGE_CODE,
@@ -258,6 +316,31 @@ export class VendureService {
         input: {
           id: variantId,
           enabled
+        }
+      }
+    );
+  }
+
+  async setProductInventory(_productId: string, variantId: string, stockOnHand: number) {
+    this.assertEnabled();
+
+    await this.adminRequest<{
+      updateProductVariant: {
+        id: string;
+      };
+    }>(
+      `
+        mutation UpdateProductVariantInventory($input: UpdateProductVariantInput!) {
+          updateProductVariant(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          id: variantId,
+          stockOnHand: Math.max(0, Math.floor(stockOnHand)),
+          trackInventory: 'TRUE'
         }
       }
     );
@@ -419,8 +502,90 @@ export class VendureService {
     };
   }
 
+  async getOrderDetail(id: string): Promise<VendureOrderDetailProjection> {
+    this.assertEnabled();
+    const data = await this.adminRequest<{
+      order: {
+        id: string;
+        code: string;
+        state: string;
+        payments: Array<{
+          id: string;
+          state: string;
+        }>;
+        fulfillments: Array<{
+          id: string;
+          state: string;
+          nextStates?: string[] | null;
+        }>;
+        lines: Array<{
+          id: string;
+          quantity: number;
+          fulfillmentLines: Array<{
+            fulfillmentId: string;
+            quantity: number;
+          }>;
+        }>;
+      } | null;
+    }>(
+      `
+        query GetOrderDetail($id: ID!) {
+          order(id: $id) {
+            id
+            code
+            state
+            payments {
+              id
+              state
+            }
+            fulfillments {
+              id
+              state
+              nextStates
+            }
+            lines {
+              id
+              quantity
+              fulfillmentLines {
+                fulfillmentId
+                quantity
+              }
+            }
+          }
+        }
+      `,
+      { id }
+    );
+
+    if (!data.order) {
+      throw new BadGatewayException('Vendure 订单不存在');
+    }
+
+    return {
+      id: data.order.id,
+      code: data.order.code,
+      state: data.order.state,
+      payments: data.order.payments ?? [],
+      fulfillments: (data.order.fulfillments ?? []).map((item) => ({
+        id: item.id,
+        state: item.state,
+        nextStates: item.nextStates ?? []
+      })),
+      lines: (data.order.lines ?? []).map((line) => ({
+        id: line.id,
+        quantity: line.quantity,
+        fulfillmentLines: line.fulfillmentLines ?? []
+      }))
+    };
+  }
+
   async cancelOrder(orderId: string, reason?: string | null): Promise<VendureOrderProjection> {
     this.assertEnabled();
+    const current = await this.getOrder(orderId);
+    if (current.state === 'Cancelled') {
+      return current;
+    }
+
     const result = await this.expectOrderResult(
       this.adminRequest<{ cancelOrder: VendureOrderResult | null }>(
         `
@@ -454,13 +619,17 @@ export class VendureService {
 
   async settleOrderPayment(orderId: string): Promise<VendureOrderProjection> {
     this.assertEnabled();
-    const order = await this.getOrder(orderId);
-    if (order.state === 'PaymentSettled') {
+    const order = await this.getOrderDetail(orderId);
+    if (this.isOrderPaid(order)) {
       return {
         id: order.id,
         code: order.code,
         state: order.state
       };
+    }
+
+    if (!KNOWN_PAYABLE_ORDER_STATES.has(order.state)) {
+      throw new BadGatewayException(`Vendure 订单当前状态 ${order.state} 无法执行收款确认`);
     }
 
     const paymentMethodCode = await this.ensureOfflinePaymentMethodCode();
@@ -494,6 +663,29 @@ export class VendureService {
       ),
       'addManualPaymentToOrder'
     );
+  }
+
+  async completeOrderFulfillment(orderId: string): Promise<VendureOrderProjection> {
+    this.assertEnabled();
+    const order = await this.getOrderDetail(orderId);
+    if (order.state === 'Delivered') {
+      return {
+        id: order.id,
+        code: order.code,
+        state: order.state
+      };
+    }
+
+    let fulfillment = order.fulfillments[0] ?? null;
+    if (!fulfillment) {
+      fulfillment = await this.createFulfillmentForOrder(order);
+    }
+
+    if (fulfillment) {
+      await this.transitionFulfillmentToDelivered(fulfillment);
+    }
+
+    return this.getOrder(orderId);
   }
 
   async adminRequest<T>(query: string, variables?: Record<string, unknown>, retry = true): Promise<T> {
@@ -592,6 +784,16 @@ export class VendureService {
     return this.paymentMethodCodePromise;
   }
 
+  private async ensureFulfillmentHandlerConfig() {
+    if (!this.fulfillmentHandlerPromise) {
+      this.fulfillmentHandlerPromise = this.resolveFulfillmentHandlerConfig().finally(() => {
+        this.fulfillmentHandlerPromise = null;
+      });
+    }
+
+    return this.fulfillmentHandlerPromise;
+  }
+
   private async resolveOfflinePaymentMethodCode() {
     const existing = await this.findOfflinePaymentMethodCode();
     if (existing) {
@@ -665,6 +867,49 @@ export class VendureService {
     return item?.code ?? null;
   }
 
+  private async resolveFulfillmentHandlerConfig() {
+    const data = await this.adminRequest<{
+      fulfillmentHandlers: VendureFulfillmentHandlerDefinition[];
+    }>(
+      `
+        query GetFulfillmentHandlers {
+          fulfillmentHandlers {
+            code
+            args {
+              name
+              required
+              defaultValue
+            }
+          }
+        }
+      `
+    );
+
+    const handlers = data.fulfillmentHandlers ?? [];
+    const preferredCode = process.env.VENDURE_FULFILLMENT_HANDLER_CODE?.trim() || DEFAULT_FULFILLMENT_HANDLER_CODE;
+    const preferred = handlers.find((handler) => handler.code === preferredCode);
+    const fallback = handlers.find((handler) => this.canUseHandlerWithoutOverrides(handler));
+    const selected = preferred ?? fallback;
+
+    if (!selected) {
+      throw new BadGatewayException('Vendure 未找到可用的履约处理器');
+    }
+
+    if (!this.canUseHandlerWithoutOverrides(selected)) {
+      throw new BadGatewayException(`Vendure 履约处理器 ${selected.code} 仍需额外参数，无法自动调用`);
+    }
+
+    return {
+      code: selected.code,
+      arguments: selected.args
+        .filter((arg) => arg.defaultValue !== undefined && arg.defaultValue !== null)
+        .map((arg) => ({
+          name: arg.name,
+          value: JSON.stringify(arg.defaultValue)
+        }))
+    };
+  }
+
   private async findVariantBySku(sku: string): Promise<VendureProductProjection | null> {
     const data = await this.adminRequest<{
       productVariants: {
@@ -731,6 +976,102 @@ export class VendureService {
     return item ? { id: item.id } : null;
   }
 
+  private async createFulfillmentForOrder(order: VendureOrderDetailProjection) {
+    const lines = order.lines
+      .map((line) => {
+        const fulfilledQuantity = line.fulfillmentLines.reduce((sum, item) => sum + item.quantity, 0);
+        const remainingQuantity = Math.max(0, line.quantity - fulfilledQuantity);
+        return remainingQuantity > 0
+          ? {
+              orderLineId: line.id,
+              quantity: remainingQuantity
+            }
+          : null;
+      })
+      .filter((item): item is { orderLineId: string; quantity: number } => Boolean(item));
+
+    if (!lines.length) {
+      return order.fulfillments[0] ?? null;
+    }
+
+    const handler = await this.ensureFulfillmentHandlerConfig();
+    return this.expectFulfillmentResult(
+      this.adminRequest<{ addFulfillmentToOrder: VendureFulfillmentResult | null }>(
+        `
+          mutation AddFulfillmentToOrder($input: FulfillOrderInput!) {
+            addFulfillmentToOrder(input: $input) {
+              __typename
+              ... on Fulfillment {
+                id
+                state
+                nextStates
+              }
+              ... on ErrorResult {
+                errorCode
+                message
+              }
+            }
+          }
+        `,
+        {
+          input: {
+            handler,
+            lines
+          }
+        }
+      ),
+      'addFulfillmentToOrder'
+    );
+  }
+
+  private async transitionFulfillmentToDelivered(fulfillment: VendureFulfillmentProjection) {
+    let current = fulfillment;
+
+    for (let index = 0; index < MAX_FULFILLMENT_STATE_TRANSITIONS && current.state !== 'Delivered'; index += 1) {
+      const nextState = current.nextStates.includes('Delivered')
+        ? 'Delivered'
+        : current.nextStates.includes('Shipped')
+          ? 'Shipped'
+          : null;
+
+      if (!nextState) {
+        throw new BadGatewayException(`Vendure 履约状态 ${current.state} 无法推进到 Delivered`);
+      }
+
+      current = await this.expectFulfillmentResult(
+        this.adminRequest<{ transitionFulfillmentToState: VendureFulfillmentResult | null }>(
+          `
+            mutation TransitionFulfillmentToState($id: ID!, $state: String!) {
+              transitionFulfillmentToState(id: $id, state: $state) {
+                __typename
+                ... on Fulfillment {
+                  id
+                  state
+                  nextStates
+                }
+                ... on ErrorResult {
+                  errorCode
+                  message
+                }
+              }
+            }
+          `,
+          {
+            id: current.id,
+            state: nextState
+          }
+        ),
+        'transitionFulfillmentToState'
+      );
+    }
+
+    if (current.state !== 'Delivered') {
+      throw new BadGatewayException('Vendure 履约状态推进未到达 Delivered');
+    }
+
+    return current;
+  }
+
   private async expectOrderResult<T extends Record<string, VendureOrderResult | null>>(
     promise: Promise<T>,
     key: keyof T
@@ -747,6 +1088,36 @@ export class VendureService {
     };
   }
 
+  private async expectFulfillmentResult<T extends Record<string, VendureFulfillmentResult | null>>(
+    promise: Promise<T>,
+    key: keyof T
+  ) {
+    const data = await promise;
+    const result = data[key];
+    if (!result || result.__typename !== 'Fulfillment' || !result.id || !result.state) {
+      throw new BadGatewayException(result?.message || 'Vendure 履约操作失败');
+    }
+    return {
+      id: result.id,
+      state: result.state,
+      nextStates: result.nextStates ?? []
+    };
+  }
+
+  private isOrderPaid(order: VendureOrderProjection | VendureOrderDetailProjection) {
+    if (KNOWN_PAID_ORDER_STATES.has(order.state)) {
+      return true;
+    }
+
+    return 'payments' in order
+      ? order.payments.some((payment) => payment.state === 'Settled')
+      : false;
+  }
+
+  private canUseHandlerWithoutOverrides(handler: VendureFulfillmentHandlerDefinition) {
+    return handler.args.every((arg) => !arg.required || arg.defaultValue !== undefined);
+  }
+
   private buildSku(productId: number) {
     return `swapcampus-product-${productId}`;
   }
@@ -761,7 +1132,7 @@ export class VendureService {
 
   private assertEnabled() {
     if (!this.enabled) {
-      throw new ServiceUnavailableException('Vendure 订单系统未启用');
+      throw new ServiceUnavailableException('Vendure 同步当前已禁用');
     }
   }
 }

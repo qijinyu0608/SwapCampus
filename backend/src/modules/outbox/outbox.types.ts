@@ -76,9 +76,12 @@ export type SearchEventType = (typeof searchEventTypes)[number];
 export const commerceSyncEventTypes = [
   'ProductPublished',
   'ProductAvailabilityChanged',
+  'ProductInventoryChanged',
   'OrderCreated',
   'OrderCanceled',
   'OrderCompleted',
+  'OrderPaymentSettled',
+  'OrderFulfillmentCompleted',
   'UserRegisteredForCommerce'
 ] as const;
 
@@ -162,13 +165,16 @@ export type PublishSellerSearchEventInput = {
 
 export type PublishProductCommerceSyncEventInput = {
   productId: number;
-  eventType: Extract<CommerceSyncEventType, 'ProductPublished' | 'ProductAvailabilityChanged'>;
+  eventType: Extract<CommerceSyncEventType, 'ProductPublished' | 'ProductAvailabilityChanged' | 'ProductInventoryChanged'>;
   availableAt?: Date;
 };
 
 export type PublishOrderCommerceSyncEventInput = {
   orderId: number;
-  eventType: Extract<CommerceSyncEventType, 'OrderCreated' | 'OrderCanceled' | 'OrderCompleted'>;
+  eventType: Extract<
+    CommerceSyncEventType,
+    'OrderCreated' | 'OrderCanceled' | 'OrderCompleted' | 'OrderPaymentSettled' | 'OrderFulfillmentCompleted'
+  >;
   availableAt?: Date;
 };
 

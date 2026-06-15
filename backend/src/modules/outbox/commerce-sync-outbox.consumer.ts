@@ -105,6 +105,9 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
       case 'ProductAvailabilityChanged':
         await this.syncProductAvailability(event.aggregateId);
         return;
+      case 'ProductInventoryChanged':
+        await this.syncProductInventory(event.aggregateId);
+        return;
       case 'OrderCreated':
         await this.ensureVendureOrder(event.aggregateId);
         return;
@@ -113,6 +116,12 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
         return;
       case 'OrderCompleted':
         await this.completeVendureOrder(event.aggregateId);
+        return;
+      case 'OrderPaymentSettled':
+        await this.settleVendureOrderPayment(event.aggregateId);
+        return;
+      case 'OrderFulfillmentCompleted':
+        await this.completeVendureOrderFulfillment(event.aggregateId);
         return;
       case 'UserRegisteredForCommerce':
         await this.syncUserCustomer(event.aggregateId);
@@ -277,6 +286,31 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     });
   }
 
+  private async syncProductInventory(productId: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId }
+    });
+    if (!product) {
+      return;
+    }
+
+    const vendureProduct = await this.vendureService.ensureProductVariant(product);
+    await this.vendureService.setProductInventory(
+      vendureProduct.id,
+      vendureProduct.variantId,
+      product.status === ProductStatus.ON_SALE ? 1 : 0
+    );
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        vendureProductId: vendureProduct.id,
+        vendureVariantId: vendureProduct.variantId,
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  }
+
   private async syncUserCustomer(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId }
@@ -313,12 +347,33 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
   }
 
   private async completeVendureOrder(orderId: number) {
+    await this.settleVendureOrderPayment(orderId);
+    await this.completeVendureOrderFulfillment(orderId);
+  }
+
+  private async settleVendureOrderPayment(orderId: number) {
     const order = await this.ensureVendureOrder(orderId);
     if (!order?.id) {
       return;
     }
 
     await this.vendureService.settleOrderPayment(order.id);
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  }
+
+  private async completeVendureOrderFulfillment(orderId: number) {
+    const order = await this.ensureVendureOrder(orderId);
+    if (!order?.id) {
+      return;
+    }
+
+    await this.vendureService.completeOrderFulfillment(order.id);
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
@@ -343,7 +398,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     if (order.vendureOrderId) {
       return {
         id: order.vendureOrderId,
-        code: order.vendureOrderCode
+        code: order.vendureOrderCode ?? `vendure-order-${order.id}`
       };
     }
 
@@ -394,7 +449,11 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     state: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED',
     error: string | null
   ) {
-    if (event.eventType === 'ProductPublished' || event.eventType === 'ProductAvailabilityChanged') {
+    if (
+      event.eventType === 'ProductPublished'
+      || event.eventType === 'ProductAvailabilityChanged'
+      || event.eventType === 'ProductInventoryChanged'
+    ) {
       const productId = toPositiveInt((event.payload as Record<string, unknown>).productId);
       if (productId) {
         await this.prisma.product.updateMany({
