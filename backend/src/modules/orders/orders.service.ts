@@ -534,6 +534,13 @@ export class OrdersService {
       trustedBadgeUnlockedUserIds
     });
 
+    const actionState = getOrderActionState({
+      order,
+      currentUserId: authUser.id,
+      reviews: order.reviews,
+      hasConversation: Boolean(order.conversations[0]?.id)
+    });
+
     return {
       ...detail,
       orderCode: order.vendureOrderCode ?? formatOrderCode(order.id),
@@ -992,7 +999,11 @@ export class OrdersService {
     trustedBadgeUnlockedUserIds?: Set<number>;
   }) {
     const { order, product, conversationId, productImageUrl, buyer, seller, unlockedUserIds, trustedBadgeUnlockedUserIds, currentUserId } = params;
-    const isBuyer = order.buyerId === currentUserId;
+    const actionState = getOrderActionState({
+      order,
+      currentUserId,
+      hasConversation: Boolean(conversationId)
+    });
     return {
       ...order,
       orderCode: order.vendureOrderCode ?? formatOrderCode(order.id),

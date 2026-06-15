@@ -154,6 +154,7 @@ describe('OrdersService', () => {
     outbox?: Record<string, any>;
   } = {}) {
     const outboxService = {
+      publishGovernanceEvent: jest.fn().mockResolvedValue(undefined),
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
@@ -754,6 +755,99 @@ describe('OrdersService', () => {
     expect(result).toEqual({
       order: completedOrder,
       review
+    });
+  });
+
+  it('should derive detail action state from status and current user review record', async () => {
+    const waitingReviewOrder = createOrder({
+      id: 96,
+      status: OrderStatus.WAITING_REVIEW
+    });
+    const completedOrder = createOrder({
+      id: 97,
+      status: OrderStatus.COMPLETED,
+      completedAt: new Date('2026-06-15T10:00:00.000Z')
+    });
+    const buyerReview = {
+      id: 701,
+      rating: 5,
+      content: '交易顺利',
+      createdAt: new Date('2026-06-15T10:10:00.000Z'),
+      reviewerId: 11,
+      reviewer: {
+        id: 11,
+        displayName: '买家甲'
+      }
+    };
+    const sellerReview = {
+      id: 702,
+      rating: 5,
+      content: '买家守时',
+      createdAt: new Date('2026-06-15T10:20:00.000Z'),
+      reviewerId: 22,
+      reviewer: {
+        id: 22,
+        displayName: '卖家乙'
+      }
+    };
+    const product = createProduct();
+    const buyer = {
+      id: 11,
+      displayName: '买家甲',
+      avatarUrl: null,
+      avatarFrame: null,
+      creditScore: 90,
+      verificationStatus: 'APPROVED'
+    };
+    const seller = {
+      id: 22,
+      displayName: '卖家乙',
+      avatarUrl: null,
+      avatarFrame: null,
+      creditScore: 95,
+      verificationStatus: 'APPROVED'
+    };
+    const { prisma } = createPrisma();
+    prisma.order.findMany.mockResolvedValue([]);
+    prisma.productImage.findMany.mockResolvedValue([
+      { imageUrl: 'https://cdn.example.com/book-cover.jpg' }
+    ]);
+    prisma.conversation.findMany.mockResolvedValue([]);
+    prisma.order.findUnique
+      .mockResolvedValueOnce({
+        ...waitingReviewOrder,
+        product,
+        buyer,
+        seller,
+        reviews: [],
+        appeals: [],
+        conversations: [{ id: 401 }]
+      })
+      .mockResolvedValueOnce({
+        ...completedOrder,
+        product,
+        buyer,
+        seller,
+        reviews: [buyerReview, sellerReview],
+        appeals: [],
+        conversations: [{ id: 402 }]
+      });
+
+    const { service } = createService(prisma);
+    const waitingReviewDetail = await service.getOrderDetail(96, buyerUser);
+    const completedDetail = await service.getOrderDetail(97, buyerUser);
+
+    expect(waitingReviewDetail.actionState).toMatchObject({
+      canComplete: false,
+      canReview: true,
+      canAppeal: true,
+      canOpenConversation: true
+    });
+    expect(completedDetail.actionState).toMatchObject({
+      canComplete: false,
+      canReview: false,
+      canAppeal: true,
+      canOpenConversation: true
     });
   });
 
