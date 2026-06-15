@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActionRow, SectionHeader } from '../components/layout';
 import { ThinkingOverlay } from '../components/feedback';
 import { CampusServicePublishWorkbench, PublishImageManager, type PublishImageItem } from '../components/publish';
-import { SectionCard } from '../components/ui';
+import { ConfirmActionModal, SectionCard } from '../components/ui';
 import {
   formatProductConditionValue,
   PRODUCT_CONDITION_MAX,
@@ -12,7 +12,12 @@ import {
 } from '../constants/productConditions';
 import { useAuthState } from '../services/auth-state';
 import { fetchPublishingRules, getApiErrorMessage, type PublishingRules } from '../services/api';
-import { createProductWithImages, uploadProductImageAsset } from '../services/product-publish';
+import {
+  createProductWithImages,
+  type ProductPublishPayload,
+  type ProductPublishReview,
+  uploadProductImageAsset
+} from '../services/product-publish';
 import { hasTradingAccess, isGuestUser } from '../services/session';
 
 type PublishType = 'product' | 'service-request' | 'service-offer';
@@ -33,6 +38,10 @@ export function ProductPublishPage() {
   const [uploadedImages, setUploadedImages] = useState<PublishImageItem[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [pendingPriceReview, setPendingPriceReview] = useState<{
+    payload: ProductPublishPayload;
+    review: ProductPublishReview;
+  } | null>(null);
   const uploadedImagesRef = useRef<PublishImageItem[]>([]);
 
   useEffect(() => {
@@ -51,13 +60,13 @@ export function ProductPublishPage() {
     });
   }, []);
 
-  async function handleSubmit(values: ProductPublishFormValues) {
+  async function publishProduct(payload: ProductPublishPayload, options?: { skipImageCheck?: boolean }) {
     if (!hasTradingAccess(currentUser)) {
       setMessage({ type: 'error', text: isGuestUser(currentUser) ? '浏览账号不可发布商品。' : '请先登录后再发布商品。' });
       return;
     }
 
-    if (!uploadedImages.length) {
+    if (!options?.skipImageCheck && !uploadedImages.length) {
       setMessage({ type: 'error', text: '请至少上传 1 张商品图片。' });
       antMessage.error('请至少上传 1 张商品图片');
       return;
@@ -65,16 +74,10 @@ export function ProductPublishPage() {
 
     setSubmittingProduct(true);
     try {
-      const result = await createProductWithImages({
-        title: values.title,
-        description: values.description,
-        price: values.price,
-        condition: formatProductConditionValue(values.conditionValue),
-        tags: [],
-        imageUrls: uploadedImages.map((item) => item.url)
-      });
+      const result = await createProductWithImages(payload);
 
       setMessage({ type: 'success', text: `商品已提交：${result.title}（ID ${result.id}，状态 ${result.status}）` });
+      setPendingPriceReview(null);
       form.resetFields();
       setUploadedImages((current) => {
         current.forEach((item) => {
@@ -85,6 +88,26 @@ export function ProductPublishPage() {
         return [];
       });
     } catch (error) {
+      const maybePayload = typeof error === 'object' && error && 'response' in error
+        ? (error as {
+            response?: {
+              data?: {
+                code?: string;
+                review?: ProductPublishReview;
+              };
+            };
+          }).response?.data
+        : null;
+
+      if (maybePayload?.code === 'PRICE_CONFIRMATION_REQUIRED' && maybePayload.review?.priceReview?.requiresConfirmation) {
+        setPendingPriceReview({
+          payload,
+          review: maybePayload.review
+        });
+        setMessage(null);
+        return;
+      }
+
       setMessage({
         type: 'error',
         text: getApiErrorMessage(error, '发布失败，请稍后重试。')
@@ -92,6 +115,30 @@ export function ProductPublishPage() {
     } finally {
       setSubmittingProduct(false);
     }
+  }
+
+  async function handleSubmit(values: ProductPublishFormValues) {
+    const payload: ProductPublishPayload = {
+      title: values.title,
+      description: values.description,
+      price: values.price,
+      condition: formatProductConditionValue(values.conditionValue),
+      tags: [],
+      imageUrls: uploadedImages.map((item) => item.url)
+    };
+
+    await publishProduct(payload);
+  }
+
+  async function handleConfirmPriceReview() {
+    if (!pendingPriceReview) {
+      return;
+    }
+
+    await publishProduct({
+      ...pendingPriceReview.payload,
+      confirmPriceReview: true
+    }, { skipImageCheck: true });
   }
 
   async function handleProductImageUpload(file: File) {
@@ -227,6 +274,34 @@ export function ProductPublishPage() {
                 </ActionRow>
               </Form>
             </SectionCard>
+            <ConfirmActionModal
+              open={Boolean(pendingPriceReview)}
+              title="价格可能不太合理"
+              confirmText="继续发布"
+              cancelText="返回修改"
+              loading={submittingProduct}
+              onConfirm={() => void handleConfirmPriceReview()}
+              onCancel={() => setPendingPriceReview(null)}
+              description={pendingPriceReview ? (
+                <div className="publish-price-review-dialog">
+                  <p>{pendingPriceReview.review.priceReview?.reason ?? pendingPriceReview.review.reason}</p>
+                  <div className="publish-price-review-meta">
+                    <span>当前价格：¥{pendingPriceReview.payload.price}</span>
+                    <span>
+                      建议区间：
+                      {' '}
+                      {pendingPriceReview.review.priceReview?.suggestedPriceMin ?? '--'}
+                      {' - '}
+                      {pendingPriceReview.review.priceReview?.suggestedPriceMax ?? '--'}
+                    </span>
+                    <span>
+                      判断方向：
+                      {pendingPriceReview.review.priceReview?.verdict === 'HIGH' ? '可能偏高' : '可能偏低'}
+                    </span>
+                  </div>
+                </div>
+              ) : ''}
+            />
           </div>
         ) : (
           <CampusServicePublishWorkbench

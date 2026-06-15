@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
@@ -30,4 +30,8 @@ export class CreateProductDto {
   @IsOptional()
   @IsString({ each: true })
   imageUrls?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  confirmPriceReview?: boolean;
 }

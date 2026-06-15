@@ -31,7 +31,8 @@ describe('ProductsService', () => {
       shouldBlock: false,
       selectedCategory: '教材资料',
       reason: 'skip',
-      issues: []
+      issues: [],
+      priceReview: null
     })
   } as any;
 
@@ -221,7 +222,8 @@ describe('ProductsService', () => {
         shouldBlock: false,
         selectedCategory: null,
         reason: 'failed',
-        issues: []
+        issues: [],
+        priceReview: null
       })
     } as any);
 
@@ -236,6 +238,102 @@ describe('ProductsService', () => {
     }, authUser)).rejects.toThrow('发布失败，请稍后重试');
 
     expect(productCreate).not.toHaveBeenCalled();
+  });
+
+  it('should publish product with fallback category when llm review is disabled', async () => {
+    const productCreate = jest.fn().mockResolvedValue({
+      id: 301,
+      sellerId: 1,
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 20,
+      category: '教材资料',
+      condition: '九成新',
+      tags: ['教材', '期末'],
+      status: 'ON_SALE',
+      commerceSyncStatus: 'PENDING',
+      commerceSyncError: null,
+      createdAt: new Date('2026-06-16T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-16T10:00:00.000Z')
+    });
+    const prisma = createPrisma({
+      product: {
+        create: productCreate,
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            displayName: '用户甲',
+            creditScore: 88,
+            verificationStatus: 'APPROVED',
+            accountStatus: 'ACTIVE'
+          }
+        ])
+      },
+      productImage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            productId: 301,
+            imageUrl: 'https://img.example.com/course.jpg',
+            sortOrder: 0
+          }
+        ])
+      },
+      favorite: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      report: {
+        groupBy: jest.fn().mockResolvedValue([])
+      },
+      userBehavior: {
+        groupBy: jest.fn().mockResolvedValue([])
+      },
+      order: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, {
+      reviewProduct: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'disabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: '教材资料',
+        reason: '未配置 DeepSeek API，已跳过 LLM 审查',
+        issues: [],
+        priceReview: null
+      })
+    } as any);
+
+    const product = await service.createProduct({
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 20,
+      category: '教材资料',
+      condition: '九成',
+      tags: ['教材', '期末'],
+      imageUrls: ['https://img.example.com/course.jpg']
+    }, authUser);
+
+    expect(product.id).toBe(301);
+    expect(product.review).toMatchObject({
+      status: 'disabled',
+      selectedCategory: '教材资料'
+    });
+    expect(productCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sellerId: 1,
+        category: '教材资料',
+        status: 'ON_SALE'
+      })
+    });
   });
 
   it('should allow previously moderated content to publish directly on sale', async () => {
@@ -288,6 +386,113 @@ describe('ProductsService', () => {
       changedBy: 'products',
       reason: 'PRODUCT_CREATED'
     }, expect.anything());
+  });
+
+  it('should require explicit confirmation when llm flags suspicious price', async () => {
+    const productCreate = jest.fn();
+    const prisma = createPrisma({
+      product: {
+        create: productCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, {
+      reviewProduct: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'enabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: '教材资料',
+        reason: '商品信息基本完整',
+        issues: [],
+        priceReview: {
+          verdict: 'HIGH',
+          confidence: 'HIGH',
+          reason: '同类教材通常不会接近这个价位',
+          suggestedPriceMin: 20,
+          suggestedPriceMax: 80,
+          requiresConfirmation: true
+        }
+      })
+    } as any);
+
+    await expect(service.createProduct({
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 399,
+      category: '教材资料',
+      condition: '九成',
+      tags: ['教材'],
+      imageUrls: ['https://img.example.com/course.jpg']
+    }, authUser)).rejects.toMatchObject({
+      response: {
+        code: 'PRICE_CONFIRMATION_REQUIRED',
+        review: expect.objectContaining({
+          priceReview: expect.objectContaining({
+            verdict: 'HIGH',
+            suggestedPriceMin: 20,
+            suggestedPriceMax: 80
+          })
+        })
+      }
+    });
+
+    expect(productCreate).not.toHaveBeenCalled();
+  });
+
+  it('should publish after user confirms suspicious price review', async () => {
+    const productCreate = jest.fn().mockResolvedValue({
+      id: 302,
+      title: '高数教材',
+      status: 'ON_SALE'
+    });
+    const prisma = createPrisma({
+      product: {
+        create: productCreate
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
+      }
+    });
+    const reviewProduct = jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      status: 'enabled',
+      decision: 'APPROVED',
+      shouldBlock: false,
+      selectedCategory: '教材资料',
+      reason: '商品信息基本完整',
+      issues: [],
+      priceReview: {
+        verdict: 'LOW',
+        confidence: 'MEDIUM',
+        reason: '低于常见二手教材价格',
+        suggestedPriceMin: 10,
+        suggestedPriceMax: 25,
+        requiresConfirmation: true
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, {
+      reviewProduct
+    } as any);
+
+    const product = await service.createProduct({
+      title: '高数教材',
+      description: '期末复习用书，少量笔记',
+      price: 1,
+      category: '教材资料',
+      condition: '九成',
+      tags: ['教材'],
+      imageUrls: ['https://img.example.com/course.jpg'],
+      confirmPriceReview: true
+    }, authUser);
+
+    expect(product).toMatchObject({ id: 302, status: 'ON_SALE' });
+    expect(reviewProduct).toHaveBeenCalledTimes(1);
+    expect(productCreate).toHaveBeenCalledTimes(1);
   });
 
   it('should persist uploaded product images with normalized unique urls', async () => {

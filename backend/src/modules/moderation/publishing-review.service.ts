@@ -45,6 +45,7 @@ export type ProductPublishingReviewResult = {
   selectedCategory: ProductCategoryName;
   reason: string;
   issues: string[];
+  priceReview: ProductPriceReviewResult | null;
 };
 
 export type CampusServicePublishingReviewResult = {
@@ -63,6 +64,13 @@ type DeepSeekProductStructuredOutput = {
   selectedCategory?: string;
   reason?: string;
   issues?: string[];
+  priceReview?: {
+    verdict?: 'PASS' | 'HIGH' | 'LOW';
+    confidence?: 'LOW' | 'MEDIUM' | 'HIGH';
+    suggestedPriceMin?: number | null;
+    suggestedPriceMax?: number | null;
+    reason?: string;
+  };
 };
 
 type DeepSeekCampusServiceStructuredOutput = {
@@ -75,6 +83,15 @@ type DeepSeekCampusServiceStructuredOutput = {
 const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash';
 const FALLBACK_DEEPSEEK_MODELS = ['deepseek-chat'];
+
+export type ProductPriceReviewResult = {
+  verdict: 'PASS' | 'HIGH' | 'LOW';
+  confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+  reason: string;
+  suggestedPriceMin: number | null;
+  suggestedPriceMax: number | null;
+  requiresConfirmation: boolean;
+};
 
 function normalizeDecision(value: unknown): ReviewDecision {
   return value === 'APPROVED' || value === 'REJECTED' || value === 'REVIEW'
@@ -108,6 +125,38 @@ function normalizeCampusServiceCategory(value: unknown): CampusServiceCategory {
   return allowed.includes(value as CampusServiceCategory)
     ? (value as CampusServiceCategory)
     : CampusServiceCategory.OTHER;
+}
+
+function normalizeConfidence(value: unknown): ProductPriceReviewResult['confidence'] {
+  return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH'
+    ? value
+    : 'LOW';
+}
+
+function normalizeSuggestedPrice(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Number(value.toFixed(2))
+    : null;
+}
+
+function normalizePriceReview(value: unknown): ProductPriceReviewResult | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const review = value as DeepSeekProductStructuredOutput['priceReview'];
+  const verdict = review?.verdict === 'HIGH' || review?.verdict === 'LOW' || review?.verdict === 'PASS'
+    ? review.verdict
+    : 'PASS';
+
+  return {
+    verdict,
+    confidence: normalizeConfidence(review?.confidence),
+    reason: normalizeReason(review?.reason, '价格看起来基本合理'),
+    suggestedPriceMin: normalizeSuggestedPrice(review?.suggestedPriceMin),
+    suggestedPriceMax: normalizeSuggestedPrice(review?.suggestedPriceMax),
+    requiresConfirmation: verdict !== 'PASS'
+  };
 }
 
 @Injectable()
@@ -194,7 +243,8 @@ export class PublishingReviewService {
         shouldBlock: false,
         selectedCategory: normalizeProductCategory(input.category),
         reason: '未配置 DeepSeek API，已跳过 LLM 审查',
-        issues: []
+        issues: [],
+        priceReview: null
       };
     }
 
@@ -207,9 +257,13 @@ export class PublishingReviewService {
             '你只输出 JSON，不要输出任何额外文本。',
             '任务一：判断该商品是否可以发布，decision 只能是 APPROVED、REJECTED、REVIEW。',
             '任务二：必须从给定商品分类中选择一个最合适的 selectedCategory。',
+            '任务三：结合商品标题、描述、分类、成色与价格，判断价格是否明显偏高或偏低；只有在你有较强把握时才标记异常。',
             '如果内容涉及违法违规、代写代考、账号交易、药品烟酒、刀具、明显不适合校园二手平台的内容，应优先 REJECTED。',
             '如果内容有明显歧义、风险较高或分类判断不稳，可以返回 REVIEW。',
-            '输出 JSON 字段固定为：decision, selectedCategory, reason, issues。issues 必须是字符串数组。'
+            '输出 JSON 字段固定为：decision, selectedCategory, reason, issues, priceReview。issues 必须是字符串数组。',
+            'priceReview 必须是对象，字段固定为：verdict, confidence, suggestedPriceMin, suggestedPriceMax, reason。',
+            'verdict 只能是 PASS、HIGH、LOW；confidence 只能是 LOW、MEDIUM、HIGH。',
+            '如果价格没有明显问题，verdict 返回 PASS，suggestedPriceMin 和 suggestedPriceMax 返回 null。'
           ].join('\n')
         },
         {
@@ -224,6 +278,7 @@ export class PublishingReviewService {
       const parsed = JSON.parse(result.content) as DeepSeekProductStructuredOutput;
       const decision = normalizeDecision(parsed.decision);
       const selectedCategory = normalizeProductCategory(parsed.selectedCategory ?? input.category);
+      const priceReview = normalizePriceReview(parsed.priceReview);
       return {
         provider: 'deepseek',
         model: result.model,
@@ -232,7 +287,8 @@ export class PublishingReviewService {
         shouldBlock: decision === 'REJECTED',
         selectedCategory,
         reason: normalizeReason(parsed.reason, 'LLM 审查完成'),
-        issues: normalizeIssues(parsed.issues)
+        issues: normalizeIssues(parsed.issues),
+        priceReview
       };
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -245,7 +301,8 @@ export class PublishingReviewService {
         shouldBlock: false,
         selectedCategory: normalizeProductCategory(input.category),
         reason: 'LLM 审查调用失败，已回退为仅使用本地规则',
-        issues: []
+        issues: [],
+        priceReview: null
       };
     }
   }

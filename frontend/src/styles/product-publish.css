@@ -125,6 +125,28 @@
   gap: 14px;
 }
 
+.publish-price-review-dialog {
+  display: grid;
+  gap: 12px;
+}
+
+.publish-price-review-dialog p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.publish-price-review-meta {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--warning-border) 54%, var(--line) 46%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning-soft) 42%, #ffffff 58%);
+  color: var(--warning-600);
+  font-size: 13px;
+}
+
 .publish-media-section {
   display: grid;
   gap: 12px;

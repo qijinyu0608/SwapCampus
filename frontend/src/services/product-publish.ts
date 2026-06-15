@@ -8,6 +8,35 @@ export type ProductPublishPayload = {
   condition: string;
   tags: string[];
   imageUrls?: string[];
+  confirmPriceReview?: boolean;
+};
+
+export type ProductPublishPriceReview = {
+  verdict: 'PASS' | 'HIGH' | 'LOW';
+  confidence: 'LOW' | 'MEDIUM' | 'HIGH';
+  reason: string;
+  suggestedPriceMin: number | null;
+  suggestedPriceMax: number | null;
+  requiresConfirmation: boolean;
+};
+
+export type ProductPublishReview = {
+  provider: string;
+  model: string;
+  status: 'enabled' | 'disabled' | 'failed';
+  decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
+  shouldBlock: boolean;
+  selectedCategory: string;
+  reason: string;
+  issues: string[];
+  priceReview?: ProductPublishPriceReview | null;
+};
+
+export type ProductPublishSuccessResponse = {
+  id: number;
+  title: string;
+  status: string;
+  review?: ProductPublishReview | null;
 };
 
 export type UploadedImageAsset = {
@@ -21,21 +50,12 @@ export type UploadedImageAsset = {
 
 export async function createProductWithImages(payload: ProductPublishPayload) {
   const response = await apiClient.post('/products', payload);
-  return response.data as {
-    id: number;
-    title: string;
-    status: string;
-    review?: {
-      provider: string;
-      model: string;
-      status: 'enabled' | 'disabled' | 'failed';
-      decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
-      shouldBlock: boolean;
-      selectedCategory: string;
-      reason: string;
-      issues: string[];
-    } | null;
-  };
+  return response.data as ProductPublishSuccessResponse;
+}
+
+export async function updateProductWithImages(id: number, payload: ProductPublishPayload) {
+  const response = await apiClient.patch(`/products/${id}`, payload);
+  return response.data as ProductPublishSuccessResponse;
 }
 
 export async function uploadProductImageAsset(file: File) {

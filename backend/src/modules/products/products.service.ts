@@ -796,12 +796,22 @@ export class ProductsService {
       imageUrls: normalizedImageUrls
     }) ?? null;
 
-    if (!llmReview || llmReview.status !== 'enabled' || !llmReview.selectedCategory) {
+    if (!llmReview || !llmReview.selectedCategory) {
       throw new BadRequestException('发布失败，请稍后重试');
     }
 
     if (llmReview.shouldBlock) {
       throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
+    }
+
+    if (llmReview.priceReview?.requiresConfirmation && !payload.confirmPriceReview) {
+      throw new BadRequestException({
+        code: 'PRICE_CONFIRMATION_REQUIRED',
+        message: llmReview.priceReview.verdict === 'HIGH'
+          ? '当前价格可能明显偏高，请确认是否继续发布'
+          : '当前价格可能明显偏低，请确认是否继续发布',
+        review: llmReview
+      });
     }
 
     const selectedCategory = normalizeProductCategoryName(llmReview.selectedCategory);
