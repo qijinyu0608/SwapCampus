@@ -90,9 +90,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
         this.logger.warn(`Commerce outbox schema is not ready yet: ${toErrorMessage(error)}`);
         return 0;
       }
-
-      this.logger.error(`Failed to poll commerce outbox: ${toErrorMessage(error)}`);
-      return 0;
+      throw error;
     } finally {
       this.pollInFlight = false;
       this.scheduleNextPoll();
@@ -134,7 +132,9 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     }
 
     this.timer = setTimeout(() => {
-      void this.pollOnce();
+      void this.pollOnce().catch((error) => {
+        this.logger.error(`Failed to run scheduled commerce outbox poll: ${toErrorMessage(error)}`);
+      });
     }, Math.max(0, delay));
   }
 

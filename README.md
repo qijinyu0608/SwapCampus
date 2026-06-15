@@ -237,6 +237,8 @@ make frontend-build
 make backfill-search-outbox
 ```
 
+默认命令会在 `search-indexer` 容器内执行已编译的回填脚本，更贴近实际部署环境，也避免宿主机本地 `tsx/Prisma` 执行链路差异带来的不确定性。
+
 该脚本会为现存商品和卖家补写 `search.index` 主题事件，供独立 `search-indexer` 继续消费。补投策略按 `aggregateId + updatedAt` 去重，避免对已经完成过的新状态重复写入。
 
 ## 演示路径

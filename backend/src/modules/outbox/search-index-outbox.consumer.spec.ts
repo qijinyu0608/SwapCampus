@@ -48,6 +48,17 @@ describe('SearchIndexOutboxConsumer', () => {
     } as any;
   }
 
+  function createPrismaKnownRequestError(code: string, message = 'request failed') {
+    const error = new Error(message);
+    Object.setPrototypeOf(error, Error.prototype);
+    Object.assign(error, {
+      name: 'PrismaClientKnownRequestError',
+      code,
+      clientVersion: '5.17.0'
+    });
+    return error;
+  }
+
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalEnabled = process.env.SEARCH_INDEX_OUTBOX_ENABLED;
 
@@ -224,6 +235,28 @@ describe('SearchIndexOutboxConsumer', () => {
         availableAt: expect.any(Date)
       }
     });
+  });
+
+  it('should tolerate schema-not-ready errors when recovering stale events', async () => {
+    const now = new Date('2026-06-15T10:10:00.000Z');
+    const prisma = createPrisma();
+    prisma.outboxEvent.updateMany.mockRejectedValueOnce(createPrismaKnownRequestError('P2021', 'missing OutboxEvent table'));
+    const searchService = createSearchService();
+    const consumer = new SearchIndexOutboxConsumer(prisma, searchService);
+
+    await expect(consumer.pollOnce(now)).resolves.toBe(0);
+    expect(prisma.outboxEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('should tolerate schema-not-ready errors when claiming pending events', async () => {
+    const now = new Date('2026-06-15T10:10:00.000Z');
+    const prisma = createPrisma();
+    prisma.outboxEvent.findMany.mockRejectedValueOnce(createPrismaKnownRequestError('P2021', 'missing OutboxEvent table'));
+    const searchService = createSearchService();
+    const consumer = new SearchIndexOutboxConsumer(prisma, searchService);
+
+    await expect(consumer.pollOnce(now)).resolves.toBe(0);
+    expect(prisma.outboxEvent.update).not.toHaveBeenCalled();
   });
 
   it('should mark event failed after max retries exceeded', async () => {

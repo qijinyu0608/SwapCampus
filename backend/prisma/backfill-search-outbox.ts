@@ -1,3 +1,4 @@
+import '../src/load-env';
 import { ProductStatus, PrismaClient } from '@prisma/client';
 import { SEARCH_INDEX_OUTBOX_TOPIC } from '../src/modules/outbox/outbox.types';
 

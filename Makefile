@@ -56,7 +56,7 @@ prisma-generate:
 	cd backend && npm run prisma:generate
 
 backfill-search-outbox:
-	cd backend && npm run db:backfill-search-outbox
+	docker compose exec -T search-indexer node /app/backend/dist/prisma/backfill-search-outbox.js
 
 screenshots:
 	node infra/generate-screenshots.mjs

@@ -17,6 +17,10 @@ function toErrorMessage(error: unknown) {
   return String(error);
 }
 
+function isSchemaNotReadyError(error: unknown) {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'P2021';
+}
+
 function toSearchOutboxEventRecord(event: {
   id: number;
   topic: string;
@@ -77,6 +81,12 @@ export class SearchIndexOutboxConsumer implements OnModuleInit {
         await this.handleClaimedEvent(event, now);
       }
       return events.length;
+    } catch (error) {
+      if (isSchemaNotReadyError(error)) {
+        this.logger.warn(`Search outbox schema is not ready yet: ${toErrorMessage(error)}`);
+        return 0;
+      }
+      throw error;
     } finally {
       this.pollInFlight = false;
       this.scheduleNextPoll();
@@ -112,7 +122,9 @@ export class SearchIndexOutboxConsumer implements OnModuleInit {
     }
 
     this.timer = setTimeout(() => {
-      void this.pollOnce();
+      void this.pollOnce().catch((error) => {
+        this.logger.error(`Failed to run scheduled search outbox poll: ${toErrorMessage(error)}`);
+      });
     }, Math.max(0, delay));
   }
 
