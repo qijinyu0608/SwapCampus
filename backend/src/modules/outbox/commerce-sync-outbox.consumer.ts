@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { OutboxEventStatus, Prisma } from '@prisma/client';
+import { OutboxEventStatus, Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VendureService } from '../vendure/vendure.service';
 import {
@@ -15,6 +15,10 @@ function toErrorMessage(error: unknown) {
   }
 
   return String(error);
+}
+
+function isSchemaNotReadyError(error: unknown) {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'P2021';
 }
 
 function toPositiveInt(value: unknown) {
@@ -81,6 +85,14 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
         await this.handleClaimedEvent(event, now);
       }
       return events.length;
+    } catch (error) {
+      if (isSchemaNotReadyError(error)) {
+        this.logger.warn(`Commerce outbox schema is not ready yet: ${toErrorMessage(error)}`);
+        return 0;
+      }
+
+      this.logger.error(`Failed to poll commerce outbox: ${toErrorMessage(error)}`);
+      return 0;
     } finally {
       this.pollInFlight = false;
       this.scheduleNextPoll();
@@ -91,6 +103,9 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     switch (event.eventType) {
       case 'ProductPublished':
         await this.syncPublishedProduct(event.aggregateId);
+        return;
+      case 'ProductAvailabilityChanged':
+        await this.syncProductAvailability(event.aggregateId);
         return;
       case 'OrderCreated':
         await this.ensureVendureOrder(event.aggregateId);
@@ -237,6 +252,31 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     });
   }
 
+  private async syncProductAvailability(productId: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId }
+    });
+    if (!product) {
+      return;
+    }
+
+    const vendureProduct = await this.vendureService.ensureProductVariant(product);
+    await this.vendureService.setProductAvailability(
+      vendureProduct.id,
+      vendureProduct.variantId,
+      product.status === ProductStatus.ON_SALE
+    );
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        vendureProductId: vendureProduct.id,
+        vendureVariantId: vendureProduct.variantId,
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  }
+
   private async syncUserCustomer(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId }
@@ -354,7 +394,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
     state: 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED',
     error: string | null
   ) {
-    if (event.eventType === 'ProductPublished') {
+    if (event.eventType === 'ProductPublished' || event.eventType === 'ProductAvailabilityChanged') {
       const productId = toPositiveInt((event.payload as Record<string, unknown>).productId);
       if (productId) {
         await this.prisma.product.updateMany({

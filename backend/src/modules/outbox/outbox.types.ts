@@ -75,6 +75,7 @@ export type SearchEventType = (typeof searchEventTypes)[number];
 
 export const commerceSyncEventTypes = [
   'ProductPublished',
+  'ProductAvailabilityChanged',
   'OrderCreated',
   'OrderCanceled',
   'OrderCompleted',
@@ -161,7 +162,7 @@ export type PublishSellerSearchEventInput = {
 
 export type PublishProductCommerceSyncEventInput = {
   productId: number;
-  eventType: Extract<CommerceSyncEventType, 'ProductPublished'>;
+  eventType: Extract<CommerceSyncEventType, 'ProductPublished' | 'ProductAvailabilityChanged'>;
   availableAt?: Date;
 };
 

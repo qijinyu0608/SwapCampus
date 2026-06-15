@@ -39,6 +39,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -87,6 +88,7 @@ describe('ReportsService', () => {
         })
       },
       product: {
+        findMany: jest.fn().mockResolvedValue([{ id: 201 }]),
         findUnique: jest.fn().mockResolvedValue({
           id: 201,
           sellerId: 51,
@@ -130,6 +132,7 @@ describe('ReportsService', () => {
 
     const outboxService = {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
@@ -145,8 +148,7 @@ describe('ReportsService', () => {
     });
     expect(prisma.product.updateMany).toHaveBeenCalledWith({
       where: {
-        sellerId: 24,
-        status: { in: [ProductStatus.ON_SALE] }
+        id: { in: [201] }
       },
       data: {
         status: ProductStatus.OFFLINE,
@@ -169,6 +171,10 @@ describe('ReportsService', () => {
       eventType: 'SellerStatusChanged',
       changedBy: 'reports',
       reason: 'REPORT_USER_BANNED'
+    }, prisma);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductAvailabilityChanged'
     }, prisma);
   });
 
@@ -215,6 +221,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -266,6 +273,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -325,6 +333,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -383,6 +392,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -441,6 +451,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 
@@ -499,6 +510,7 @@ describe('ReportsService', () => {
 
     const service = new ReportsService(prisma, {
       publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
     } as any);
 

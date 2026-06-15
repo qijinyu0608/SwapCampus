@@ -206,6 +206,10 @@ export class ReportsService {
           changedBy: 'reports',
           reason: 'REPORT_PRODUCT_OFFLINE'
         }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: report.productId,
+          eventType: 'ProductAvailabilityChanged'
+        }, tx);
       }
 
       if (payload.nextStatus === 'BAN_USER' && report.targetUserId) {
@@ -228,23 +232,35 @@ export class ReportsService {
           data: { accountStatus: AccountStatus.BANNED }
         });
 
-        const reconciledProductIds = await Promise.all([
-          cancelOrdersForUserAndReconcileProducts(tx, report.targetUserId, operationAt),
-          tx.product.updateMany({
+        const onSaleProductIds = (
+          await tx.product.findMany({
             where: {
               sellerId: report.targetUserId,
-              status: { in: [ProductStatus.ON_SALE] }
+              status: ProductStatus.ON_SALE
             },
-            data: {
-              status: ProductStatus.OFFLINE,
-              offlineReason: ProductOfflineReason.USER_BANNED
-            }
-          }),
+            select: { id: true }
+          })
+        ).map((product: { id: number }) => product.id);
+
+        const reconciledProductIds = await Promise.all([
+          cancelOrdersForUserAndReconcileProducts(tx, report.targetUserId, operationAt),
+          onSaleProductIds.length
+            ? tx.product.updateMany({
+                where: {
+                  id: { in: onSaleProductIds }
+                },
+                data: {
+                  status: ProductStatus.OFFLINE,
+                  offlineReason: ProductOfflineReason.USER_BANNED
+                }
+              })
+            : Promise.resolve({ count: 0 }),
           cancelCampusServicesForUser(tx, report.targetUserId, payload.resolutionNote?.trim() || '举报封禁处理'),
           applyCreditScoreDelta(tx, report.targetUserId, REPORT_BAN_CREDIT_PENALTY)
         ]);
 
         reconciledProductIds[0].forEach((id) => affectedProductIds.add(id));
+        onSaleProductIds.forEach((id) => affectedProductIds.add(id));
         affectedUserId = report.targetUserId;
 
         await this.outboxService.publishSellerSearchEvent({
@@ -254,12 +270,16 @@ export class ReportsService {
           reason: 'REPORT_USER_BANNED'
         }, tx);
 
-        for (const productId of reconciledProductIds[0]) {
+        for (const productId of Array.from(affectedProductIds)) {
           await this.outboxService.publishProductSearchEvent({
             productId,
             eventType: 'ProductStatusChanged',
             changedBy: 'reports',
             reason: 'REPORT_USER_BANNED'
+          }, tx);
+          await this.outboxService.publishProductCommerceSyncEvent({
+            productId,
+            eventType: 'ProductAvailabilityChanged'
           }, tx);
         }
       }

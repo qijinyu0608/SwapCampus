@@ -219,6 +219,50 @@ export class VendureService {
     return { id: result.id };
   }
 
+  async setProductAvailability(productId: string, variantId: string, enabled: boolean) {
+    this.assertEnabled();
+
+    await this.adminRequest<{
+      updateProduct: {
+        id: string;
+      };
+    }>(
+      `
+        mutation UpdateProduct($input: UpdateProductInput!) {
+          updateProduct(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          id: productId,
+          enabled
+        }
+      }
+    );
+
+    await this.adminRequest<{
+      updateProductVariant: {
+        id: string;
+      };
+    }>(
+      `
+        mutation UpdateProductVariant($input: UpdateProductVariantInput!) {
+          updateProductVariant(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          id: variantId,
+          enabled
+        }
+      }
+    );
+  }
+
   async createPlacedOrder(params: {
     customerId: string;
     productVariantId: string;

@@ -188,6 +188,10 @@ export class OrdersService {
         orderId: order.id,
         eventType: 'OrderCreated'
       }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: product.id,
+        eventType: 'ProductAvailabilityChanged'
+      }, tx);
 
       const existingConversation = await tx.conversation.findFirst({
         where: {
@@ -760,6 +764,10 @@ export class OrdersService {
           changedBy: 'orders',
           reason: 'ORDER_CANCELED'
         }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: existingOrder.productId,
+          eventType: 'ProductAvailabilityChanged'
+        }, tx);
       }
       await this.outboxService.publishOrderCommerceSyncEvent({
         orderId,
@@ -1039,6 +1047,10 @@ export class OrdersService {
         eventType: 'ProductStatusChanged',
         changedBy: 'orders',
         reason: event === 'AUTO_COMPLETED' ? 'ORDER_AUTO_COMPLETED' : 'ORDER_COMPLETED'
+      }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: currentOrder.productId,
+        eventType: 'ProductAvailabilityChanged'
       }, tx);
       await this.outboxService.publishOrderCommerceSyncEvent({
         orderId,

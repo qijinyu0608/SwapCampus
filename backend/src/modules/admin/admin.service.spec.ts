@@ -67,6 +67,7 @@ describe('AdminService', () => {
         updateMany: jest.fn()
       },
       product: {
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn()
@@ -108,16 +109,23 @@ describe('AdminService', () => {
   }
 
   function createService(prisma: any) {
-    return new AdminService(prisma, {
+    const outboxService = {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
+      publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
-    } as any, {
+    } as any;
+
+    return {
+      service: new AdminService(prisma, outboxService, {
       getProductDetail: jest.fn(),
       syncListing: jest.fn(),
       syncOrder: jest.fn()
     } as any, {
       getCampusServiceDetail: jest.fn()
-    } as any);
+      } as any),
+      outboxService
+    };
   }
 
   it('should cancel active order and reopen product when no other active order exists', async () => {
@@ -145,7 +153,7 @@ describe('AdminService', () => {
       accountStatus: 'ACTIVE'
     });
 
-    const service = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.updateOrderStatus(91, {
       status: OrderStatus.CANCELED,
       reason: '管理员取消'
@@ -160,6 +168,14 @@ describe('AdminService', () => {
       data: { status: ProductStatus.ON_SALE, offlineReason: null }
     });
     expect(tx.auditLog.create).toHaveBeenCalled();
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 91,
+      eventType: 'OrderCanceled'
+    }, tx);
     expect(result).toMatchObject({
       id: 91,
       productId: 18,
@@ -176,7 +192,7 @@ describe('AdminService', () => {
       status: ProductStatus.OFFLINE
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateProductStatus(18, {
       status: ProductStatus.OFFLINE
@@ -195,7 +211,7 @@ describe('AdminService', () => {
       status: ProductStatus.ON_SALE
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateProductStatus(18, {
       status: ProductStatus.ON_SALE
@@ -220,7 +236,7 @@ describe('AdminService', () => {
       id: 91
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateProductStatus(18, {
       status: ProductStatus.ON_SALE
@@ -232,7 +248,7 @@ describe('AdminService', () => {
 
   it('should reject non-cancel admin order status updates', async () => {
     const { prisma } = createPrisma();
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateOrderStatus(91, {
       status: 'COMPLETED' as any
@@ -252,7 +268,7 @@ describe('AdminService', () => {
       status: ProductStatus.SOLD
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateOrderStatus(91, {
       status: OrderStatus.CANCELED
@@ -302,7 +318,7 @@ describe('AdminService', () => {
       creditScore: 54
     });
 
-    const service = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.resolveOrderAppeal(51, {
       nextStatus: 'CANCELED_ORDER',
       resolutionNote: '申诉成立'
@@ -324,6 +340,14 @@ describe('AdminService', () => {
         handledBy: adminUser.id
       }
     });
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 91,
+      eventType: 'OrderCanceled'
+    }, tx);
     expect(result).toEqual({
       id: 51,
       status: 'RESOLVED',
@@ -342,7 +366,7 @@ describe('AdminService', () => {
       status: 'RESOLVED'
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(51, {
       nextStatus: 'RESOLVED'
@@ -371,7 +395,7 @@ describe('AdminService', () => {
       status: ProductStatus.SOLD
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(51, {
       nextStatus: 'CANCELED_ORDER'
@@ -395,7 +419,7 @@ describe('AdminService', () => {
       accountStatus: 'BANNED'
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(52, {
       nextStatus: 'BAN_RESPONDENT'
@@ -418,7 +442,7 @@ describe('AdminService', () => {
       accountStatus: 'ACTIVE'
     });
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(53, {
       nextStatus: 'UNBAN_RESPONDENT'
@@ -453,6 +477,7 @@ describe('AdminService', () => {
     tx.order.findMany.mockResolvedValue([
       { id: 91, productId: 18 }
     ]);
+    tx.product.findMany.mockResolvedValue([{ id: 18 }]);
     tx.product.findUnique.mockResolvedValue({
       id: 18,
       sellerId: 45,
@@ -462,7 +487,7 @@ describe('AdminService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
     const result = await service.resolveOrderAppeal(54, {
       nextStatus: 'BAN_RESPONDENT',
       resolutionNote: '申诉封禁'
@@ -482,7 +507,7 @@ describe('AdminService', () => {
       id: 54,
       status: 'RESOLVED',
       resolutionNote: '申诉封禁',
-      affectedProductIds: [],
+      affectedProductIds: [18],
       affectedUserId: 32
     });
   });
@@ -495,7 +520,7 @@ describe('AdminService', () => {
       endedAt: new Date('2026-06-12T09:00:00.000Z')
     }));
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
       action: 'REOPEN' as AdminCampusServiceAction,
@@ -513,7 +538,7 @@ describe('AdminService', () => {
     });
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing());
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
     const result = await service.updateCampusServiceStatus(18, {
       action: AdminCampusServiceAction.CANCEL,
       reason: '管理员关闭'
@@ -556,7 +581,7 @@ describe('AdminService', () => {
       status: CampusServiceListingStatus.OPEN
     }));
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
       action: 'FORCE_MATCH' as AdminCampusServiceAction
@@ -575,7 +600,7 @@ describe('AdminService', () => {
       endedAt: new Date('2026-06-12T09:00:00.000Z')
     }));
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
       action: AdminCampusServiceAction.CANCEL
@@ -589,7 +614,7 @@ describe('AdminService', () => {
     const { prisma, tx } = createPrisma();
     tx.campusServiceListing.findUnique.mockResolvedValue(createListing());
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(18, {
       action: 'FORCE_COMPLETE' as AdminCampusServiceAction
@@ -603,7 +628,7 @@ describe('AdminService', () => {
     const { prisma, tx } = createPrisma();
     tx.campusServiceListing.findUnique.mockResolvedValue(null);
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
 
     await expect(service.updateCampusServiceStatus(404, {
       action: AdminCampusServiceAction.CANCEL
@@ -675,7 +700,7 @@ describe('AdminService', () => {
       }
     } as any;
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
     const result = await service.listCampusServices(adminUser);
 
     expect(result).toHaveLength(3);
@@ -742,7 +767,7 @@ describe('AdminService', () => {
       }
     } as any;
 
-    const service = createService(prisma);
+    const { service } = createService(prisma);
     const [result] = await service.listCampusServices(adminUser);
 
     expect(result).toMatchObject({

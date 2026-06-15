@@ -163,6 +163,10 @@ describe('ProductsService', () => {
       productId: 200,
       eventType: 'ProductPublished'
     }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 200,
+      eventType: 'ProductAvailabilityChanged'
+    }, expect.anything());
     expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
       productId: 200,
       eventType: 'ProductCreated',
@@ -266,6 +270,10 @@ describe('ProductsService', () => {
       productId: 201,
       eventType: 'ProductPublished'
     }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductAvailabilityChanged'
+    }, expect.anything());
     expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
       productId: 201,
       eventType: 'ProductCreated',
@@ -319,6 +327,10 @@ describe('ProductsService', () => {
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 202,
       eventType: 'ProductPublished'
+    }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 202,
+      eventType: 'ProductAvailabilityChanged'
     }, expect.anything());
   });
 

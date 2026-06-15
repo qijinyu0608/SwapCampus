@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { AccountStatus, UserRole, VerificationStatus } from '@prisma/client';
+import { AccountStatus, ProductOfflineReason, ProductStatus, UserRole, VerificationStatus } from '@prisma/client';
 import { UsersService } from './users.service';
 
 describe('UsersService admin status updates', () => {
@@ -17,6 +17,7 @@ describe('UsersService admin status updates', () => {
         update: jest.fn()
       },
       product: {
+        findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 0 })
       },
       order: {
@@ -45,7 +46,8 @@ describe('UsersService admin status updates', () => {
 
     const outboxService = {
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined),
-      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined)
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
     const service = new UsersService(prisma, outboxService);
@@ -127,8 +129,9 @@ describe('UsersService admin status updates', () => {
       id: 18,
       accountStatus: AccountStatus.BANNED
     });
+    tx.product.findMany.mockResolvedValue([{ id: 201 }]);
 
-    await service.updateBanStatus(18, {
+    const result = await service.updateBanStatus(18, {
       banned: true,
       reason: '封禁测试'
     }, adminUser);
@@ -142,6 +145,20 @@ describe('UsersService admin status updates', () => {
         targetId: 18,
         detail: '封禁测试'
       }
+    });
+    expect(tx.product.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [201] }
+      },
+      data: {
+        status: ProductStatus.OFFLINE,
+        offlineReason: ProductOfflineReason.USER_BANNED
+      }
+    });
+    expect(result).toEqual({
+      id: 18,
+      isBanned: true,
+      reconciledProductIds: [201]
     });
   });
 

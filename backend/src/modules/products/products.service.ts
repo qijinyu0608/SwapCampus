@@ -847,6 +847,10 @@ export class ProductsService {
         productId: created.id,
         eventType: 'ProductPublished'
       }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: created.id,
+        eventType: 'ProductAvailabilityChanged'
+      }, tx);
       await this.outboxService.publishProductSearchEvent({
         productId: created.id,
         eventType: 'ProductCreated',

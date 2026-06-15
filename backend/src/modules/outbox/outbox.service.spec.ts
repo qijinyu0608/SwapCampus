@@ -99,6 +99,30 @@ describe('OutboxService', () => {
     });
   });
 
+  it('should publish product availability sync event with product aggregate', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishProductCommerceSyncEvent({
+      productId: 34,
+      eventType: 'ProductAvailabilityChanged'
+    });
+
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        topic: COMMERCE_SYNC_OUTBOX_TOPIC,
+        eventType: 'ProductAvailabilityChanged',
+        aggregateType: OutboxAggregateType.PRODUCT,
+        aggregateId: 34,
+        payload: {
+          productId: 34
+        },
+        status: OutboxEventStatus.PENDING,
+        availableAt: expect.any(Date)
+      })
+    });
+  });
+
   it('should publish order commerce sync event with order aggregate', async () => {
     const prisma = createPrisma();
     const service = new OutboxService(prisma);

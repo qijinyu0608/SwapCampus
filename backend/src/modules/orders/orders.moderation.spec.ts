@@ -85,6 +85,7 @@ describe('OrdersService moderation safeguards', () => {
 
     const service = new OrdersService(prisma, {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
     } as any);
 
@@ -147,6 +148,7 @@ describe('OrdersService moderation safeguards', () => {
 
     const service = new OrdersService(prisma, {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
     } as any);
 

@@ -155,6 +155,7 @@ describe('OrdersService', () => {
   } = {}) {
     const outboxService = {
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishUserCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       ...overrides.outbox
@@ -257,6 +258,10 @@ describe('OrdersService', () => {
       eventType: 'ProductStatusChanged',
       changedBy: 'orders',
       reason: 'ORDER_RESERVED'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 401,
@@ -491,6 +496,10 @@ describe('OrdersService', () => {
       changedBy: 'orders',
       reason: 'ORDER_CANCELED'
     }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
+    }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 93,
       eventType: 'OrderCanceled'
@@ -650,6 +659,10 @@ describe('OrdersService', () => {
       eventType: 'ProductStatusChanged',
       changedBy: 'orders',
       reason: 'ORDER_COMPLETED'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 94,
@@ -826,6 +839,10 @@ describe('OrdersService', () => {
       eventType: 'ProductStatusChanged',
       changedBy: 'orders',
       reason: 'ORDER_AUTO_COMPLETED'
+    }, tx);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductAvailabilityChanged'
     }, tx);
     expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
       orderId: 97,

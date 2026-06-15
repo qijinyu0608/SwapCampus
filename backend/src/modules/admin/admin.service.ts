@@ -166,23 +166,34 @@ export class AdminService {
       data: { accountStatus: AccountStatus.BANNED }
     });
 
-    const [reconciledProductIds] = await Promise.all([
-      cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
-      tx.product.updateMany({
+    const onSaleProductIds = (
+      await tx.product.findMany({
         where: {
           sellerId: userId,
           status: ProductStatus.ON_SALE
         },
-        data: {
-          status: ProductStatus.OFFLINE,
-          offlineReason: ProductOfflineReason.USER_BANNED
-        }
-      }),
+        select: { id: true }
+      })
+    ).map((product: { id: number }) => product.id);
+
+    const [reconciledProductIds] = await Promise.all([
+      cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
+      onSaleProductIds.length
+        ? tx.product.updateMany({
+            where: {
+              id: { in: onSaleProductIds }
+            },
+            data: {
+              status: ProductStatus.OFFLINE,
+              offlineReason: ProductOfflineReason.USER_BANNED
+            }
+          })
+        : Promise.resolve({ count: 0 }),
       cancelCampusServicesForUser(tx, userId, reason),
       applyCreditScoreDelta(tx, userId, creditPenalty)
     ]);
 
-    return reconciledProductIds;
+    return [...new Set([...reconciledProductIds, ...onSaleProductIds])];
   }
 
   async getOverview(currentUser: AuthenticatedUser) {
@@ -330,6 +341,10 @@ export class AdminService {
         changedBy: 'admin',
         reason: 'ADMIN_PRODUCT_STATUS_CHANGED'
       }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId,
+        eventType: 'ProductAvailabilityChanged'
+      }, tx);
 
       return {
         id: product.id,
@@ -405,7 +420,15 @@ export class AdminService {
           changedBy: 'admin',
           reason: 'ADMIN_ORDER_CANCELED'
         }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId: updated.productId,
+          eventType: 'ProductAvailabilityChanged'
+        }, tx);
       }
+      await this.outboxService.publishOrderCommerceSyncEvent({
+        orderId,
+        eventType: 'OrderCanceled'
+      }, tx);
 
       return {
         id: updated.id,
@@ -579,6 +602,17 @@ export class AdminService {
             : payload.nextStatus === 'BAN_RESPONDENT'
               ? 'ORDER_APPEAL_BANNED'
               : 'ORDER_APPEAL_UNBANNED'
+        }, tx);
+        await this.outboxService.publishProductCommerceSyncEvent({
+          productId,
+          eventType: 'ProductAvailabilityChanged'
+        }, tx);
+      }
+
+      if (payload.nextStatus === 'CANCELED_ORDER') {
+        await this.outboxService.publishOrderCommerceSyncEvent({
+          orderId: appeal.orderId,
+          eventType: 'OrderCanceled'
         }, tx);
       }
 

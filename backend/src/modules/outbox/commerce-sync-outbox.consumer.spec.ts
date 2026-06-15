@@ -2,6 +2,17 @@ import { OutboxEventStatus, ProductStatus, UserRole } from '@prisma/client';
 import { CommerceSyncOutboxConsumer } from './commerce-sync-outbox.consumer';
 
 describe('CommerceSyncOutboxConsumer', () => {
+  function createPrismaKnownRequestError(code: string, message = 'request failed') {
+    const error = new Error(message);
+    Object.setPrototypeOf(error, Error.prototype);
+    Object.assign(error, {
+      name: 'PrismaClientKnownRequestError',
+      code,
+      clientVersion: '5.17.0'
+    });
+    return error;
+  }
+
   function createPrisma() {
     const prisma: any = {
       outboxEvent: {
@@ -42,6 +53,7 @@ describe('CommerceSyncOutboxConsumer', () => {
         id: 'vendure-product-1',
         variantId: 'vendure-variant-1'
       }),
+      setProductAvailability: jest.fn().mockResolvedValue(undefined),
       ensureCustomer: jest.fn().mockResolvedValue({
         id: 'vendure-customer-1'
       }),
@@ -91,6 +103,48 @@ describe('CommerceSyncOutboxConsumer', () => {
     });
 
     expect(vendureService.ensureProductVariant).toHaveBeenCalledWith(expect.objectContaining({ id: 18 }));
+    expect(prisma.product.update).toHaveBeenCalledWith({
+      where: { id: 18 },
+      data: {
+        vendureProductId: 'vendure-product-1',
+        vendureVariantId: 'vendure-variant-1',
+        commerceSyncStatus: 'SYNCED',
+        commerceSyncError: null
+      }
+    });
+  });
+
+  it('should sync product availability and mark product synced', async () => {
+    const prisma = createPrisma();
+    prisma.product.findUnique.mockResolvedValue({
+      id: 18,
+      title: '二手教材',
+      status: ProductStatus.OFFLINE
+    });
+    const { consumer, vendureService } = createConsumer(prisma);
+
+    await consumer.handleEvent({
+      id: 11,
+      topic: 'commerce.sync',
+      eventType: 'ProductAvailabilityChanged',
+      aggregateType: 'PRODUCT' as any,
+      aggregateId: 18,
+      payload: { productId: 18 },
+      status: OutboxEventStatus.PENDING,
+      availableAt: new Date(),
+      retryCount: 0,
+      lastError: null,
+      processingStartedAt: null,
+      createdAt: new Date(),
+      processedAt: null
+    });
+
+    expect(vendureService.ensureProductVariant).toHaveBeenCalledWith(expect.objectContaining({ id: 18 }));
+    expect(vendureService.setProductAvailability).toHaveBeenCalledWith(
+      'vendure-product-1',
+      'vendure-variant-1',
+      false
+    );
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { id: 18 },
       data: {
@@ -199,5 +253,25 @@ describe('CommerceSyncOutboxConsumer', () => {
         commerceSyncError: 'vendure down'
       }
     });
+  });
+
+  it('should tolerate schema-not-ready errors when recovering stale events', async () => {
+    const now = new Date('2026-06-15T10:00:00.000Z');
+    const prisma = createPrisma();
+    prisma.outboxEvent.updateMany.mockRejectedValueOnce(createPrismaKnownRequestError('P2021', 'missing OutboxEvent table'));
+    const { consumer } = createConsumer(prisma);
+
+    await expect(consumer.pollOnce(now)).resolves.toBe(0);
+    expect(prisma.outboxEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('should tolerate schema-not-ready errors when claiming pending events', async () => {
+    const now = new Date('2026-06-15T10:00:00.000Z');
+    const prisma = createPrisma();
+    prisma.outboxEvent.findMany.mockRejectedValueOnce(createPrismaKnownRequestError('P2021', 'missing OutboxEvent table'));
+    const { consumer } = createConsumer(prisma);
+
+    await expect(consumer.pollOnce(now)).resolves.toBe(0);
+    expect(prisma.outboxEvent.update).not.toHaveBeenCalled();
   });
 });

@@ -1302,21 +1302,34 @@ export class UsersService {
 
       if (payload.banned) {
         const operationAt = new Date();
-        const [reconciledProductIds] = await Promise.all([
-          cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
-          tx.product.updateMany({
+        const onSaleProductIds = (
+          await tx.product.findMany({
             where: {
               sellerId: userId,
               status: ProductStatus.ON_SALE
             },
-            data: {
-              status: ProductStatus.OFFLINE,
-              offlineReason: ProductOfflineReason.USER_BANNED
-            }
-          }),
+            select: { id: true }
+          })
+        ).map((product: { id: number }) => product.id);
+
+        const [reconciledProductIds] = await Promise.all([
+          cancelOrdersForUserAndReconcileProducts(tx, userId, operationAt),
+          onSaleProductIds.length
+            ? tx.product.updateMany({
+                where: {
+                  id: { in: onSaleProductIds }
+                },
+                data: {
+                  status: ProductStatus.OFFLINE,
+                  offlineReason: ProductOfflineReason.USER_BANNED
+                }
+              })
+            : Promise.resolve({ count: 0 }),
           cancelCampusServicesForUser(tx, userId, payload.reason?.trim() || '账号封禁处理'),
           applyCreditScoreDelta(tx, userId, MANUAL_BAN_CREDIT_PENALTY)
         ]);
+
+        const affectedProductIds = [...new Set([...reconciledProductIds, ...onSaleProductIds])];
 
         await this.outboxService.publishSellerSearchEvent({
           sellerId: userId,
@@ -1325,12 +1338,16 @@ export class UsersService {
           reason: 'USER_BANNED'
         }, tx);
 
-        for (const productId of reconciledProductIds) {
+        for (const productId of affectedProductIds) {
           await this.outboxService.publishProductSearchEvent({
             productId,
             eventType: 'ProductStatusChanged',
             changedBy: 'users',
             reason: 'USER_BANNED'
+          }, tx);
+          await this.outboxService.publishProductCommerceSyncEvent({
+            productId,
+            eventType: 'ProductAvailabilityChanged'
           }, tx);
         }
 
@@ -1348,7 +1365,7 @@ export class UsersService {
         return {
           id: updated.id,
           isBanned: updated.accountStatus === AccountStatus.BANNED,
-          reconciledProductIds
+          reconciledProductIds: affectedProductIds
         };
       }
 
