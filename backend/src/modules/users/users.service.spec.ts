@@ -43,13 +43,13 @@ describe('UsersService admin status updates', () => {
       $transaction: jest.fn((callback) => callback(tx))
     } as any;
 
-    const searchService = {
-      syncSellerProducts: jest.fn().mockResolvedValue(undefined),
-      syncProduct: jest.fn().mockResolvedValue(undefined)
+    const outboxService = {
+      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
-    const service = new UsersService(prisma, searchService);
-    return { service, tx, searchService };
+    const service = new UsersService(prisma, outboxService);
+    return { service, tx, outboxService };
   }
 
   function createVerificationService() {
@@ -68,11 +68,11 @@ describe('UsersService admin status updates', () => {
       $transaction: jest.fn((callback) => callback(tx))
     } as any;
 
-    const searchService = {
-      syncSellerProducts: jest.fn().mockResolvedValue(undefined)
+    const outboxService = {
+      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
-    const service = new UsersService(prisma, searchService);
+    const service = new UsersService(prisma, outboxService);
     return { service, tx };
   }
 

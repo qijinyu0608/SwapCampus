@@ -12,6 +12,10 @@ describe('ProductsService', () => {
     searchProducts: jest.fn(),
     syncProduct: jest.fn().mockResolvedValue(undefined)
   } as any;
+  const outboxService = {
+    publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+    publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
+  } as any;
   const vendureService = {
     ensureProductVariant: jest.fn().mockResolvedValue({
       id: 'vendure-product-1',
@@ -39,6 +43,62 @@ describe('ProductsService', () => {
     jest.clearAllMocks();
   });
 
+  function createPrisma(overrides: Record<string, any> = {}) {
+    const prisma = {
+      product: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn()
+      },
+      user: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn()
+      },
+      productImage: {
+        findMany: jest.fn()
+      },
+      favorite: {
+        groupBy: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn()
+      },
+      order: {
+        findMany: jest.fn()
+      },
+      report: {
+        count: jest.fn()
+      },
+      userBehavior: {
+        groupBy: jest.fn(),
+        count: jest.fn(),
+        upsert: jest.fn()
+      },
+      creditRedeemOrder: {
+        findFirst: jest.fn()
+      },
+      message: {
+        count: jest.fn()
+      },
+      review: {
+        findMany: jest.fn()
+      },
+      $transaction: jest.fn(async (callback: any) => callback(prisma))
+    } as any;
+
+    Object.entries(overrides).forEach(([key, value]) => {
+      if (value && typeof value === 'object' && !Array.isArray(value) && prisma[key]) {
+        Object.assign(prisma[key], value);
+      } else {
+        prisma[key] = value;
+      }
+    });
+
+    return prisma;
+  }
+
   it('should return fallback dashboard stats when prisma query fails', async () => {
     const service = new ProductsService({
       product: {
@@ -51,7 +111,7 @@ describe('ProductsService', () => {
       productImage: {
         findMany: jest.fn()
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, vendureService, publishingReviewService);
 
     const stats = await service.getDashboardStats();
 
@@ -65,19 +125,15 @@ describe('ProductsService', () => {
       title: '高数教材',
       status: 'ON_SALE'
     });
-    const service = new ProductsService({
+    const prisma = createPrisma({
       product: {
-        create: productCreate,
-        update: jest.fn().mockResolvedValue({
-          id: 200,
-          title: '高数教材',
-          status: 'ON_SALE'
-        })
+        create: productCreate
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
 
     const product = await service.createProduct({
       title: '高数教材',
@@ -97,9 +153,22 @@ describe('ProductsService', () => {
     expect(productCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         status: 'ON_SALE',
-        tags: ['教材', '期末']
+        category: '教材资料',
+        tags: ['教材', '期末'],
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       })
     }));
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 200,
+      eventType: 'ProductPublished'
+    }, expect.anything());
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 200,
+      eventType: 'ProductCreated',
+      changedBy: 'products',
+      reason: 'PRODUCT_CREATED'
+    }, expect.anything());
   });
 
   it('should reject product publishing when moderation fails', async () => {
@@ -111,7 +180,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, vendureService, publishingReviewService);
 
     await expect(service.createProduct({
       title: '课程代写服务',
@@ -135,7 +204,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, vendureService, {
+    } as any, searchService, outboxService, vendureService, {
       reviewProduct: jest.fn().mockResolvedValue({
         provider: 'deepseek',
         model: 'deepseek-v4-flash',
@@ -167,19 +236,15 @@ describe('ProductsService', () => {
       title: '10000mAh 充电宝',
       status: 'ON_SALE'
     });
-    const service = new ProductsService({
+    const prisma = createPrisma({
       product: {
-        create: productCreate,
-        update: jest.fn().mockResolvedValue({
-          id: 201,
-          title: '10000mAh 充电宝',
-          status: 'ON_SALE'
-        })
+        create: productCreate
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
 
     const product = await service.createProduct({
       title: '10000mAh 充电宝',
@@ -197,6 +262,16 @@ describe('ProductsService', () => {
       decision: 'APPROVED'
     });
     expect(productCreate).toHaveBeenCalledTimes(1);
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductPublished'
+    }, expect.anything());
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 201,
+      eventType: 'ProductCreated',
+      changedBy: 'products',
+      reason: 'PRODUCT_CREATED'
+    }, expect.anything());
   });
 
   it('should persist uploaded product images with normalized unique urls', async () => {
@@ -205,19 +280,15 @@ describe('ProductsService', () => {
       title: '二手显示器',
       status: 'ON_SALE'
     });
-    const service = new ProductsService({
+    const prisma = createPrisma({
       product: {
-        create: productCreate,
-        update: jest.fn().mockResolvedValue({
-          id: 202,
-          title: '二手显示器',
-          status: 'ON_SALE'
-        })
+        create: productCreate
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
+        findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
 
     await service.createProduct({
       title: '二手显示器',
@@ -240,9 +311,15 @@ describe('ProductsService', () => {
             { imageUrl: 'https://img.example.com/a.png', sortOrder: 0 },
             { imageUrl: 'https://img.example.com/b.png', sortOrder: 1 }
           ]
-        }
+        },
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       })
     }));
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 202,
+      eventType: 'ProductPublished'
+    }, expect.anything());
   });
 
   it('should reject product publishing without images', async () => {
@@ -254,7 +331,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, vendureService, publishingReviewService);
 
     await expect(service.createProduct({
       title: '无图商品',
@@ -305,7 +382,7 @@ describe('ProductsService', () => {
         totalHits: 17,
         totalPages: 4
       })
-    } as any, vendureService);
+    } as any, outboxService, vendureService);
 
     const result = await service.searchProducts({
       q: '教材',
@@ -361,7 +438,7 @@ describe('ProductsService', () => {
     } as any, {
       isEnabled: jest.fn().mockReturnValue(true),
       searchProducts: search
-    } as any, vendureService);
+    } as any, outboxService, vendureService);
 
     const result = await service.searchProducts({
       q: '教材',
@@ -415,7 +492,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
 
     await service.getHomeRecommendations(2);
 
@@ -498,7 +575,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
     const result = await service.getProductDetail(301);
 
     expect(result.detailBase).toEqual({
@@ -622,7 +699,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
 
     await service.getProductDetail(301, 1001);
     await service.getProductDetail(301, 1001);
@@ -667,7 +744,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
     const result = await service.recordProductContact(301, {
       id: 1001,
       studentId: '2026001001',

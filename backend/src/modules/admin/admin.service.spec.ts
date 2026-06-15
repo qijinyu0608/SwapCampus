@@ -109,14 +109,14 @@ describe('AdminService', () => {
 
   function createService(prisma: any) {
     return new AdminService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
-    } as any, {
+      getProductDetail: jest.fn(),
       syncListing: jest.fn(),
       syncOrder: jest.fn()
+    } as any, {
+      getCampusServiceDetail: jest.fn()
     } as any);
   }
 
@@ -327,7 +327,9 @@ describe('AdminService', () => {
     expect(result).toEqual({
       id: 51,
       status: 'RESOLVED',
-      resolutionNote: '申诉成立'
+      resolutionNote: '申诉成立',
+      affectedProductIds: [18],
+      affectedUserId: null
     });
   });
 
@@ -479,7 +481,9 @@ describe('AdminService', () => {
     expect(result).toEqual({
       id: 54,
       status: 'RESOLVED',
-      resolutionNote: '申诉封禁'
+      resolutionNote: '申诉封禁',
+      affectedProductIds: [],
+      affectedUserId: 32
     });
   });
 

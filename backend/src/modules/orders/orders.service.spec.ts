@@ -151,34 +151,18 @@ describe('OrdersService', () => {
   }
 
   function createService(prisma: any, overrides: {
-    search?: Record<string, any>;
-    vendure?: Record<string, any>;
+    outbox?: Record<string, any>;
   } = {}) {
-    const searchService = {
-      syncProduct: jest.fn().mockResolvedValue(undefined),
-      ...overrides.search
-    };
-    const vendureService = {
-      ensureProductVariant: jest.fn().mockResolvedValue({
-        id: 'vendure-product-18',
-        variantId: 'vendure-variant-18'
-      }),
-      ensureCustomer: jest.fn().mockResolvedValue({
-        id: 'vendure-customer-11'
-      }),
-      createPlacedOrder: jest.fn().mockResolvedValue({
-        id: 'vendure-order-91',
-        code: 'SCVENDURE91'
-      }),
-      cancelOrder: jest.fn().mockResolvedValue(undefined),
-      settleOrderPayment: jest.fn().mockResolvedValue(undefined),
-      ...overrides.vendure
+    const outboxService = {
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
+      publishUserCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
+      ...overrides.outbox
     };
 
     return {
-      service: new OrdersService(prisma, searchService as any, vendureService as any),
-      searchService,
-      vendureService
+      service: new OrdersService(prisma, outboxService as any),
+      outboxService
     };
   }
 
@@ -190,9 +174,7 @@ describe('OrdersService', () => {
   it('should create a product order and reserve the product', async () => {
     const product = createProduct();
     const createdOrder = createOrder({
-      id: 401,
-      vendureOrderId: 'vendure-order-91',
-      vendureOrderCode: 'SCVENDURE91'
+      id: 401
     });
     const { prisma, tx } = createPrisma();
     prisma.product.findUnique.mockResolvedValue(product);
@@ -206,15 +188,13 @@ describe('OrdersService', () => {
     prisma.productImage.findMany.mockResolvedValue([
       { imageUrl: 'https://cdn.example.com/book-cover.jpg' }
     ]);
-    prisma.product.update.mockResolvedValue(undefined);
-    prisma.user.update.mockResolvedValue(undefined);
     tx.order.create.mockResolvedValue(createdOrder);
     tx.product.update.mockResolvedValue(undefined);
     tx.conversation.findFirst.mockResolvedValue(null);
     tx.conversation.create.mockResolvedValue({ id: 9001 });
     tx.message.create.mockResolvedValue(undefined);
 
-    const { service, searchService, vendureService } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.createOrder({
       productId: 18,
       meetupLocation: ' 图书馆门口 ',
@@ -222,33 +202,6 @@ describe('OrdersService', () => {
       paymentIntent: ' 现金 ',
       note: ' 想现场看看成色 '
     }, buyerUser);
-
-    expect(vendureService.ensureProductVariant).toHaveBeenCalledWith(product);
-    expect(vendureService.ensureCustomer).toHaveBeenCalledWith({
-      id: 11,
-      vendureCustomerId: null,
-      displayName: '买家甲',
-      email: 'buyer@example.com',
-      accountStatus: AccountStatus.ACTIVE
-    });
-    expect(vendureService.createPlacedOrder).toHaveBeenCalledWith({
-      customerId: 'vendure-customer-11',
-      productVariantId: 'vendure-variant-18',
-      note: expect.stringContaining('想现场看看成色')
-    });
-    expect(prisma.product.update).toHaveBeenCalledWith({
-      where: { id: 18 },
-      data: {
-        vendureProductId: 'vendure-product-18',
-        vendureVariantId: 'vendure-variant-18'
-      }
-    });
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 11 },
-      data: {
-        vendureCustomerId: 'vendure-customer-11'
-      }
-    });
 
     const createOrderArgs = tx.order.create.mock.calls[0][0];
     expect(createOrderArgs.data.status).toBe(OrderStatus.PENDING);
@@ -258,6 +211,10 @@ describe('OrdersService', () => {
     expect(createOrderArgs.data.note).toContain('交易时间：今晚 8 点');
     expect(createOrderArgs.data.note).toContain('支付方式：现金');
     expect(createOrderArgs.data.autoConfirmAt).toBeInstanceOf(Date);
+    expect(createOrderArgs.data.vendureOrderId).toBeNull();
+    expect(createOrderArgs.data.vendureOrderCode).toBeNull();
+    expect(createOrderArgs.data.commerceSyncStatus).toBe('PENDING');
+    expect(createOrderArgs.data.commerceSyncError).toBeNull();
     expect(createOrderArgs.data.orderSnapshot).toMatchObject({
       productId: 18,
       title: '二手教材',
@@ -290,12 +247,21 @@ describe('OrdersService', () => {
       event: 'CREATED',
       orderId: 401,
       productId: 18,
-      orderCode: 'SCVENDURE91',
+      orderCode: 'SC00000401',
       title: '已提交订单',
       badge: '已下单',
       actionTarget: '/orders/401'
     });
-    expect(searchService.syncProduct).toHaveBeenCalledWith(18);
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductStatusChanged',
+      changedBy: 'orders',
+      reason: 'ORDER_RESERVED'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 401,
+      eventType: 'OrderCreated'
+    }, tx);
     expect(result).toEqual(createdOrder);
   });
 
@@ -419,7 +385,7 @@ describe('OrdersService', () => {
     tx.message.create.mockResolvedValue(undefined);
     tx.conversation.update.mockResolvedValue(undefined);
 
-    const { service, searchService } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.confirmMeetup(92, {
       meetupLocation: ' 南门快递柜 ',
       note: ' 到了给我发消息 '
@@ -449,7 +415,7 @@ describe('OrdersService', () => {
       title: '已确认交付安排',
       badge: '待面交'
     });
-    expect(searchService.syncProduct).toHaveBeenCalledWith(18);
+    expect(outboxService.publishProductSearchEvent).not.toHaveBeenCalled();
     expect(result).toEqual(updatedOrder);
   });
 
@@ -488,7 +454,7 @@ describe('OrdersService', () => {
     tx.message.create.mockResolvedValue(undefined);
     tx.conversation.update.mockResolvedValue(undefined);
 
-    const { service, searchService } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.cancelOrder(93, {
       reason: ' 临时有事 '
     }, buyerUser);
@@ -497,7 +463,9 @@ describe('OrdersService', () => {
       where: { id: 93 },
       data: {
         status: OrderStatus.CANCELED,
-        canceledAt: expect.any(Date)
+        canceledAt: expect.any(Date),
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       }
     });
     expect(tx.product.update).toHaveBeenCalledWith({
@@ -517,7 +485,16 @@ describe('OrdersService', () => {
       badge: '已取消'
     });
     expect(payload.summary).toContain('取消原因：临时有事');
-    expect(searchService.syncProduct).toHaveBeenCalledWith(18);
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductStatusChanged',
+      changedBy: 'orders',
+      reason: 'ORDER_CANCELED'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 93,
+      eventType: 'OrderCanceled'
+    }, tx);
     expect(result).toEqual(canceledOrder);
   });
 
@@ -565,7 +542,9 @@ describe('OrdersService', () => {
       where: { id: 8 },
       data: {
         status: OrderStatus.CANCELED,
-        canceledAt: expect.any(Date)
+        canceledAt: expect.any(Date),
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       }
     });
   });
@@ -638,15 +617,16 @@ describe('OrdersService', () => {
     tx.message.create.mockResolvedValue(undefined);
     tx.conversation.update.mockResolvedValue(undefined);
 
-    const { service, searchService, vendureService } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.completeMeetup(94, {}, buyerUser);
 
-    expect(vendureService.settleOrderPayment).toHaveBeenCalledWith('vendure-order-94');
     expect(tx.order.update).toHaveBeenCalledWith({
       where: { id: 94 },
       data: {
         status: OrderStatus.WAITING_REVIEW,
-        completedAt: expect.any(Date)
+        completedAt: expect.any(Date),
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       }
     });
     expect(tx.product.update).toHaveBeenCalledWith({
@@ -665,7 +645,16 @@ describe('OrdersService', () => {
       title: '买家已确认收货',
       badge: '待评价'
     });
-    expect(searchService.syncProduct).toHaveBeenCalledWith(18);
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductStatusChanged',
+      changedBy: 'orders',
+      reason: 'ORDER_COMPLETED'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 94,
+      eventType: 'OrderCompleted'
+    }, tx);
     expect(result).toEqual(waitingReviewOrder);
   });
 
@@ -787,7 +776,7 @@ describe('OrdersService', () => {
     tx.message.create.mockResolvedValue(undefined);
     tx.conversation.update.mockResolvedValue(undefined);
 
-    const { service, searchService, vendureService } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     await (service as any).reconcileAutoConfirmedOrders(11);
 
     expect(prisma.order.findMany).toHaveBeenCalledWith({
@@ -807,12 +796,13 @@ describe('OrdersService', () => {
         buyerId: true
       }
     });
-    expect(vendureService.settleOrderPayment).toHaveBeenCalledWith('vendure-order-97');
     expect(tx.order.update).toHaveBeenCalledWith({
       where: { id: 97 },
       data: {
         status: OrderStatus.WAITING_REVIEW,
-        completedAt: expect.any(Date)
+        completedAt: expect.any(Date),
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       }
     });
     expect(tx.product.update).toHaveBeenCalledWith({
@@ -831,6 +821,15 @@ describe('OrdersService', () => {
       title: '已自动确认收货',
       badge: '待评价'
     });
-    expect(searchService.syncProduct).toHaveBeenCalledWith(18);
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 18,
+      eventType: 'ProductStatusChanged',
+      changedBy: 'orders',
+      reason: 'ORDER_AUTO_COMPLETED'
+    }, tx);
+    expect(outboxService.publishOrderCommerceSyncEvent).toHaveBeenCalledWith({
+      orderId: 97,
+      eventType: 'OrderCompleted'
+    }, tx);
   });
 });

@@ -29,7 +29,7 @@ describe('OrdersService moderation safeguards', () => {
       }
     } as any;
 
-    const service = new OrdersService(prisma, {} as any, {} as any);
+    const service = new OrdersService(prisma, {} as any);
 
     await expect(
       service.createAppeal(8, {
@@ -84,8 +84,9 @@ describe('OrdersService moderation safeguards', () => {
     } as any;
 
     const service = new OrdersService(prisma, {
-      syncProduct: jest.fn().mockResolvedValue(undefined)
-    } as any, {} as any);
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
+    } as any);
 
     await service.cancelOrder(8, { reason: '买家取消' }, user);
 
@@ -94,7 +95,9 @@ describe('OrdersService moderation safeguards', () => {
       where: { id: 8 },
       data: {
         status: OrderStatus.CANCELED,
-        canceledAt: expect.any(Date)
+        canceledAt: expect.any(Date),
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null
       }
     });
   });
@@ -143,8 +146,9 @@ describe('OrdersService moderation safeguards', () => {
     } as any;
 
     const service = new OrdersService(prisma, {
-      syncProduct: jest.fn().mockResolvedValue(undefined)
-    } as any, {} as any);
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
+    } as any);
 
     await service.cancelOrder(9, { reason: '买家取消' }, user);
 

@@ -38,8 +38,8 @@ describe('ReportsService', () => {
     } as any;
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -128,12 +128,12 @@ describe('ReportsService', () => {
     } as any;
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
-    const searchService = {
-      syncProduct: jest.fn().mockResolvedValue(undefined),
-      syncSellerProducts: jest.fn().mockResolvedValue(undefined)
+    const outboxService = {
+      publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
+      publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
-    const service = new ReportsService(prisma, searchService);
+    const service = new ReportsService(prisma, outboxService);
     const result = await service.resolveReport(6, {
       resolutionNote: '核查后封禁',
       nextStatus: 'BAN_USER'
@@ -164,7 +164,12 @@ describe('ReportsService', () => {
       id: 6,
       status: 'RESOLVED'
     });
-    expect(searchService.syncSellerProducts).toHaveBeenCalledWith(24);
+    expect(outboxService.publishSellerSearchEvent).toHaveBeenCalledWith({
+      sellerId: 24,
+      eventType: 'SellerStatusChanged',
+      changedBy: 'reports',
+      reason: 'REPORT_USER_BANNED'
+    }, prisma);
   });
 
   it('should reject BAN_USER when report has no target user', async () => {
@@ -209,8 +214,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -260,8 +265,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -319,8 +324,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -377,8 +382,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -435,8 +440,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
@@ -493,8 +498,8 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
-      syncProduct: jest.fn(),
-      syncSellerProducts: jest.fn()
+      publishProductSearchEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn()
     } as any);
 
     await expect(
