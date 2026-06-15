@@ -4,6 +4,7 @@ import { convertToRecipeUserId, listUsersByAccountInfo } from 'supertokens-node'
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import UserRoles from 'supertokens-node/recipe/userroles';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { APP_ROLES, DEFAULT_TENANT_ID } from './auth.constants';
 import { rolePermissionMap } from './supertokens.config';
 
@@ -108,7 +109,9 @@ export class AuthSyncService {
 
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService
   ) {}
 
   private toRoleName(role: UserRole) {
@@ -275,25 +278,53 @@ export class AuthSyncService {
     const studentCardPhotoUrl = normalizeStudentCardPhotoUrl(input.studentCardPhotoUrl);
 
     try {
-      const user = await this.prisma.user.upsert({
-        where: { supertokensUserId: input.supertokensUserId },
-        update: {
-          email,
-          displayName,
-          studentId,
-          avatarUrl,
-          avatarFrame,
-          role,
-          verificationStatus,
-          accountStatus,
-          verification: {
-            upsert: {
-              update: {
-                realName: displayName,
-                college,
-                graduationYear,
-                studentCardPhotoUrl
-              },
+      const user = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.user.findUnique({
+          where: { supertokensUserId: input.supertokensUserId },
+          select: { id: true }
+        });
+
+        const nextUser = await tx.user.upsert({
+          where: { supertokensUserId: input.supertokensUserId },
+          update: {
+            email,
+            displayName,
+            studentId,
+            avatarUrl,
+            avatarFrame,
+            role,
+            verificationStatus,
+            accountStatus,
+            verification: {
+              upsert: {
+                update: {
+                  realName: displayName,
+                  college,
+                  graduationYear,
+                  studentCardPhotoUrl
+                },
+                create: {
+                  realName: displayName,
+                  college,
+                  graduationYear,
+                  phone: '待填写',
+                  studentCardPhotoUrl
+                }
+              }
+            }
+          },
+          create: {
+            supertokensUserId: input.supertokensUserId,
+            email,
+            displayName,
+            studentId,
+            avatarUrl,
+            avatarFrame,
+            role,
+            creditScore: 60,
+            verificationStatus,
+            accountStatus,
+            verification: {
               create: {
                 realName: displayName,
                 college,
@@ -302,32 +333,20 @@ export class AuthSyncService {
                 studentCardPhotoUrl
               }
             }
+          },
+          include: {
+            verification: true
           }
-        },
-        create: {
-          supertokensUserId: input.supertokensUserId,
-          email,
-          displayName,
-          studentId,
-          avatarUrl,
-          avatarFrame,
-          role,
-          creditScore: 60,
-          verificationStatus,
-          accountStatus,
-          verification: {
-            create: {
-              realName: displayName,
-              college,
-              graduationYear,
-              phone: '待填写',
-              studentCardPhotoUrl
-            }
-          }
-        },
-        include: {
-          verification: true
+        });
+
+        if (!existing) {
+          await this.outboxService.publishUserCommerceSyncEvent({
+            userId: nextUser.id,
+            eventType: 'UserRegisteredForCommerce'
+          }, tx);
         }
+
+        return nextUser;
       });
 
       const linkedUser = this.ensureSuperTokensLinkedUser(user);
