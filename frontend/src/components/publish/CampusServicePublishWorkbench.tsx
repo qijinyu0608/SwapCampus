@@ -16,13 +16,16 @@ import { ThinkingOverlay } from '../feedback';
 import { useAuthState } from '../../services/auth-state';
 import {
   type CampusServiceCreatePayload,
+  type CampusServiceDetailView,
   createCampusServiceListing,
+  fetchCampusServiceDetail,
   type CampusServiceFulfillmentMode,
   getApiErrorMessage,
   type CampusServiceIntent,
   type CampusServiceLocationMode,
   type CampusServicePattern,
   type CampusServicePriceMode,
+  updateCampusServiceListing,
   uploadImageAsset
 } from '../../services/api';
 import { hasTradingAccess, isGuestUser } from '../../services/session';
@@ -82,6 +85,8 @@ type PublishFormValues = {
   locationMode?: CampusServiceLocationMode;
   locationNote?: string;
   validUntilAt: Dayjs | string;
+  estimatedMinutes?: number;
+  urgency?: 'NORMAL' | 'TODAY' | 'URGENT';
   fulfillmentMode?: CampusServiceFulfillmentMode;
   itemCount?: number;
   maxTotalOrders?: number | null;
@@ -94,6 +99,7 @@ type CampusServicePublishWorkbenchProps = {
   presetIntent?: CampusServiceIntent;
   variant?: 'default' | 'publish';
   enableRulesGate?: boolean;
+  listingId?: number;
 };
 
 function resolveDefaultMaxTotalOrders(pattern: CampusServicePattern) {
@@ -109,35 +115,63 @@ function buildPublishStrategy(intent: CampusServiceIntent, pattern: CampusServic
   };
 }
 
+function buildEditInitialValues(detail: CampusServiceDetailView): PublishFormValues {
+  return {
+    intent: detail.intent,
+    pattern: detail.pattern,
+    title: detail.title,
+    description: detail.description,
+    priceMode: detail.priceMode,
+    reward: detail.priceMode === 'FIXED' ? detail.reward : undefined,
+    locationMode: detail.locationMode,
+    locationNote: detail.locationNote ?? undefined,
+    validUntilAt: detail.fulfillment.validUntilAt.replace('T', ' ').slice(0, 16),
+    estimatedMinutes: detail.estimatedMinutes,
+    urgency: detail.urgency,
+    fulfillmentMode: detail.fulfillment.mode,
+    itemCount: detail.itemCount,
+    maxTotalOrders: detail.fulfillment.maxTotalOrders,
+    maxConcurrentOrders: detail.fulfillment.maxConcurrentOrders ?? 1,
+    trustNote: detail.trustNote ?? undefined
+  };
+}
+
 export function CampusServicePublishWorkbench({
   sectionTitle = '发布服务',
   presetIntent,
   variant = 'default',
+  listingId,
 }: CampusServicePublishWorkbenchProps) {
   const navigate = useNavigate();
   const { currentUser } = useAuthState();
   const [form] = Form.useForm<PublishFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<PublishImageItem[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [editListingIntent, setEditListingIntent] = useState<CampusServiceIntent | null>(null);
   const uploadedImagesRef = useRef<PublishImageItem[]>([]);
+  const isEditMode = Number.isFinite(listingId);
+  const lockedIntent = presetIntent ?? (isEditMode ? (editListingIntent ?? undefined) : undefined);
   const watchedIntent = Form.useWatch('intent', form);
-  const intent = presetIntent ?? watchedIntent ?? 'REQUEST';
+  const intent = lockedIntent ?? watchedIntent ?? 'REQUEST';
   const pattern = Form.useWatch('pattern', form) ?? 'ONE_TIME';
   const priceMode = Form.useWatch('priceMode', form) ?? 'FIXED';
   const titleLabel = intent === 'REQUEST' ? '求助标题' : '服务标题';
   const amountLabel = intent === 'REQUEST' ? '预算 / 报价' : '收费 / 报价';
   const totalOrdersLabel = intent === 'REQUEST' ? '招募人数上限' : '预约名额上限';
   const concurrentOrdersLabel = intent === 'REQUEST' ? '同时接单上限' : '同时服务上限';
-  const submitLabel = intent === 'REQUEST' ? '立即发布求助' : '立即发布服务';
+  const submitLabel = isEditMode
+    ? '保存修改'
+    : intent === 'REQUEST' ? '立即发布求助' : '立即发布服务';
 
   function applyPublishStrategy(nextIntent: CampusServiceIntent, nextPattern: CampusServicePattern) {
     const nextStrategy = buildPublishStrategy(nextIntent, nextPattern);
     const currentReward = form.getFieldValue('reward');
 
     form.setFieldsValue({
-      intent: presetIntent ?? nextIntent,
+      intent: lockedIntent ?? nextIntent,
       maxTotalOrders: nextStrategy.maxTotalOrders,
       maxConcurrentOrders: nextStrategy.maxConcurrentOrders,
       priceMode: form.getFieldValue('priceMode') ?? 'FIXED',
@@ -146,12 +180,12 @@ export function CampusServicePublishWorkbench({
   }
 
   useEffect(() => {
-    if (!presetIntent) {
+    if (!lockedIntent) {
       return;
     }
 
-    applyPublishStrategy(presetIntent, form.getFieldValue('pattern') ?? 'ONE_TIME');
-  }, [form, presetIntent]);
+    applyPublishStrategy(lockedIntent, form.getFieldValue('pattern') ?? 'ONE_TIME');
+  }, [form, lockedIntent]);
 
   useEffect(() => {
     uploadedImagesRef.current = uploadedImages;
@@ -164,6 +198,59 @@ export function CampusServicePublishWorkbench({
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!isEditMode || !listingId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadListing() {
+      setLoading(true);
+      try {
+        const detail = await fetchCampusServiceDetail(listingId!);
+        if (cancelled) {
+          return;
+        }
+
+        const nextItems = (detail.images ?? []).map((url, index) => ({
+          key: `existing-${index}-${url}`,
+          url,
+          previewUrl: url,
+          width: 1200,
+          height: 1200
+        }));
+
+        setUploadedImages((current) => {
+          current.forEach((item) => {
+            if (item.previewUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(item.previewUrl);
+            }
+          });
+          return nextItems;
+        });
+
+        setEditListingIntent(detail.intent);
+        form.setFieldsValue(buildEditInitialValues(detail));
+        setMessage(null);
+      } catch (error) {
+        if (!cancelled) {
+          setMessage({ type: 'error', text: getApiErrorMessage(error, '服务详情加载失败，请稍后重试。') });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadListing();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form, isEditMode, listingId]);
 
   async function handleServiceImageUpload(file: File) {
     setUploadingImage(true);
@@ -230,13 +317,13 @@ export function CampusServicePublishWorkbench({
 
       const payload: CampusServiceCreatePayload = {
         ...values,
-        intent,
-        validFromAt: now.toISOString(),
+        intent: isEditMode ? (editListingIntent ?? intent) : intent,
+        validFromAt: isEditMode ? undefined : now.toISOString(),
         validUntilAt: parsedValidUntilAt.toISOString(),
         amount: values.priceMode === 'FREE' ? 0 : values.reward,
         reward: values.priceMode === 'FREE' ? 0 : values.reward,
-        estimatedMinutes: DEFAULT_ESTIMATED_MINUTES,
-        urgency: DEFAULT_URGENCY,
+        estimatedMinutes: values.estimatedMinutes ?? DEFAULT_ESTIMATED_MINUTES,
+        urgency: values.urgency ?? DEFAULT_URGENCY,
         maxTotalOrders: values.maxTotalOrders ?? undefined,
         locationMode: values.locationMode ?? 'FLEXIBLE',
         locationNote: values.locationNote?.trim() || undefined,
@@ -247,21 +334,50 @@ export function CampusServicePublishWorkbench({
         delete payload.reward;
       }
 
-      const created = await createCampusServiceListing(payload);
-      setMessage({ type: 'success', text: `已发布“${values.title}”。` });
-      form.resetFields();
-      setUploadedImages((current) => {
-        current.forEach((item) => {
-          if (item.previewUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(item.previewUrl);
-          }
+      if (isEditMode) {
+        delete payload.intent;
+        delete payload.validFromAt;
+      }
+
+      const saved = isEditMode && listingId
+        ? await updateCampusServiceListing(listingId, payload)
+        : await createCampusServiceListing(payload);
+      setMessage({ type: 'success', text: isEditMode ? `已更新“${values.title}”。` : `已发布“${values.title}”。` });
+
+      if (isEditMode) {
+        const nextItems = (saved.images ?? []).map((url, index) => ({
+          key: `existing-${index}-${url}`,
+          url,
+          previewUrl: url,
+          width: 1200,
+          height: 1200
+        }));
+        setUploadedImages((current) => {
+          current.forEach((item) => {
+            if (item.previewUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(item.previewUrl);
+            }
+          });
+          return nextItems;
         });
-        return [];
-      });
-      applyPublishStrategy(presetIntent ?? 'REQUEST', 'ONE_TIME');
-      void navigate('/campus-services', { state: { selectedListingId: created.id } });
+        setEditListingIntent(saved.intent);
+        form.setFieldsValue(buildEditInitialValues(saved));
+        void navigate(`/campus-services/${saved.id}`);
+      } else {
+        form.resetFields();
+        setUploadedImages((current) => {
+          current.forEach((item) => {
+            if (item.previewUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(item.previewUrl);
+            }
+          });
+          return [];
+        });
+        applyPublishStrategy(lockedIntent ?? 'REQUEST', 'ONE_TIME');
+        void navigate('/campus-services', { state: { selectedListingId: saved.id } });
+      }
     } catch (error) {
-      setMessage({ type: 'error', text: getApiErrorMessage(error, '发布失败，请稍后重试。') });
+      setMessage({ type: 'error', text: getApiErrorMessage(error, isEditMode ? '保存失败，请稍后重试。' : '发布失败，请稍后重试。') });
     } finally {
       setSubmitting(false);
     }
@@ -270,6 +386,7 @@ export function CampusServicePublishWorkbench({
   return (
     <div className={variant === 'publish' ? 'publish-workbench-main service-publish-workbench publish-workbench-shell' : 'two-col service-market-layout'}>
       <ThinkingOverlay open={submitting} />
+      <ThinkingOverlay open={loading} />
       <PageCard>
         {variant === 'publish' ? null : <SectionHeader title={sectionTitle} className="is-spacious" />}
         {message ? <Alert type={message.type} showIcon message={message.text} closable onClose={() => setMessage(null)} style={{ marginBottom: 16 }} /> : null}
@@ -279,7 +396,7 @@ export function CampusServicePublishWorkbench({
           onFinish={handlePublish}
           className="form-shell service-market-form"
           initialValues={{
-            intent: presetIntent ?? 'REQUEST',
+            intent: lockedIntent ?? 'REQUEST',
             pattern: 'ONE_TIME',
             priceMode: 'FIXED',
             itemCount: 1,
@@ -298,7 +415,7 @@ export function CampusServicePublishWorkbench({
             onUpload={handleServiceImageUpload}
           />
           <div className="service-market-form-grid">
-            {!presetIntent ? (
+            {!lockedIntent ? (
               <Form.Item name="intent" label="发布方向" initialValue="REQUEST" rules={[{ required: true }]}>
                 <Select
                   options={intentOptions}

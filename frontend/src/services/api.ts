@@ -139,6 +139,9 @@ export type ProductSummary = ListingSummary & {
 export type ProductDetail = ProductSummary & {
   images: string[];
   publishedAt: string;
+  actionState: {
+    canEdit: boolean;
+  };
   seller: ListingParticipantBase & {
     creditLevel: string;
     college: string;
@@ -345,7 +348,10 @@ export type ProductCreatePayload = {
   condition: string;
   tags: string[];
   imageUrls?: string[];
+  confirmPriceReview?: boolean;
 };
+
+export type ProductUpdatePayload = Partial<ProductCreatePayload>;
 
 export type OrderPayload = {
   productId: number;
@@ -623,6 +629,7 @@ export type CampusServiceViewerContext = {
 export type CampusServiceActionState = {
   isPublisher: boolean;
   isParticipant: boolean;
+  canEdit: boolean;
   canAccept: boolean;
   canConfirm: boolean;
   canReject: boolean;
@@ -656,6 +663,7 @@ export type CampusServiceListItem = ListingSummary & {
   intent: CampusServiceIntent;
   intentLabel: string;
   pattern: CampusServicePattern;
+  priceMode: CampusServicePriceMode;
   serviceType: {
     key: CampusServiceCategory;
     label: string;
@@ -726,6 +734,8 @@ export type CampusServiceDetail = CampusServiceListItem & {
   };
   locationFrom: string;
   locationTo: string;
+  locationNote?: string | null;
+  locationMode: CampusServiceLocationMode;
   contactPreference: CampusServiceContactPreference;
   contactPreferenceLabel: string;
   itemCount: number;
@@ -796,6 +806,8 @@ export type CampusServiceCreatePayload = {
   trustNote?: string;
   imageUrls?: string[];
 };
+
+export type CampusServiceUpdatePayload = Partial<CampusServiceCreatePayload>;
 
 export type CampusServiceOrderListParams = {
   listingId?: number;
@@ -1299,6 +1311,11 @@ export async function createProduct(payload: ProductCreatePayload) {
   return response.data;
 }
 
+export async function updateProduct(id: number, payload: ProductUpdatePayload) {
+  const response = await apiClient.patch(`/products/${id}`, payload);
+  return response.data;
+}
+
 export async function fetchOrders(params?: OrderListParams) {
   const response = await apiClient.get<PaginatedOrdersResponse>('/orders', {
     params
@@ -1686,6 +1703,11 @@ export async function fetchCampusServiceDetail(id: number) {
 
 export async function createCampusServiceListing(payload: CampusServiceCreatePayload) {
   const response = await apiClient.post<CampusServiceDetailView>('/campus-services', payload);
+  return response.data;
+}
+
+export async function updateCampusServiceListing(id: number, payload: CampusServiceUpdatePayload) {
+  const response = await apiClient.patch<CampusServiceDetailView>(`/campus-services/${id}`, payload);
   return response.data;
 }
 

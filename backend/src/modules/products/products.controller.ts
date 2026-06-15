@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { SearchProductsDto } from './dto/search-products.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
@@ -82,6 +83,16 @@ export class ProductsController {
     @CurrentUser() user: AuthenticatedUser
   ) {
     return this.productsService.createProduct(payload, user);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  updateProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpdateProductDto,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.productsService.updateProduct(id, payload, user);
   }
 
   @Post(':id/contact')

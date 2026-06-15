@@ -13,6 +13,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { moderateProductPayload } from './product-moderation';
 import { SearchProductsDto } from './dto/search-products.dto';
 import { PublishingReviewService } from '../moderation/publishing-review.service';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 const DEMO_PRODUCT_IMAGE = '/images/products/demo-square.png';
 
@@ -123,6 +124,14 @@ function buildProductTags(payload: Pick<CreateProductDto, 'title' | 'category' |
   });
 
   return filteredTags.slice(0, 6);
+}
+
+function normalizeProductImageUrls(imageUrls?: string[]) {
+  return (imageUrls ?? [])
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .filter((url, index, list) => list.indexOf(url) === index)
+    .slice(0, 6);
 }
 
 function getCreditLevel(score: number) {
@@ -539,9 +548,16 @@ export class ProductsService {
           eventType: BehaviorEventType.VIEW
         }
       });
+
+      await this.outboxService.publishRecommendationEvent({
+        userId,
+        productId: product.id,
+        eventType: 'BehaviorTracked',
+        action: 'VIEW'
+      });
     }
 
-    const [seller, images, relatedProducts, reportCount, favoriteCount, wantCount, viewCount, sellerOrders, activeOrder] = await Promise.all([
+    const [seller, images, relatedProducts, reportCount, favoriteCount, wantCount, viewCount, sellerOrders, activeOrder, totalOrderCount] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: product.sellerId },
         include: { verification: true }
@@ -581,7 +597,12 @@ export class ProductsService {
         where: { sellerId: product.sellerId },
         select: { id: true, status: true }
       }),
-      this.ordersService?.getOrderByProductId(product.id) ?? Promise.resolve(null)
+      this.ordersService?.getOrderByProductId(product.id) ?? Promise.resolve(null),
+      this.prisma.order.count({
+        where: {
+          productId: product.id
+        }
+      })
     ]);
 
     const sellerOrderIds = sellerOrders.map((order) => order.id);
@@ -609,6 +630,9 @@ export class ProductsService {
       images: images.length
         ? images.map((image) => image.imageUrl)
         : [detailCard.imageUrl],
+      actionState: {
+        canEdit: userId === product.sellerId && product.status === ProductStatus.ON_SALE && totalOrderCount === 0
+      },
       publishedAt: product.createdAt,
       seller: {
         id: seller?.id ?? product.sellerId,
@@ -732,6 +756,13 @@ export class ProductsService {
       }
     });
 
+    await this.outboxService.publishRecommendationEvent({
+      userId: account.id,
+      productId: product.id,
+      eventType: 'BehaviorTracked',
+      action: 'CONTACT'
+    });
+
     return {
       productId: product.id,
       recorded: true
@@ -769,11 +800,7 @@ export class ProductsService {
     }
 
     const normalizedTags = buildProductTags(payload);
-    const normalizedImageUrls = (payload.imageUrls ?? [])
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .filter((url, index, list) => list.indexOf(url) === index)
-      .slice(0, 6);
+    const normalizedImageUrls = normalizeProductImageUrls(payload.imageUrls);
 
     if (!normalizedImageUrls.length) {
       throw new BadRequestException('请至少上传 1 张商品图片');
@@ -879,6 +906,180 @@ export class ProductsService {
       id: product.id,
       title: product.title,
       status: product.status,
+      review: llmReview
+    };
+  }
+
+  async updateProduct(id: number, payload: UpdateProductDto, currentUser: AuthenticatedUser) {
+    const sellerUser = requireAuthenticatedUser(currentUser);
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        images: {
+          orderBy: { sortOrder: 'asc' }
+        }
+      }
+    });
+
+    if (!product) {
+      throw new NotFoundException('商品不存在');
+    }
+
+    if (product.sellerId !== sellerUser.id) {
+      throw new ForbiddenException('只有发布者可以编辑商品');
+    }
+
+    if (product.status !== ProductStatus.ON_SALE) {
+      throw new BadRequestException('当前商品状态不能编辑');
+    }
+
+    const totalOrderCount = await this.prisma.order.count({
+      where: {
+        productId: id
+      }
+    });
+
+    if (totalOrderCount > 0) {
+      throw new BadRequestException('商品已进入交易链路，不能编辑');
+    }
+
+    const activeOrderCount = await this.prisma.order.count({
+      where: {
+        productId: id,
+        status: {
+          in: [OrderStatus.PENDING, OrderStatus.IN_PROGRESS, OrderStatus.WAITING_REVIEW]
+        }
+      }
+    });
+
+    const title = payload.title?.trim() ?? product.title;
+    const description = payload.description?.trim() ?? product.description;
+    const category = normalizeProductCategoryName(payload.category ?? product.category);
+    const condition = normalizeProductConditionValue(payload.condition ?? product.condition);
+    const price = payload.price ?? Number(product.price);
+    const tags = buildProductTags({
+      title,
+      description,
+      category,
+      condition,
+      tags: payload.tags ?? normalizeTags(product.tags)
+    } as CreateProductDto);
+    const normalizedImageUrls = payload.imageUrls === undefined
+      ? product.images.map((item) => item.imageUrl)
+      : normalizeProductImageUrls(payload.imageUrls);
+
+    if (!title) {
+      throw new BadRequestException('商品标题不能为空');
+    }
+
+    if (!description) {
+      throw new BadRequestException('商品描述不能为空');
+    }
+
+    if (!isProductConditionValue(condition)) {
+      throw new BadRequestException('当前成色不支持发布');
+    }
+
+    if (!normalizedImageUrls.length) {
+      throw new BadRequestException('请至少上传 1 张商品图片');
+    }
+
+    const moderationResult = moderateProductPayload({
+      title,
+      description,
+      tags
+    }, prohibitedKeywords);
+    if (!moderationResult.passed) {
+      throw new BadRequestException(
+        `商品${moderationResult.fieldLabel}包含疑似违规内容“${moderationResult.matchedTerm}”，请修改后再提交`
+      );
+    }
+
+    const llmReview = await this.publishingReviewService?.reviewProduct({
+      title,
+      description,
+      price,
+      category,
+      condition,
+      tags,
+      imageUrls: normalizedImageUrls
+    }) ?? null;
+
+    if (!llmReview || !llmReview.selectedCategory) {
+      throw new BadRequestException('编辑失败，请稍后重试');
+    }
+
+    if (llmReview.shouldBlock) {
+      throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
+    }
+
+    if (llmReview.priceReview?.requiresConfirmation && !payload.confirmPriceReview) {
+      throw new BadRequestException({
+        code: 'PRICE_CONFIRMATION_REQUIRED',
+        message: llmReview.priceReview.verdict === 'HIGH'
+          ? '当前价格可能明显偏高，请确认是否继续发布'
+          : '当前价格可能明显偏低，请确认是否继续发布',
+        review: llmReview
+      });
+    }
+
+    const selectedCategory = normalizeProductCategoryName(llmReview.selectedCategory);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const nextProduct = await tx.product.update({
+        where: { id },
+        data: {
+          title,
+          description,
+          price,
+          category: selectedCategory,
+          condition,
+          tags,
+          commerceSyncStatus: 'PENDING',
+          commerceSyncError: null,
+          images: {
+            deleteMany: {},
+            create: normalizedImageUrls.map((imageUrl, index) => ({
+              imageUrl,
+              sortOrder: index
+            }))
+          }
+        }
+      });
+
+      await tx.conversation.updateMany({
+        where: { productId: id },
+        data: {
+          updatedAt: new Date()
+        }
+      });
+
+      await this.outboxService.publishProductSearchEvent({
+        productId: id,
+        eventType: 'ProductUpdated',
+        changedBy: 'products',
+        reason: 'PRODUCT_UPDATED'
+      }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: id,
+        eventType: 'ProductPublished'
+      }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: id,
+        eventType: 'ProductAvailabilityChanged'
+      }, tx);
+      await this.outboxService.publishProductCommerceSyncEvent({
+        productId: id,
+        eventType: 'ProductInventoryChanged'
+      }, tx);
+
+      return nextProduct;
+    });
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      status: updated.status,
       review: llmReview
     };
   }

@@ -33,6 +33,9 @@ describe('CampusServicesService', () => {
       issues: []
     })
   } as any;
+  const outboxService = {
+    publishMessageEvent: jest.fn().mockResolvedValue(undefined)
+  } as any;
 
   function createListing(overrides: Record<string, unknown> = {}) {
     return {
@@ -136,7 +139,19 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const reviewService = {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'enabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: CampusServiceCategory.SKILL,
+        reason: 'skip',
+        issues: []
+      })
+    } as any;
+    const service = new CampusServicesService(prisma, outboxService, reviewService);
     const response = await service.listCampusServices({}, authUser);
     const [result] = response.items;
 
@@ -220,7 +235,19 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const reviewService = {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'enabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: CampusServiceCategory.SKILL,
+        reason: 'skip',
+        issues: []
+      })
+    } as any;
+    const service = new CampusServicesService(prisma, outboxService, reviewService);
 
     await service.listCampusServices({}, authUser);
 
@@ -269,7 +296,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     await service.listCampusServices({}, authUser);
 
     expect(prisma.campusServiceListing.count).toHaveBeenCalledWith({
@@ -340,7 +367,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
 
     await service.listCampusServices({ credit: ['OUTSTANDING', 'GOOD'] }, authUser);
 
@@ -404,7 +431,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
 
     await service.listCampusServices({
       categories: [CampusServiceCategory.EVENT, CampusServiceCategory.MOVING]
@@ -447,7 +474,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
 
     await service.listCampusServices({
       categories: 'MOVING,EVENT' as any
@@ -490,7 +517,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const response = await service.listCampusServices({
       categories: [CampusServiceCategory.MOVING]
     }, authUser);
@@ -565,7 +592,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.getCampusServiceDetail(27, authUser);
 
     expect(prisma.campusServiceListing.findUnique).toHaveBeenCalledWith({
@@ -647,7 +674,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.getCampusServiceDetail(66, authUser);
 
     expect(result.latestOrderId).toBe(706);
@@ -738,7 +765,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.listCampusServices({ ownerId: 11 }, authUser);
 
     expect(result.items[0]).toMatchObject({
@@ -782,7 +809,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.getCampusServiceDetail(67, authUser);
 
     expect(result.actionState.canPause).toBe(true);
@@ -824,7 +851,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.getCampusServiceDetail(68, authUser);
 
     expect(result.actionState.canPause).toBe(false);
@@ -878,7 +905,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma, publishingReviewService);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.createCampusService({
       intent: CampusServiceIntent.OFFER,
       pattern: CampusServicePattern.REUSABLE,
@@ -940,7 +967,7 @@ describe('CampusServicesService', () => {
           accountStatus: AccountStatus.ACTIVE
         })
       }
-    } as any, {
+    } as any, outboxService, {
       reviewCampusService: jest.fn().mockResolvedValue({
         provider: 'deepseek',
         model: 'deepseek-v4-flash',
@@ -968,6 +995,94 @@ describe('CampusServicesService', () => {
     } as any, authUser)).rejects.toThrow('发布失败，请稍后重试');
 
     expect(listingCreate).not.toHaveBeenCalled();
+  });
+
+  it('should create campus service when llm review falls back to disabled status with selected category', async () => {
+    const createdListing = createListing({
+      id: 108,
+      ownerId: 11,
+      intent: CampusServiceIntent.REQUEST,
+      pattern: CampusServicePattern.ONE_TIME,
+      category: CampusServiceCategory.HELP,
+      title: '临时帮忙带饭',
+      description: '今晚帮忙从食堂带饭到宿舍楼下',
+      amount: 0,
+      priceMode: CampusServicePriceMode.FREE,
+      locationMode: CampusServiceLocationMode.FLEXIBLE,
+      locationNote: '宿舍楼下交接',
+      autoConfirm: false,
+      maxTotalOrders: 1,
+      maxConcurrentOrders: 1
+    });
+    const prisma = {
+      campusServiceListing: {
+        create: jest.fn().mockResolvedValue(createdListing)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      campusServiceOrder: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma, outboxService, {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'disabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: CampusServiceCategory.HELP,
+        reason: '未配置 DeepSeek API，已跳过 LLM 审查',
+        issues: []
+      })
+    } as any);
+
+    const result = await service.createCampusService({
+      intent: CampusServiceIntent.REQUEST,
+      pattern: CampusServicePattern.ONE_TIME,
+      title: ' 临时帮忙带饭 ',
+      category: CampusServiceCategory.HELP,
+      description: ' 今晚帮忙从食堂带饭到宿舍楼下 ',
+      priceMode: CampusServicePriceMode.FREE,
+      locationNote: ' 宿舍楼下交接 ',
+      estimatedMinutes: 20,
+      validFromAt: '2026-06-16T08:00:00.000Z',
+      validUntilAt: '2026-06-16T10:00:00.000Z',
+      imageUrls: ['https://cdn.example.com/help-cover.jpg']
+    }, authUser);
+
+    expect(prisma.campusServiceListing.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ownerId: 11,
+        category: CampusServiceCategory.HELP,
+        title: '临时帮忙带饭',
+        description: '今晚帮忙从食堂带饭到宿舍楼下',
+        priceMode: CampusServicePriceMode.FREE,
+        amount: 0
+      })
+    });
+    expect(result.id).toBe(108);
+    expect(result.review).toMatchObject({
+      status: 'disabled',
+      selectedCategory: CampusServiceCategory.HELP
+    });
   });
 
   it('should update campus service listing fields for publisher', async () => {
@@ -1022,7 +1137,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService, publishingReviewService);
     const result = await service.updateCampusService(89, {
       title: ' 新标题 ',
       description: ' 新描述 ',
@@ -1038,12 +1153,13 @@ describe('CampusServicesService', () => {
       data: expect.objectContaining({
         title: '新标题',
         description: '新描述',
-        category: CampusServiceCategory.SKILL,
+        category: CampusServiceCategory.ERRAND,
         amount: 18,
         urgency: CampusServiceUrgency.URGENT,
         trustNote: '带电脑'
       })
     });
+    expect(publishingReviewService.reviewCampusService).toHaveBeenCalled();
     expect(result.title).toBe('新标题');
     expect(result.urgency).toBe(CampusServiceUrgency.URGENT);
   });
@@ -1097,7 +1213,19 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const reviewService = {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'enabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: CampusServiceCategory.ERRAND,
+        reason: 'skip',
+        issues: []
+      })
+    } as any;
+    const service = new CampusServicesService(prisma, outboxService, reviewService);
     const result = await service.updateCampusService(90, {
       validUntilAt: '2026-06-21T08:00:00.000Z'
     }, authUser);
@@ -1111,6 +1239,7 @@ describe('CampusServicesService', () => {
         endedAt: null
       })
     });
+    expect(reviewService.reviewCampusService).toHaveBeenCalled();
     expect(result.status).toBe(CampusServiceListingStatus.OPEN);
   });
 
@@ -1185,7 +1314,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService);
     const result = await service.acceptCampusService(55, {
       initialMessage: '我来接'
     }, authUser);
@@ -1207,11 +1336,11 @@ describe('CampusServicesService', () => {
       }
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 901,
         senderId: 11,
         content: '我来接'
-      }
+      })
     });
     expect(result.conversationId).toBe(901);
     expect(result.actionState.canOpenConversation).toBe(true);
@@ -1257,7 +1386,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService);
     const result = await service.pauseCampusService(57, authUser);
 
     expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
@@ -1314,7 +1443,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService);
     const result = await service.reopenCampusService(58, authUser);
 
     expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
@@ -1421,7 +1550,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, outboxService);
     const result = await service.endCampusService(59, {
       reason: '暂时不需要了'
     }, authUser);
@@ -1451,18 +1580,18 @@ describe('CampusServicesService', () => {
       }
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 993,
         senderId: 11,
         content: '发布已结束，本次申请随之关闭：暂时不需要了'
-      }
+      })
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 994,
         senderId: 11,
         content: '发布已结束，本次申请随之关闭：暂时不需要了'
-      }
+      })
     });
     expect(result.status).toBe(CampusServiceListingStatus.ENDED);
   });
@@ -1492,7 +1621,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
 
     await expect(
       service.acceptCampusService(79, {
@@ -1580,7 +1709,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.confirmCampusServiceOrder(807, authUser);
 
     expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
@@ -1594,11 +1723,11 @@ describe('CampusServicesService', () => {
       }
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 991,
         senderId: 11,
         content: 'QJinyu 已确认接单，当前协作进入进行中。'
-      }
+      })
     });
     expect(result.latestOrderId).toBe(807);
     expect(result.actionState.canOpenConversation).toBe(true);
@@ -1674,7 +1803,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.rejectCampusServiceOrder(808, {
       reason: '时间不合适'
     }, authUser);
@@ -1688,11 +1817,11 @@ describe('CampusServicesService', () => {
       }
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 992,
         senderId: 11,
         content: '申请已拒绝：时间不合适'
-      }
+      })
     });
     expect(result.latestOrderId).toBe(808);
   });
@@ -1754,7 +1883,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.listCampusServiceOrders({}, authUser);
 
     expect(prisma.campusServiceOrder.count).toHaveBeenCalledWith({
@@ -1841,7 +1970,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.listCampusServiceOrders({}, authUser);
 
     expect(result.items[0].actionState).toEqual({
@@ -1929,7 +2058,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.getCampusServiceDetail(95, authUser);
 
     expect(result.latestOrderId).toBe(905);
@@ -1997,7 +2126,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.listCampusServiceOrders({ listingId: 96 }, authUser);
 
     expect(prisma.campusServiceOrder.count).toHaveBeenCalledWith({
@@ -2074,7 +2203,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.listCampusServiceOrders({
       listingId: 97,
       group: 'WAITING_COMPLETE'
@@ -2162,7 +2291,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.cancelCampusServiceOrder(903, {}, authUser);
 
     expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
@@ -2174,11 +2303,11 @@ describe('CampusServicesService', () => {
       }
     });
     expect(prisma.message.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         conversationId: 3003,
         senderId: 11,
         content: 'QJinyu 取消了当前协作。'
-      }
+      })
     });
     expect(result.id).toBe(93);
   });
@@ -2253,7 +2382,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.completeCampusServiceOrder(904, {}, authUser);
 
     expect(prisma.campusServiceOrder.findUnique).toHaveBeenCalledWith({
@@ -2371,7 +2500,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.cancelCampusService(98, {}, authUser);
 
     expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({
@@ -2485,7 +2614,7 @@ describe('CampusServicesService', () => {
       }
     } as any;
 
-    const service = new CampusServicesService(prisma);
+    const service = new CampusServicesService(prisma, { publishMessageEvent: jest.fn().mockResolvedValue(undefined) } as any);
     const result = await service.completeCampusService(99, {}, authUser);
 
     expect(prisma.campusServiceOrder.update).toHaveBeenCalledWith({

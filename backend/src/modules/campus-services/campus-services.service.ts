@@ -23,6 +23,7 @@ import {
   CampusServicePattern,
   CampusServicePriceMode,
   CampusServiceUrgency,
+  MessageType,
   VerificationStatus
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -34,6 +35,7 @@ import { CancelCampusServiceDto } from './dto/cancel-campus-service.dto';
 import { CompleteCampusServiceDto } from './dto/complete-campus-service.dto';
 import { CreateCampusServiceDto } from './dto/create-campus-service.dto';
 import { PublishingReviewService } from '../moderation/publishing-review.service';
+import { OutboxService } from '../outbox/outbox.service';
 import {
   EXCELLENT_CREDIT_SCORE,
   GOOD_CREDIT_SCORE,
@@ -347,6 +349,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService,
     @Inject(PublishingReviewService)
     private readonly publishingReviewService?: PublishingReviewService
   ) {}
@@ -401,6 +405,36 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         status: CampusServiceOrderStatus.EXPIRED,
         expiredAt: now
       }
+    });
+  }
+
+  private async appendCampusServiceMessage(
+    conversationId: number,
+    senderId: number,
+    content: string,
+    type: MessageType = MessageType.TEXT
+  ) {
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId,
+        senderId,
+        content,
+        type
+      }
+    });
+
+    if (message?.id) {
+      await this.outboxService.publishMessageEvent({
+        conversationId,
+        messageId: message.id,
+        senderId,
+        type
+      });
+    }
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updatedAt: new Date() }
     });
   }
 
@@ -1306,6 +1340,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       intent: listing.intent,
       intentLabel: campusServiceIntentLabelMap[listing.intent],
       pattern: listing.pattern,
+      priceMode: listing.priceMode,
       status: listing.status,
       statusLabel: campusServiceListingStatusLabelMap[listing.status],
       description: listing.description,
@@ -1357,6 +1392,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       actionState: {
         isPublisher: actionModel.isPublisher,
         isParticipant: actionModel.isParticipant,
+        canEdit: actionModel.isPublisher && listing.status !== CampusServiceListingStatus.CANCELED && totalOrderCount === 0,
         canAccept: actionModel.canAccept,
         canConfirm: actionModel.canConfirm,
         canReject: actionModel.canReject,
@@ -1510,6 +1546,8 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         },
         locationFrom: this.resolveLocationFrom(listing),
         locationTo: this.resolveLocationTo(listing),
+        locationNote: listing.locationNote,
+        locationMode: listing.locationMode,
         contactPreference: listing.contactPreference,
         contactPreferenceLabel: campusServiceContactPreferenceLabelMap[listing.contactPreference],
         itemCount: listing.itemCount,
@@ -2067,7 +2105,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       imageUrls: normalizedImageUrls
     }) ?? null;
 
-    if (!llmReview || llmReview.status !== 'enabled' || !llmReview.selectedCategory) {
+    if (!llmReview || !llmReview.selectedCategory) {
       throw new BadRequestException('发布失败，请稍后重试');
     }
 
@@ -2145,6 +2183,16 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('已关闭的服务不能编辑');
     }
 
+    const totalOrderCount = await this.prisma.campusServiceOrder.count({
+      where: {
+        listingId: id
+      }
+    });
+
+    if (totalOrderCount > 0) {
+      throw new BadRequestException('服务已进入协作链路，不能编辑');
+    }
+
     const activeOrderCount = await this.prisma.campusServiceOrder.count({
       where: {
         listingId: id,
@@ -2211,6 +2259,43 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('描述不能为空');
     }
 
+    const reviewTitle = normalizedTitle ?? listing.title;
+    const reviewDescription = normalizedDescription ?? listing.description;
+    const reviewCategory = payload.category ?? listing.category;
+    const reviewEstimatedMinutes = payload.estimatedMinutes ?? listing.estimatedMinutes;
+    const reviewUrgency = payload.urgency ?? listing.urgency;
+    const reviewLocationMode = payload.locationMode ?? listing.locationMode;
+    const reviewLocationNote = payload.locationNote !== undefined ? (payload.locationNote?.trim() || null) : listing.locationNote;
+    const reviewTrustNote = payload.trustNote !== undefined ? (payload.trustNote?.trim() || null) : listing.trustNote;
+
+    const llmReview = await this.publishingReviewService?.reviewCampusService({
+      intent: listing.intent,
+      pattern,
+      title: reviewTitle,
+      category: reviewCategory,
+      description: reviewDescription,
+      amount: priceMode === CampusServicePriceMode.FREE ? 0 : (amountValue ?? safeNumber(listing.amount)),
+      priceMode,
+      locationMode: reviewLocationMode,
+      locationNote: reviewLocationNote,
+      estimatedMinutes: reviewEstimatedMinutes,
+      urgency: reviewUrgency,
+      fulfillmentMode: payload.fulfillmentMode ?? listing.fulfillmentMode,
+      itemCount: payload.itemCount ?? listing.itemCount,
+      maxTotalOrders,
+      maxConcurrentOrders,
+      trustNote: reviewTrustNote,
+      imageUrls: normalizedImageUrls ?? []
+    }) ?? null;
+
+    if (!llmReview || !llmReview.selectedCategory) {
+      throw new BadRequestException('编辑失败，请稍后重试');
+    }
+
+    if (llmReview.shouldBlock) {
+      throw new BadRequestException(`LLM 审核未通过：${llmReview.reason}`);
+    }
+
     const shouldReopenFromManualEnd = (
       listing.status === CampusServiceListingStatus.ENDED
       && listing.endReason === CampusServiceListingEndReason.MANUAL_END
@@ -2221,7 +2306,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       where: { id },
       data: {
         title: normalizedTitle ?? listing.title,
-        category: payload.category ?? listing.category,
+        category: llmReview.selectedCategory,
         description: normalizedDescription ?? listing.description,
         pattern,
         priceMode,
@@ -2263,7 +2348,11 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     await this.refreshListingCapacity(id);
-    return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
+    const detail = await this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
+    return {
+      ...detail,
+      review: llmReview
+    };
   }
 
   async acceptCampusService(id: number, payload: AcceptCampusServiceDto, currentUser: AuthenticatedUser) {
@@ -2351,18 +2440,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        senderId: user.id,
-        content: orderMessage
-      }
-    });
-
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() }
-    });
+    await this.appendCampusServiceMessage(conversation.id, user.id, orderMessage);
 
     await this.refreshListingCapacity(listing.id);
     return this.getCampusServiceDetail(id, { ...currentUser, id: authUser.id });
@@ -2542,19 +2620,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
 
-        await this.prisma.message.create({
-          data: {
-            conversationId,
-            senderId: authUser.id,
-            content: reasonText
-              ? `发布已结束，本次申请随之关闭：${reasonText}`
-              : '发布者已结束当前发布，本次申请随之关闭。'
-          }
-        });
-        await this.prisma.conversation.update({
-          where: { id: conversationId },
-          data: { updatedAt: operationAt }
-        });
+        await this.appendCampusServiceMessage(
+          conversationId,
+          authUser.id,
+          reasonText
+            ? `发布已结束，本次申请随之关闭：${reasonText}`
+            : '发布者已结束当前发布，本次申请随之关闭。'
+        );
       }
     }
 
@@ -2624,19 +2696,11 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: `${
-            user.displayName
-          } 已${resolveCampusServiceConfirmAction(order.listing.intent)}，当前协作进入进行中。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        `${user.displayName} 已${resolveCampusServiceConfirmAction(order.listing.intent)}，当前协作进入进行中。`
+      );
     }
 
     await this.refreshListingCapacity(order.listingId);
@@ -2696,19 +2760,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: reasonText
-            ? `申请已拒绝：${reasonText}`
-            : `${user.displayName} 拒绝了这次${resolveCampusServicePrimaryAction(order.listing.intent)}申请。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        reasonText
+          ? `申请已拒绝：${reasonText}`
+          : `${user.displayName} 拒绝了这次${resolveCampusServicePrimaryAction(order.listing.intent)}申请。`
+      );
     }
 
     await this.refreshListingCapacity(order.listingId);
@@ -2781,19 +2839,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
-            ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(order.listing.intent)}。`
-            : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(order.listing.intent)}，请对方确认。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        updatedOrder.status === CampusServiceOrderStatus.COMPLETED
+          ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(order.listing.intent)}。`
+          : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(order.listing.intent)}，请对方确认。`
+      );
     }
 
     await this.refreshListingCapacity(order.listingId);
@@ -2854,19 +2906,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: reasonText
-            ? `当前协作已取消：${reasonText}`
-            : `${user.displayName} 取消了当前协作。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        reasonText
+          ? `当前协作已取消：${reasonText}`
+          : `${user.displayName} 取消了当前协作。`
+      );
     }
 
     await this.refreshListingCapacity(order.listingId);
@@ -2939,19 +2985,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: updatedOrder.status === CampusServiceOrderStatus.COMPLETED
-            ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(listing.intent)}。`
-            : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(listing.intent)}，请对方确认。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        updatedOrder.status === CampusServiceOrderStatus.COMPLETED
+          ? `${user.displayName} 已${resolveCampusServiceConfirmCompleteAction(listing.intent)}。`
+          : `${user.displayName} 已${resolveCampusServiceSubmitCompleteAction(listing.intent)}，请对方确认。`
+      );
     }
 
     await this.refreshListingCapacity(id);
@@ -3021,19 +3061,13 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (conversation) {
-      await this.prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          senderId: user.id,
-          content: reasonText
-            ? `当前协作已取消：${reasonText}`
-            : `${user.displayName} 取消了当前协作。`
-        }
-      });
-      await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { updatedAt: new Date() }
-      });
+      await this.appendCampusServiceMessage(
+        conversation.id,
+        user.id,
+        reasonText
+          ? `当前协作已取消：${reasonText}`
+          : `${user.displayName} 取消了当前协作。`
+      );
     }
 
     await this.refreshListingCapacity(id);

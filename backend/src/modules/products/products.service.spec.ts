@@ -13,6 +13,7 @@ describe('ProductsService', () => {
     syncProduct: jest.fn().mockResolvedValue(undefined)
   } as any;
   const outboxService = {
+    publishRecommendationEvent: jest.fn().mockResolvedValue(undefined),
     publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
     publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
   } as any;
@@ -785,6 +786,7 @@ describe('ProductsService', () => {
           .mockResolvedValueOnce(23)
       },
       order: {
+        count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([
           { id: 501, status: 'COMPLETED' },
           { id: 502, status: 'PENDING' }
@@ -912,6 +914,7 @@ describe('ProductsService', () => {
           .mockResolvedValueOnce(24)
       },
       order: {
+        count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([
           { id: 501, status: 'COMPLETED' },
           { id: 502, status: 'PENDING' }

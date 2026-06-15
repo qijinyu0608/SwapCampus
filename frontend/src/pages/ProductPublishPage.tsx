@@ -1,21 +1,24 @@
 import { Alert, Button, Form, Input, InputNumber, Slider, message as antMessage } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ActionRow, SectionHeader } from '../components/layout';
 import { ThinkingOverlay } from '../components/feedback';
 import { CampusServicePublishWorkbench, PublishImageManager, type PublishImageItem } from '../components/publish';
 import { ConfirmActionModal, SectionCard } from '../components/ui';
 import {
   formatProductConditionValue,
+  parseProductConditionValue,
   PRODUCT_CONDITION_MAX,
   PRODUCT_CONDITION_MIN,
   PRODUCT_CONDITION_STEP
 } from '../constants/productConditions';
 import { useAuthState } from '../services/auth-state';
-import { fetchPublishingRules, getApiErrorMessage, type PublishingRules } from '../services/api';
+import { fetchProductDetail, fetchPublishingRules, getApiErrorMessage, type PublishingRules } from '../services/api';
 import {
   createProductWithImages,
   type ProductPublishPayload,
   type ProductPublishReview,
+  updateProductWithImages,
   uploadProductImageAsset
 } from '../services/product-publish';
 import { hasTradingAccess, isGuestUser } from '../services/session';
@@ -30,12 +33,15 @@ type ProductPublishFormValues = {
 };
 
 export function ProductPublishPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { currentUser } = useAuthState();
   const [form] = Form.useForm<ProductPublishFormValues>();
   const [publishType, setPublishType] = useState<PublishType>('product');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [rules, setRules] = useState<PublishingRules | null>(null);
   const [uploadedImages, setUploadedImages] = useState<PublishImageItem[]>([]);
+  const [loadingProduct, setLoadingProduct] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submittingProduct, setSubmittingProduct] = useState(false);
   const [pendingPriceReview, setPendingPriceReview] = useState<{
@@ -43,10 +49,68 @@ export function ProductPublishPage() {
     review: ProductPublishReview;
   } | null>(null);
   const uploadedImagesRef = useRef<PublishImageItem[]>([]);
+  const isEditMode = Boolean(id);
 
   useEffect(() => {
     fetchPublishingRules().then(setRules).catch(() => setRules(null));
   }, []);
+
+  useEffect(() => {
+    if (!isEditMode || !id) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProduct() {
+      setLoadingProduct(true);
+      try {
+        const detail = await fetchProductDetail(Number(id));
+        if (cancelled) {
+          return;
+        }
+
+        const parsedCondition = parseProductConditionValue(detail.condition) ?? PRODUCT_CONDITION_MAX;
+        const nextItems = detail.images.map((url, index) => ({
+          key: `existing-${index}-${url}`,
+          url,
+          previewUrl: url,
+          width: 1200,
+          height: 1200
+        }));
+
+        setUploadedImages((current) => {
+          current.forEach((item) => {
+            if (item.previewUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(item.previewUrl);
+            }
+          });
+          return nextItems;
+        });
+        form.setFieldsValue({
+          title: detail.title,
+          price: detail.price,
+          description: detail.description,
+          conditionValue: parsedCondition
+        });
+        setMessage(null);
+      } catch (error) {
+        if (!cancelled) {
+          setMessage({ type: 'error', text: getApiErrorMessage(error, '商品详情加载失败，请稍后重试。') });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProduct(false);
+        }
+      }
+    }
+
+    void loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form, id, isEditMode]);
 
   useEffect(() => {
     uploadedImagesRef.current = uploadedImages;
@@ -74,19 +138,25 @@ export function ProductPublishPage() {
 
     setSubmittingProduct(true);
     try {
-      const result = await createProductWithImages(payload);
+      const result = isEditMode && id
+        ? await updateProductWithImages(Number(id), payload)
+        : await createProductWithImages(payload);
 
-      setMessage({ type: 'success', text: `商品已提交：${result.title}（ID ${result.id}，状态 ${result.status}）` });
+      setMessage({ type: 'success', text: isEditMode ? `商品已更新：${result.title}` : `商品已提交：${result.title}（ID ${result.id}，状态 ${result.status}）` });
       setPendingPriceReview(null);
-      form.resetFields();
-      setUploadedImages((current) => {
-        current.forEach((item) => {
-          if (item.previewUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(item.previewUrl);
-          }
+      if (isEditMode) {
+        void navigate(`/products/${result.id}`);
+      } else {
+        form.resetFields();
+        setUploadedImages((current) => {
+          current.forEach((item) => {
+            if (item.previewUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(item.previewUrl);
+            }
+          });
+          return [];
         });
-        return [];
-      });
+      }
     } catch (error) {
       const maybePayload = typeof error === 'object' && error && 'response' in error
         ? (error as {
@@ -110,7 +180,7 @@ export function ProductPublishPage() {
 
       setMessage({
         type: 'error',
-        text: getApiErrorMessage(error, '发布失败，请稍后重试。')
+        text: getApiErrorMessage(error, isEditMode ? '保存失败，请稍后重试。' : '发布失败，请稍后重试。')
       });
     } finally {
       setSubmittingProduct(false);
@@ -176,29 +246,32 @@ export function ProductPublishPage() {
   return (
     <div id="publish-top" className="page-grid publish-page publish-workbench-page">
       <div className="publish-layout">
-        <section className="publish-type-panel">
-          <div className="publish-type-grid" role="tablist" aria-label="发布类型">
-            {publishTypeOptions.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                role="tab"
-                aria-selected={publishType === option.key}
-                className={['publish-type-card', publishType === option.key ? 'is-active' : ''].filter(Boolean).join(' ')}
-                onClick={() => setPublishType(option.key)}
-              >
-                <strong>{option.title}</strong>
-              </button>
-            ))}
-          </div>
-        </section>
+        {isEditMode ? null : (
+          <section className="publish-type-panel">
+            <div className="publish-type-grid" role="tablist" aria-label="发布类型">
+              {publishTypeOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={publishType === option.key}
+                  className={['publish-type-card', publishType === option.key ? 'is-active' : ''].filter(Boolean).join(' ')}
+                  onClick={() => setPublishType(option.key)}
+                >
+                  <strong>{option.title}</strong>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {isProductPublish ? (
           <div className="publish-workbench-main publish-workbench-shell">
             <ThinkingOverlay open={submittingProduct} />
+            <ThinkingOverlay open={loadingProduct} />
             <SectionCard
               className="publish-main-card publish-editor-card"
-              title={<SectionHeader title="商品信息" className="is-prominent" />}
+              title={<SectionHeader title={isEditMode ? '编辑商品' : '商品信息'} className="is-prominent" />}
             >
               {message ? <Alert style={{ marginBottom: 16 }} type={message.type} showIcon message={message.text} /> : null}
               <Form
@@ -270,14 +343,14 @@ export function ProductPublishPage() {
                 </div>
 
                 <ActionRow className="publish-submit-row">
-                  <Button type="primary" htmlType="submit" loading={submittingProduct}>发布商品</Button>
+                  <Button type="primary" htmlType="submit" loading={submittingProduct}>{isEditMode ? '保存修改' : '发布商品'}</Button>
                 </ActionRow>
               </Form>
             </SectionCard>
             <ConfirmActionModal
               open={Boolean(pendingPriceReview)}
               title="价格可能不太合理"
-              confirmText="继续发布"
+              confirmText={isEditMode ? '继续保存' : '继续发布'}
               cancelText="返回修改"
               loading={submittingProduct}
               onConfirm={() => void handleConfirmPriceReview()}
@@ -309,6 +382,7 @@ export function ProductPublishPage() {
             presetIntent={servicePresetIntent}
             variant="publish"
             enableRulesGate={false}
+            listingId={undefined}
           />
         )}
       </div>

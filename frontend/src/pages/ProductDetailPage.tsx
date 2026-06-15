@@ -20,13 +20,11 @@ import {
   createConversation,
   createReport,
   fetchProductDetail,
-  fetchUserTrustSummary,
   getApiErrorMessage,
   recordProductContact,
   type ProductDetailView
 } from '../services/api';
 import { isFavorite, subscribeFavorites, toggleFavorite } from '../services/favorites';
-import { hasTradingAccess, isGuestUser } from '../services/session';
 import { executeToggleFollow } from '../utils/followActions';
 import { loadFollowStateForTarget } from '../utils/followState';
 import { resolvePrimaryProductImage, resolveProductGallery } from '../utils/productCover';
@@ -167,6 +165,10 @@ export function ProductDetailPage() {
       return;
     }
 
+    if (currentUser?.id === detail.seller.id) {
+      return;
+    }
+
     if (!ensureTradingAccess('联系对方')) {
       return;
     }
@@ -194,6 +196,10 @@ export function ProductDetailPage() {
 
   function handleCreateOrder() {
     if (!detail) {
+      return;
+    }
+
+    if (currentUser?.id === detail.seller.id) {
       return;
     }
 
@@ -261,6 +267,10 @@ export function ProductDetailPage() {
       return;
     }
 
+    if (currentUser?.id === detail.seller.id) {
+      return;
+    }
+
     try {
       setFavoriteAnimating(false);
       const nextState = await toggleFavorite(detail.id, currentUser);
@@ -322,6 +332,8 @@ export function ProductDetailPage() {
     : hasActiveOrder
       ? '商品已售出'
       : null;
+  const isOwnProduct = currentUser?.id === detail.seller.id;
+  const canEditOwnProduct = isOwnProduct && detail.actionState.canEdit;
   const sellerIdentity = sellerPresentation.creditBadge.label;
   const sellerStats = [
     detail.seller.college,
@@ -371,7 +383,7 @@ export function ProductDetailPage() {
                   `${detail.stats.favoriteCount} 收藏`,
                   `${detail.stats.viewCount} 浏览`
                 ]}
-                favoriteButton={(
+                favoriteButton={!isOwnProduct ? (
                   <button
                     type="button"
                     aria-label={favorited ? '取消收藏' : '收藏商品'}
@@ -384,7 +396,7 @@ export function ProductDetailPage() {
                   >
                     {favorited ? <StarFilled /> : <StarOutlined />}
                   </button>
-                )}
+                ) : undefined}
                 amount={<strong>{formatCurrencyAmount(detail.detailBase.price)}</strong>}
               />
             )}
@@ -405,7 +417,17 @@ export function ProductDetailPage() {
             )}
             footer={(
               <DetailActionFooter
-                actions={hasActiveOrder ? (
+                actions={isOwnProduct ? (
+                  canEditOwnProduct ? (
+                    <Button
+                      type="primary"
+                      size="large"
+                      onClick={() => void navigate(`/products/${detail.id}/edit`)}
+                    >
+                      编辑
+                    </Button>
+                  ) : null
+                ) : hasActiveOrder ? (
                   <Button
                     type="primary"
                     size="large"
@@ -416,7 +438,12 @@ export function ProductDetailPage() {
                   </Button>
                 ) : (
                   <>
-                    <Button type="primary" size="large" onClick={() => void handleContactSeller()} loading={submitting === 'chat'}>
+                    <Button
+                      type="primary"
+                      size="large"
+                      onClick={() => void handleContactSeller()}
+                      loading={submitting === 'chat'}
+                    >
                       聊一聊
                     </Button>
                     <Button size="large" onClick={handleCreateOrder}>

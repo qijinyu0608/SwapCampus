@@ -1,6 +1,6 @@
 import { StarFilled, StarOutlined } from '@ant-design/icons';
 import FlipClockCountdown from '@leenguyen/react-flip-clock-countdown';
-import { Button, Form, Input, Modal, Skeleton, Alert, message as antMessage } from 'antd';
+import { Button, Form, Input, Skeleton, Alert, message as antMessage } from 'antd';
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DetailShell } from '../components/layout';
@@ -18,8 +18,7 @@ import {
 } from '../components/ui';
 import {
   CampusServicePublisherOrderWorkbench,
-  ListingDetailMetaPanel,
-  ListingDetailTagPanel
+  ListingDetailMetaPanel
 } from '../components/listing';
 import { type AvatarFrameKey } from '../components/user/UserAvatar';
 import {
@@ -29,7 +28,6 @@ import {
   cancelCampusServiceOrder,
   completeCampusServiceOrder,
   createReport,
-  fetchUserTrustSummary,
   type CampusServiceOrderListItem,
   confirmCampusServiceOrder,
   endCampusServiceListing,
@@ -258,7 +256,7 @@ export function CampusServiceDetailPage() {
   }
 
   function handleOpenConversation() {
-    if (!listing?.conversationId) {
+    if (!listing?.conversationId || !listing || listing.actionState.isPublisher) {
       return;
     }
 
@@ -267,6 +265,10 @@ export function CampusServiceDetailPage() {
 
   async function handleToggleFavorite() {
     if (!listing) {
+      return;
+    }
+
+    if (listing.actionState.isPublisher) {
       return;
     }
 
@@ -315,6 +317,10 @@ export function CampusServiceDetailPage() {
       return;
     }
 
+    if (listing.actionState.isPublisher) {
+      return;
+    }
+
     if (!hasTradingAccess(currentUser)) {
       antMessage.error(
         isGuestUser(currentUser)
@@ -351,6 +357,10 @@ export function CampusServiceDetailPage() {
 
   function handleStartCheckout() {
     if (!listing) {
+      return;
+    }
+
+    if (listing.actionState.isPublisher) {
       return;
     }
 
@@ -595,6 +605,8 @@ export function CampusServiceDetailPage() {
     'publisher',
     'trust-note'
   ].includes(item.key));
+  const isOwnListing = listing.actionState.isPublisher;
+  const isPrimaryTradeActionDisabled = !listing.actionState.canAccept && !listing.actionState.canConfirm && !listing.actionState.canComplete && !listing.actionState.canOpenConversation;
 
   return (
     <div className="detail-page">
@@ -641,7 +653,7 @@ export function CampusServiceDetailPage() {
                   `${listing.stats.favoriteCount} 收藏`,
                   `${listing.stats.viewCount} 浏览`
                 ]}
-                favoriteButton={(
+                favoriteButton={!isOwnListing ? (
                   <button
                     type="button"
                     aria-label={listing.isFavorited ? '取消收藏' : '收藏服务'}
@@ -655,7 +667,7 @@ export function CampusServiceDetailPage() {
                   >
                     {listing.isFavorited ? <StarFilled /> : <StarOutlined />}
                   </button>
-                )}
+                ) : undefined}
                 amount={<strong>{listing.detailBase.amountLabel}</strong>}
               />
             )}
@@ -668,42 +680,60 @@ export function CampusServiceDetailPage() {
             footer={(
               <DetailActionFooter
                 actions={(
-                  <>
-                    <Button type="primary" size="large" onClick={handleOpenConversation}>
-                      聊一聊
-                    </Button>
-                    <Button
-                      size="large"
-                      onClick={() => {
-                        if (listing.actionState.canAccept) {
-                          handleStartCheckout();
-                          return;
-                        }
-                        if (listing.actionState.canConfirm) {
-                          void handleConfirmOrder();
-                          return;
-                        }
-                        if (listing.actionState.canComplete) {
-                          void handleComplete();
-                          return;
-                        }
-                        if (listing.actionState.canOpenConversation) {
-                          handleOpenConversation();
-                        } else {
-                          antMessage.info(listing.intent === 'REQUEST' ? '当前求助暂时不可报名接单' : '当前服务暂时不可预约');
-                        }
-                      }}
-                      loading={actingListingId === listing.id && submitting === 'accept'}
-                    >
-                      {listing.actionState.canAccept
-                        ? primaryActionLabel
-                        : listing.actionState.canConfirm
-                          ? (listing.actionLabels.confirm ?? '确认')
-                          : listing.actionState.canComplete
-                            ? (listing.actionLabels.complete ?? '提交进度')
-                            : primaryActionLabel}
-                    </Button>
-                  </>
+                  isOwnListing ? (
+                    listing.actionState.canEdit ? (
+                      <Button
+                        type="primary"
+                        size="large"
+                        onClick={() => void navigate(`/campus-services/${listing.id}/edit`)}
+                      >
+                        编辑
+                      </Button>
+                    ) : null
+                  ) : (
+                    <>
+                      <Button
+                        type="primary"
+                        size="large"
+                        onClick={handleOpenConversation}
+                        disabled={!listing.actionState.canOpenConversation}
+                      >
+                        聊一聊
+                      </Button>
+                      <Button
+                        size="large"
+                        disabled={isPrimaryTradeActionDisabled}
+                        onClick={() => {
+                          if (listing.actionState.canAccept) {
+                            handleStartCheckout();
+                            return;
+                          }
+                          if (listing.actionState.canConfirm) {
+                            void handleConfirmOrder();
+                            return;
+                          }
+                          if (listing.actionState.canComplete) {
+                            void handleComplete();
+                            return;
+                          }
+                          if (listing.actionState.canOpenConversation) {
+                            handleOpenConversation();
+                          } else {
+                            antMessage.info(listing.intent === 'REQUEST' ? '当前求助暂时不可报名接单' : '当前服务暂时不可预约');
+                          }
+                        }}
+                        loading={actingListingId === listing.id && submitting === 'accept'}
+                      >
+                        {listing.actionState.canAccept
+                          ? primaryActionLabel
+                          : listing.actionState.canConfirm
+                            ? (listing.actionLabels.confirm ?? '确认')
+                            : listing.actionState.canComplete
+                              ? (listing.actionLabels.complete ?? '提交进度')
+                              : primaryActionLabel}
+                      </Button>
+                    </>
+                  )
                 )}
                 quietAction={(
                   <button type="button" className="detail-quiet-action warn" onClick={openReportModal}>
