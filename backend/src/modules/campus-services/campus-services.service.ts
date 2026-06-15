@@ -238,6 +238,9 @@ type ListingContext = {
     creditScore: number;
     verificationStatus: VerificationStatus;
     accountStatus: AccountStatus;
+    college?: string;
+    completedOrders?: number;
+    averageRating?: number | null;
   }>;
   latestOrderMap: Map<number, OrderRecord | null>;
   ordersByListingMap: Map<number, OrderRecord[]>;
@@ -266,6 +269,17 @@ type CampusServiceOrderViewContext = {
   conversationId: number | null;
   imageUrl: string;
 };
+
+function getParticipantCollegeLabel(
+  college: string | null | undefined,
+  verificationStatus: VerificationStatus | undefined
+) {
+  if (college?.trim()) {
+    return college.trim();
+  }
+
+  return verificationStatus === VerificationStatus.APPROVED ? '已认证用户' : '待认证';
+}
 
 function formatCurrency(amount: number | null | undefined) {
   if (amount === null || amount === undefined) {
@@ -840,7 +854,10 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         avatarFrame: counterpart?.avatarFrame ?? null,
         creditScore: counterpart?.creditScore ?? 60,
         verificationStatus: counterpart?.verificationStatus ?? VerificationStatus.PENDING,
-        accountStatus: counterpart?.accountStatus ?? AccountStatus.ACTIVE
+        accountStatus: counterpart?.accountStatus ?? AccountStatus.ACTIVE,
+        college: counterpart?.college ?? getParticipantCollegeLabel(null, counterpart?.verificationStatus),
+        completedOrders: counterpart?.completedOrders ?? 0,
+        averageRating: counterpart?.averageRating ?? null
       },
       publisher: {
         id: publisher?.id ?? listing.ownerId,
@@ -850,7 +867,10 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         avatarFrame: publisher?.avatarFrame ?? null,
         creditScore: publisher?.creditScore ?? 60,
         verificationStatus: publisher?.verificationStatus ?? VerificationStatus.PENDING,
-        accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE
+        accountStatus: publisher?.accountStatus ?? AccountStatus.ACTIVE,
+        college: publisher?.college ?? getParticipantCollegeLabel(null, publisher?.verificationStatus),
+        completedOrders: publisher?.completedOrders ?? 0,
+        averageRating: publisher?.averageRating ?? null
       },
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
@@ -979,7 +999,18 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           avatarFrame: true,
           creditScore: true,
           verificationStatus: true,
-          accountStatus: true
+          accountStatus: true,
+          verification: {
+            select: {
+              college: true
+            }
+          },
+          sellerOrders: {
+            select: {
+              id: true,
+              status: true
+            }
+          }
         }
       }),
       this.prisma.campusServiceOrder.findMany({
@@ -1052,20 +1083,63 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     const extraUsers = missingUserIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: missingUserIds } },
-            select: {
-              id: true,
-              displayName: true,
-              studentId: true,
-              avatarUrl: true,
-              avatarFrame: true,
-              creditScore: true,
-              verificationStatus: true,
-              accountStatus: true
+          select: {
+            id: true,
+            displayName: true,
+            studentId: true,
+            avatarUrl: true,
+            avatarFrame: true,
+            creditScore: true,
+            verificationStatus: true,
+            accountStatus: true,
+            verification: {
+              select: {
+                college: true
+              }
+            },
+            sellerOrders: {
+              select: {
+                id: true,
+                status: true
+              }
+            }
           }
         })
       : [];
 
     const allUsers = [...users, ...extraUsers];
+    const sellerOrderIds = [...new Set(allUsers.flatMap((user) => (user.sellerOrders ?? []).map((order) => order.id)))];
+    const sellerReviews = sellerOrderIds.length
+      ? await this.prisma.review.findMany({
+          where: { orderId: { in: sellerOrderIds } },
+          select: { orderId: true, rating: true }
+        })
+      : [];
+    const ratingsByOrderId = new Map(sellerReviews.map((review) => [review.orderId, review.rating]));
+    const normalizedUsers = allUsers.map((user) => {
+      const sellerOrders = user.sellerOrders ?? [];
+      const completedOrders = sellerOrders.filter((order) => order.status === CampusServiceOrderStatus.COMPLETED).length;
+      const ratings = sellerOrders
+        .map((order) => ratingsByOrderId.get(order.id))
+        .filter((rating): rating is number => typeof rating === 'number');
+      const averageRating = ratings.length
+        ? Number((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1))
+        : null;
+
+      return {
+        id: user.id,
+        displayName: user.displayName,
+        studentId: user.studentId,
+        avatarUrl: user.avatarUrl,
+        avatarFrame: user.avatarFrame,
+        creditScore: user.creditScore,
+        verificationStatus: user.verificationStatus,
+        accountStatus: user.accountStatus,
+        college: getParticipantCollegeLabel(user.verification?.college, user.verificationStatus),
+        completedOrders,
+        averageRating
+      };
+    });
     const latestOrderMap = new Map<number, OrderRecord | null>();
     const ordersByListingMap = new Map<number, OrderRecord[]>();
     const activeOrderCountMap = new Map<number, number>();
@@ -1156,7 +1230,7 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
     });
 
     return {
-      userMap: new Map(allUsers.map((user) => [user.id, user])),
+      userMap: new Map(normalizedUsers.map((user) => [user.id, user])),
       latestOrderMap,
       ordersByListingMap,
       activeOrderCountMap,
@@ -1324,7 +1398,10 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
         avatarFrame: context.unlockedUserIds.has(listing.ownerId) ? (owner?.avatarFrame ?? null) : null,
         creditScore: owner?.creditScore ?? 60,
         verificationStatus: owner?.verificationStatus ?? VerificationStatus.PENDING,
-        accountStatus: owner?.accountStatus ?? AccountStatus.ACTIVE
+        accountStatus: owner?.accountStatus ?? AccountStatus.ACTIVE,
+        college: owner?.college ?? getParticipantCollegeLabel(null, owner?.verificationStatus),
+        completedOrders: owner?.completedOrders ?? 0,
+        averageRating: owner?.averageRating ?? null
       },
       participant: displayOrder
         ? {
@@ -1352,7 +1429,21 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
             )?.verificationStatus ?? VerificationStatus.PENDING,
             accountStatus: context.userMap.get(
               listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
-            )?.accountStatus ?? AccountStatus.ACTIVE
+            )?.accountStatus ?? AccountStatus.ACTIVE,
+            college: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.college ?? getParticipantCollegeLabel(
+              null,
+              context.userMap.get(
+                listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+              )?.verificationStatus
+            ),
+            completedOrders: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.completedOrders ?? 0,
+            averageRating: context.userMap.get(
+              listing.intent === CampusServiceIntent.REQUEST ? displayOrder.providerId : displayOrder.requesterId
+            )?.averageRating ?? null
           }
         : null,
       latestOrder
@@ -1649,7 +1740,18 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
               avatarFrame: true,
               creditScore: true,
               verificationStatus: true,
-              accountStatus: true
+              accountStatus: true,
+              verification: {
+                select: {
+                  college: true
+                }
+              },
+              sellerOrders: {
+                select: {
+                  id: true,
+                  status: true
+                }
+              }
             }
           })
         : Promise.resolve([]),
@@ -1669,7 +1771,23 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       this.findCampusServiceImages([...new Set(orders.map((order) => order.listingId))])
     ]);
 
-    const userMap = new Map(users.map((user) => [user.id, user]));
+    const userMap = new Map(users.map((user) => {
+      const sellerOrders = user.sellerOrders ?? [];
+      const completedOrders = sellerOrders.filter((sellerOrder) => sellerOrder.status === CampusServiceOrderStatus.COMPLETED).length;
+      return [user.id, {
+        id: user.id,
+        displayName: user.displayName,
+        studentId: user.studentId,
+        avatarUrl: user.avatarUrl,
+        avatarFrame: user.avatarFrame,
+        creditScore: user.creditScore,
+        verificationStatus: user.verificationStatus,
+        accountStatus: user.accountStatus,
+        college: getParticipantCollegeLabel(user.verification?.college, user.verificationStatus),
+        completedOrders,
+        averageRating: null
+      }];
+    }));
     const conversationMap = new Map(
       conversations
         .filter((conversation) => conversation.campusServiceOrderId)
@@ -1747,7 +1865,18 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
           avatarFrame: true,
           creditScore: true,
           verificationStatus: true,
-          accountStatus: true
+          accountStatus: true,
+          verification: {
+            select: {
+              college: true
+            }
+          },
+          sellerOrders: {
+            select: {
+              id: true,
+              status: true
+            }
+          }
         }
       }),
       this.prisma.conversation.findFirst({
@@ -1757,7 +1886,22 @@ export class CampusServicesService implements OnModuleInit, OnModuleDestroy {
       this.findCampusServiceImages([listing.id])
     ]);
 
-    const userMap = new Map(users.map((user) => [user.id, user]));
+    const userMap = new Map(users.map((user) => {
+      const completedOrders = user.sellerOrders.filter((sellerOrder) => sellerOrder.status === CampusServiceOrderStatus.COMPLETED).length;
+      return [user.id, {
+        id: user.id,
+        displayName: user.displayName,
+        studentId: user.studentId,
+        avatarUrl: user.avatarUrl,
+        avatarFrame: user.avatarFrame,
+        creditScore: user.creditScore,
+        verificationStatus: user.verificationStatus,
+        accountStatus: user.accountStatus,
+        college: getParticipantCollegeLabel(user.verification?.college, user.verificationStatus),
+        completedOrders,
+        averageRating: null
+      }];
+    }));
     const imageUrl = images[0]?.imageUrl ?? '';
     const baseView = this.buildCampusServiceOrderView({
       authUserId: authUser.id,

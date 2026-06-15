@@ -87,6 +87,12 @@ export type ListingParticipantBase = {
   accountStatus: 'ACTIVE' | 'BANNED';
 };
 
+export type ListingParticipantSummary = ListingParticipantBase & {
+  college: string;
+  averageRating: number | null;
+  completedOrders: number;
+};
+
 export type ListingDetailMetaItem = {
   key: string;
   label: string;
@@ -640,7 +646,7 @@ export type CampusServiceActionLabels = {
   conversation: string | null;
 };
 
-export type CampusServiceParticipant = ListingParticipantBase;
+export type CampusServiceParticipant = ListingParticipantSummary;
 
 export type CampusServiceListItem = ListingSummary & {
   id: number;
@@ -801,7 +807,7 @@ export type CampusServiceOrderListParams = {
   pageSize?: number;
 };
 
-export type CampusServiceOrderParticipant = ListingParticipantBase;
+export type CampusServiceOrderParticipant = ListingParticipantSummary;
 
 export type CampusServiceOrderListItem = {
   id: number;

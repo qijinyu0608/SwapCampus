@@ -578,9 +578,9 @@ export function CampusServiceDetailPage() {
     sellerName: listing.publisher.displayName
   }, listing.id, 6);
   const sellerStats = [
-    publisherPresentation?.collegeLabel ?? '同校用户',
-    `信用 ${listing.publisher.creditScore}`,
-    listing.intentLabel
+    listing.publisher.college,
+    `完成 ${listing.publisher.completedOrders} 单`,
+    listing.publisher.averageRating === null ? '暂无评分' : `评分 ${listing.publisher.averageRating.toFixed(1)}`
   ];
   const primaryActionLabel = listing.intent === 'REQUEST' ? '报名接单' : '立即预约';
   const detailDescription = listing.detailBase.description;
