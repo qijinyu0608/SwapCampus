@@ -1064,6 +1064,7 @@ export type ReportItem = {
   id: number;
   reporterId: number;
   productId: number | null;
+  campusServiceListingId?: number | null;
   targetUserId: number | null;
   reason: string;
   status: string;
@@ -1437,6 +1438,7 @@ export async function resolveAdminOrderAppeal(
   id: number,
   payload: {
     nextStatus: 'RESOLVED' | 'REJECTED' | 'CANCELED_ORDER' | 'BAN_RESPONDENT' | 'UNBAN_RESPONDENT';
+    penaltyLevel?: 'NORMAL' | 'SEVERE';
     resolutionNote?: string;
   }
 ) {
@@ -1642,6 +1644,7 @@ export async function fetchReports() {
 
 export async function resolveReport(id: number, payload: {
   resolutionNote: string;
+  penaltyLevel?: 'NORMAL' | 'SEVERE';
   nextStatus: 'RESOLVED' | 'REJECTED' | 'OFFLINE_PRODUCT' | 'BAN_USER' | 'UNBAN_USER';
 }) {
   const response = await apiClient.patch(`/reports/${id}/resolve`, payload);

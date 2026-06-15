@@ -147,6 +147,7 @@ type LogFilters = {
   keyword?: string;
   action?: string;
 };
+type GovernancePenaltyLevel = 'NORMAL' | 'SEVERE';
 
 function getTagColor(value: string) {
   if (value === 'COMPLETED' || value === 'DONE' || value === 'APPROVED' || value === 'ON_SALE') {
@@ -387,7 +388,8 @@ export function AdminPage() {
 
   async function handleResolveReport(
     reportId: number,
-    nextStatus: 'RESOLVED' | 'REJECTED' | 'OFFLINE_PRODUCT' | 'BAN_USER' | 'UNBAN_USER'
+    nextStatus: 'RESOLVED' | 'REJECTED' | 'OFFLINE_PRODUCT' | 'BAN_USER' | 'UNBAN_USER',
+    penaltyLevel: GovernancePenaltyLevel = 'NORMAL'
   ) {
     if (!currentUser) {
       message.error('请先登录后再处理');
@@ -397,6 +399,7 @@ export function AdminPage() {
     try {
       await resolveReport(reportId, {
         resolutionNote,
+        penaltyLevel,
         nextStatus
       });
       message.success('举报已处理');
@@ -408,7 +411,8 @@ export function AdminPage() {
 
   async function handleResolveAppeal(
     appealId: number,
-    nextStatus: 'RESOLVED' | 'REJECTED' | 'CANCELED_ORDER' | 'BAN_RESPONDENT' | 'UNBAN_RESPONDENT'
+    nextStatus: 'RESOLVED' | 'REJECTED' | 'CANCELED_ORDER' | 'BAN_RESPONDENT' | 'UNBAN_RESPONDENT',
+    penaltyLevel: GovernancePenaltyLevel = 'NORMAL'
   ) {
     if (!currentUser) {
       message.error('请先登录后再处理');
@@ -418,6 +422,7 @@ export function AdminPage() {
     try {
       await resolveAdminOrderAppeal(appealId, {
         nextStatus,
+        penaltyLevel,
         resolutionNote
       });
       message.success('申诉已处理');
@@ -718,6 +723,7 @@ export function AdminPage() {
         valueType: 'select',
         valueEnum: {
           PRODUCT: { text: '商品' },
+          CAMPUS_SERVICE: { text: '校园服务' },
           USER: { text: '用户' }
         },
         fieldProps: {
@@ -738,6 +744,9 @@ export function AdminPage() {
         render: (_, record) => {
           if (record.productId) {
             return `商品 #${record.productId}`;
+          }
+          if (record.campusServiceListingId) {
+            return `校园服务 #${record.campusServiceListingId}`;
           }
           if (record.targetUserId) {
             return `用户 #${record.targetUserId}`;
@@ -780,18 +789,18 @@ export function AdminPage() {
           }
 
           return [
-            record.productId ? (
+            (record.productId || record.campusServiceListingId) ? (
               <Button key="offline" size="small" type="primary" onClick={() => void handleResolveReport(record.id, 'OFFLINE_PRODUCT')}>
-                下架商品
+                {record.productId ? '下架商品' : '下架服务'}
               </Button>
             ) : null,
             record.targetUserId ? (
-              <Button key="ban" size="small" danger onClick={() => void handleResolveReport(record.id, 'BAN_USER')}>
-                封禁用户
+              <Button key="ban" size="small" danger onClick={() => void handleResolveReport(record.id, 'BAN_USER', 'SEVERE')}>
+                严重封号
               </Button>
             ) : null,
             <Button key="resolved" size="small" onClick={() => void handleResolveReport(record.id, 'RESOLVED')}>
-              已处理
+              扣分处理
             </Button>,
             <Button key="reject" size="small" onClick={() => void handleResolveReport(record.id, 'REJECTED')}>
               驳回
@@ -894,13 +903,13 @@ export function AdminPage() {
 
           return [
             <Button key="resolve" size="small" type="primary" onClick={() => void handleResolveAppeal(record.id, 'RESOLVED')}>
-              处理完成
+              扣分处理
             </Button>,
             <Button key="cancel-order" size="small" onClick={() => void handleResolveAppeal(record.id, 'CANCELED_ORDER')}>
               取消订单
             </Button>,
-            <Button key="ban-user" size="small" danger onClick={() => void handleResolveAppeal(record.id, 'BAN_RESPONDENT')}>
-              封禁对方
+            <Button key="ban-user" size="small" danger onClick={() => void handleResolveAppeal(record.id, 'BAN_RESPONDENT', 'SEVERE')}>
+              严重封号
             </Button>,
             <Button key="reject" size="small" onClick={() => void handleResolveAppeal(record.id, 'REJECTED')}>
               驳回
@@ -1377,11 +1386,14 @@ export function AdminPage() {
         if (params.targetType === 'PRODUCT' && !item.productId) {
           return false;
         }
+        if (params.targetType === 'CAMPUS_SERVICE' && !item.campusServiceListingId) {
+          return false;
+        }
         if (params.targetType === 'USER' && !item.targetUserId) {
           return false;
         }
 
-        return containsValue([item.id, item.reason, item.productId, item.targetUserId], params.keyword);
+        return containsValue([item.id, item.reason, item.productId, item.campusServiceListingId, item.targetUserId], params.keyword);
       });
 
       return { data, success: true, total: data.length };

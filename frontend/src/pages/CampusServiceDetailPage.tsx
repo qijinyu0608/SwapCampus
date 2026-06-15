@@ -243,7 +243,6 @@ export function CampusServiceDetailPage() {
         currentUser,
         submit: (reason) => createReport({
           campusServiceListingId: listing.id,
-          targetUserId: listing.publisher.id,
           reason
         }),
         onSuccess: () => {

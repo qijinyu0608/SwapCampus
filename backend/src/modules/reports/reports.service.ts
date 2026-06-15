@@ -13,6 +13,10 @@ import {
   REPORT_BAN_CREDIT_PENALTY,
   REPORT_RESOLVED_CREDIT_PENALTY
 } from '../users/user-credit.utils';
+import {
+  normalizeGovernancePenaltyLevel,
+  requiresBanForPenalty
+} from '../moderation/governance-penalty.utils';
 
 @Injectable()
 export class ReportsService {
@@ -137,7 +141,9 @@ export class ReportsService {
   async resolveReport(reportId: number, payload: ResolveReportDto, currentUser: AuthenticatedUser) {
     const adminUser = requireAdminUser(currentUser);
     const affectedProductIds = new Set<number>();
+    const affectedCampusServiceListingIds = new Set<number>();
     let affectedUserId: number | null = null;
+    const penaltyLevel = normalizeGovernancePenaltyLevel(payload.penaltyLevel);
     const result = await this.prisma.$transaction(async (tx) => {
       const report = await tx.report.findUnique({
         where: { id: reportId }
@@ -155,11 +161,31 @@ export class ReportsService {
         ? 'RESOLVED'
         : payload.nextStatus;
 
-      if (payload.nextStatus === 'OFFLINE_PRODUCT' && !report.productId) {
-        throw new BadRequestException('当前举报没有关联商品');
+      if (payload.nextStatus === 'OFFLINE_PRODUCT' && !report.productId && !report.campusServiceListingId) {
+        throw new BadRequestException('当前举报没有关联可下架对象');
       }
 
-      if ((payload.nextStatus === 'BAN_USER' || payload.nextStatus === 'UNBAN_USER') && !report.targetUserId) {
+      if ((payload.nextStatus === 'BAN_USER' || payload.nextStatus === 'UNBAN_USER') && !requiresBanForPenalty(penaltyLevel)) {
+        throw new BadRequestException('仅严重违规举报才允许封号或解封');
+      }
+
+      let reportTargetUserId = report.targetUserId ?? null;
+      if (!reportTargetUserId && report.productId) {
+        const productOwner = await tx.product.findUnique({
+          where: { id: report.productId },
+          select: { sellerId: true }
+        });
+        reportTargetUserId = productOwner?.sellerId ?? null;
+      }
+      if (!reportTargetUserId && report.campusServiceListingId) {
+        const listingOwner = await tx.campusServiceListing.findUnique({
+          where: { id: report.campusServiceListingId },
+          select: { ownerId: true }
+        });
+        reportTargetUserId = listingOwner?.ownerId ?? null;
+      }
+
+      if ((payload.nextStatus === 'BAN_USER' || payload.nextStatus === 'UNBAN_USER') && !reportTargetUserId) {
         throw new BadRequestException('当前举报没有关联用户');
       }
 
@@ -216,10 +242,50 @@ export class ReportsService {
         }, tx);
       }
 
-      if (payload.nextStatus === 'BAN_USER' && report.targetUserId) {
+      if (payload.nextStatus === 'OFFLINE_PRODUCT' && report.campusServiceListingId) {
+        const operationAt = new Date();
+        const listing = await tx.campusServiceListing.findUnique({
+          where: { id: report.campusServiceListingId },
+          select: {
+            id: true,
+            status: true
+          }
+        });
+
+        if (!listing) {
+          throw new NotFoundException('举报关联校园服务不存在');
+        }
+
+        if (!['OPEN', 'BUSY', 'PAUSED'].includes(listing.status)) {
+          throw new BadRequestException('举报关联校园服务当前已归档');
+        }
+
+        await tx.campusServiceListing.update({
+          where: { id: listing.id },
+          data: {
+            status: 'CANCELED',
+            endReason: 'ADMIN_CLOSE',
+            endedAt: operationAt
+          }
+        });
+        await tx.campusServiceOrder.updateMany({
+          where: {
+            listingId: listing.id,
+            status: { in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'WAITING_COMPLETE_CONFIRM'] }
+          },
+          data: {
+            status: 'CANCELED',
+            canceledAt: operationAt,
+            cancelReason: payload.resolutionNote?.trim() || '校园服务举报下架处理'
+          }
+        });
+        affectedCampusServiceListingIds.add(listing.id);
+      }
+
+      if (payload.nextStatus === 'BAN_USER' && reportTargetUserId) {
         const operationAt = new Date();
         const targetUser = await tx.user.findUnique({
-          where: { id: report.targetUserId },
+          where: { id: reportTargetUserId },
           select: { id: true, accountStatus: true, creditScore: true }
         });
 
@@ -232,14 +298,14 @@ export class ReportsService {
         }
 
         await tx.user.update({
-          where: { id: report.targetUserId },
+          where: { id: reportTargetUserId },
           data: { accountStatus: AccountStatus.BANNED }
         });
 
         const onSaleProductIds = (
           await tx.product.findMany({
             where: {
-              sellerId: report.targetUserId,
+              sellerId: reportTargetUserId,
               status: ProductStatus.ON_SALE
             },
             select: { id: true }
@@ -247,7 +313,7 @@ export class ReportsService {
         ).map((product: { id: number }) => product.id);
 
         const [{ canceledOrderIds, reconciledProductIds }] = await Promise.all([
-          cancelOrdersForUserAndReconcileProducts(tx, report.targetUserId, operationAt),
+          cancelOrdersForUserAndReconcileProducts(tx, reportTargetUserId, operationAt),
           onSaleProductIds.length
             ? tx.product.updateMany({
                 where: {
@@ -259,13 +325,13 @@ export class ReportsService {
                 }
               })
             : Promise.resolve({ count: 0 }),
-          cancelCampusServicesForUser(tx, report.targetUserId, payload.resolutionNote?.trim() || '举报封禁处理'),
-          applyCreditScoreDelta(tx, report.targetUserId, REPORT_BAN_CREDIT_PENALTY)
+          cancelCampusServicesForUser(tx, reportTargetUserId, payload.resolutionNote?.trim() || '举报封禁处理'),
+          applyCreditScoreDelta(tx, reportTargetUserId, REPORT_BAN_CREDIT_PENALTY)
         ]);
 
         reconciledProductIds.forEach((id) => affectedProductIds.add(id));
         onSaleProductIds.forEach((id) => affectedProductIds.add(id));
-        affectedUserId = report.targetUserId;
+        affectedUserId = reportTargetUserId;
 
         for (const orderId of canceledOrderIds) {
           await this.outboxService.publishOrderCommerceSyncEvent({
@@ -275,7 +341,7 @@ export class ReportsService {
         }
 
         await this.outboxService.publishSellerSearchEvent({
-          sellerId: report.targetUserId,
+          sellerId: reportTargetUserId,
           eventType: 'SellerStatusChanged',
           changedBy: 'reports',
           reason: 'REPORT_USER_BANNED'
@@ -301,14 +367,15 @@ export class ReportsService {
 
       if (
         (payload.nextStatus === 'RESOLVED' || payload.nextStatus === 'OFFLINE_PRODUCT')
-        && report.targetUserId
+        && reportTargetUserId
       ) {
-        await applyCreditScoreDelta(tx, report.targetUserId, REPORT_RESOLVED_CREDIT_PENALTY);
+        affectedUserId = affectedUserId ?? reportTargetUserId;
+        await applyCreditScoreDelta(tx, reportTargetUserId, REPORT_RESOLVED_CREDIT_PENALTY);
       }
 
-      if (payload.nextStatus === 'UNBAN_USER' && report.targetUserId) {
+      if (payload.nextStatus === 'UNBAN_USER' && reportTargetUserId) {
         const targetUser = await tx.user.findUnique({
-          where: { id: report.targetUserId },
+          where: { id: reportTargetUserId },
           select: { id: true, accountStatus: true }
         });
 
@@ -321,13 +388,13 @@ export class ReportsService {
         }
 
         await tx.user.update({
-          where: { id: report.targetUserId },
+          where: { id: reportTargetUserId },
           data: { accountStatus: AccountStatus.ACTIVE }
         });
-        affectedUserId = report.targetUserId;
+        affectedUserId = reportTargetUserId;
 
         await this.outboxService.publishSellerSearchEvent({
-          sellerId: report.targetUserId,
+          sellerId: reportTargetUserId,
           eventType: 'SellerStatusChanged',
           changedBy: 'reports',
           reason: 'REPORT_USER_UNBANNED'
@@ -348,9 +415,9 @@ export class ReportsService {
           actorId: adminUser.id,
           actorName: `管理员#${adminUser.id}`,
           action: payload.nextStatus,
-          targetType: report.productId ? 'REPORT_PRODUCT' : 'REPORT_USER',
-          targetId: report.productId ?? report.targetUserId ?? report.id,
-          detail: payload.resolutionNote?.trim() || `举报处理结果：${payload.nextStatus}`
+          targetType: report.productId ? 'REPORT_PRODUCT' : report.campusServiceListingId ? 'REPORT_CAMPUS_SERVICE' : 'REPORT_USER',
+          targetId: report.productId ?? report.campusServiceListingId ?? reportTargetUserId ?? report.id,
+          detail: payload.resolutionNote?.trim() || `举报处理结果：${payload.nextStatus}（${penaltyLevel === 'SEVERE' ? '严重违规' : '普通违规'}）`
         }
       });
 
@@ -359,6 +426,7 @@ export class ReportsService {
         status: updated.status,
         resolutionNote: updated.resolutionNote,
         affectedProductIds: Array.from(affectedProductIds),
+        affectedCampusServiceListingIds: Array.from(affectedCampusServiceListingIds),
         affectedUserId
       };
     });

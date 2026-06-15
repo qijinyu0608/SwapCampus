@@ -30,6 +30,10 @@ import {
   ORDER_APPEAL_BAN_CREDIT_PENALTY,
   ORDER_APPEAL_RESOLVED_CREDIT_PENALTY
 } from '../users/user-credit.utils';
+import {
+  normalizeGovernancePenaltyLevel,
+  requiresBanForPenalty
+} from '../moderation/governance-penalty.utils';
 
 const activeOrderStatuses: OrderStatus[] = [
   OrderStatus.PENDING,
@@ -509,6 +513,7 @@ export class AdminService {
     const adminUser = requireAdminUser(currentUser);
     const affectedProductIds = new Set<number>();
     let affectedUserId: number | null = null;
+    const penaltyLevel = normalizeGovernancePenaltyLevel(payload.penaltyLevel);
 
     return this.prisma.$transaction(async (tx) => {
       const appealClient = tx as typeof tx & Pick<PrismaClient, 'orderAppeal'>;
@@ -522,6 +527,10 @@ export class AdminService {
 
       if (appeal.status !== 'OPEN') {
         throw new BadRequestException('申诉已处理，不能重复操作');
+      }
+
+      if ((payload.nextStatus === 'BAN_RESPONDENT' || payload.nextStatus === 'UNBAN_RESPONDENT') && !requiresBanForPenalty(penaltyLevel)) {
+        throw new BadRequestException('仅严重违规申诉才允许封号或解封');
       }
 
       if (payload.nextStatus === 'BAN_RESPONDENT') {

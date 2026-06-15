@@ -38,6 +38,7 @@ describe('ReportsService', () => {
     } as any;
 
     const service = new ReportsService(prisma, {
+      publishGovernanceEvent: jest.fn(),
       publishProductSearchEvent: jest.fn(),
       publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn()
@@ -131,6 +132,7 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const outboxService = {
+      publishGovernanceEvent: jest.fn().mockResolvedValue(undefined),
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined),
@@ -140,7 +142,8 @@ describe('ReportsService', () => {
     const service = new ReportsService(prisma, outboxService);
     const result = await service.resolveReport(6, {
       resolutionNote: '核查后封禁',
-      nextStatus: 'BAN_USER'
+      nextStatus: 'BAN_USER',
+      penaltyLevel: 'SEVERE'
     }, adminUser);
 
     expect(prisma.user.update).toHaveBeenCalledWith({
@@ -203,6 +206,7 @@ describe('ReportsService', () => {
         update: jest.fn()
       },
       product: {
+        findUnique: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn()
       },
@@ -210,6 +214,7 @@ describe('ReportsService', () => {
         updateMany: jest.fn()
       },
       campusServiceListing: {
+        findUnique: jest.fn(),
         updateMany: jest.fn(),
         findMany: jest.fn()
       },
@@ -225,6 +230,7 @@ describe('ReportsService', () => {
     prisma.$transaction = jest.fn((callback) => callback(prisma));
 
     const service = new ReportsService(prisma, {
+      publishGovernanceEvent: jest.fn(),
       publishProductSearchEvent: jest.fn(),
       publishProductCommerceSyncEvent: jest.fn(),
       publishSellerSearchEvent: jest.fn(),
@@ -234,7 +240,61 @@ describe('ReportsService', () => {
     await expect(
       service.resolveReport(7, {
         resolutionNote: '无用户对象',
-        nextStatus: 'BAN_USER'
+        nextStatus: 'BAN_USER',
+        penaltyLevel: 'SEVERE'
+      }, adminUser)
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('should reject BAN_USER when penalty level is not severe', async () => {
+    const prisma = {
+      report: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 70,
+          productId: null,
+          targetUserId: 24,
+          reason: '普通违规',
+          status: 'OPEN'
+        })
+      },
+      user: {
+        findUnique: jest.fn(),
+        update: jest.fn()
+      },
+      product: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn()
+      },
+      order: {
+        updateMany: jest.fn()
+      },
+      campusServiceListing: {
+        findUnique: jest.fn(),
+        updateMany: jest.fn(),
+        findMany: jest.fn()
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn(),
+        findMany: jest.fn(),
+        groupBy: jest.fn()
+      }
+    } as any;
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
+
+    const service = new ReportsService(prisma, {
+      publishGovernanceEvent: jest.fn(),
+      publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn(),
+      publishOrderCommerceSyncEvent: jest.fn()
+    } as any);
+
+    await expect(
+      service.resolveReport(70, {
+        resolutionNote: '普通处罚',
+        nextStatus: 'BAN_USER',
+        penaltyLevel: 'NORMAL'
       }, adminUser)
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -346,7 +406,8 @@ describe('ReportsService', () => {
     await expect(
       service.resolveReport(11, {
         resolutionNote: '重复封禁',
-        nextStatus: 'BAN_USER'
+        nextStatus: 'BAN_USER',
+        penaltyLevel: 'SEVERE'
       }, adminUser)
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -405,7 +466,8 @@ describe('ReportsService', () => {
     await expect(
       service.resolveReport(12, {
         resolutionNote: '重复解封',
-        nextStatus: 'UNBAN_USER'
+        nextStatus: 'UNBAN_USER',
+        penaltyLevel: 'SEVERE'
       }, adminUser)
     ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -529,5 +591,95 @@ describe('ReportsService', () => {
 
     expect(prisma.product.update).not.toHaveBeenCalled();
     expect(prisma.report.update).not.toHaveBeenCalled();
+  });
+
+  it('should offline campus service and deduct owner credit on resolved report', async () => {
+    const prisma = {
+      report: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 13,
+          productId: null,
+          campusServiceListingId: 31,
+          targetUserId: null,
+          reason: '服务违规',
+          status: 'OPEN'
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 13,
+          status: 'RESOLVED',
+          resolutionNote: '已下架'
+        })
+      },
+      user: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({ id: 24, creditScore: 66 }),
+        update: jest.fn().mockResolvedValue({ id: 24, creditScore: 58 })
+      },
+      product: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn()
+      },
+      order: {
+        updateMany: jest.fn()
+      },
+      campusServiceListing: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({ ownerId: 24 })
+          .mockResolvedValueOnce({ id: 31, status: 'OPEN' }),
+        update: jest.fn().mockResolvedValue({ id: 31 }),
+        updateMany: jest.fn(),
+        findMany: jest.fn()
+      },
+      campusServiceOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn(),
+        groupBy: jest.fn()
+      },
+      auditLog: {
+        create: jest.fn()
+      }
+    } as any;
+    prisma.$transaction = jest.fn((callback) => callback(prisma));
+
+    const service = new ReportsService(prisma, {
+      publishGovernanceEvent: jest.fn(),
+      publishProductSearchEvent: jest.fn(),
+      publishProductCommerceSyncEvent: jest.fn(),
+      publishSellerSearchEvent: jest.fn(),
+      publishOrderCommerceSyncEvent: jest.fn()
+    } as any);
+
+    const result = await service.resolveReport(13, {
+      resolutionNote: '已下架',
+      nextStatus: 'OFFLINE_PRODUCT',
+      penaltyLevel: 'NORMAL'
+    }, adminUser);
+
+    expect(prisma.campusServiceListing.update).toHaveBeenCalledWith({
+      where: { id: 31 },
+      data: {
+        status: 'CANCELED',
+        endReason: 'ADMIN_CLOSE',
+        endedAt: expect.any(Date)
+      }
+    });
+    expect(prisma.campusServiceOrder.updateMany).toHaveBeenCalledWith({
+      where: {
+        listingId: 31,
+        status: { in: ['PENDING_CONFIRMATION', 'CONFIRMED', 'WAITING_COMPLETE_CONFIRM'] }
+      },
+      data: {
+        status: 'CANCELED',
+        canceledAt: expect.any(Date),
+        cancelReason: '已下架'
+      }
+    });
+    expect(result).toMatchObject({
+      id: 13,
+      status: 'RESOLVED',
+      affectedCampusServiceListingIds: [31],
+      affectedUserId: 24
+    });
   });
 });

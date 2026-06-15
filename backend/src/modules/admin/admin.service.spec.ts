@@ -110,6 +110,7 @@ describe('AdminService', () => {
 
   function createService(prisma: any) {
     const outboxService = {
+      publishGovernanceEvent: jest.fn().mockResolvedValue(undefined),
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
       publishOrderCommerceSyncEvent: jest.fn().mockResolvedValue(undefined),
@@ -167,7 +168,16 @@ describe('AdminService', () => {
       where: { id: 18 },
       data: { status: ProductStatus.ON_SALE, offlineReason: null }
     });
-    expect(tx.auditLog.create).toHaveBeenCalled();
+    expect(outboxService.publishGovernanceEvent).toHaveBeenCalledWith({
+      actorId: adminUser.id,
+      actorName: `管理员#${adminUser.id}`,
+      action: 'UPDATE_ORDER_STATUS',
+      targetType: 'ORDER',
+      targetId: 91,
+      detail: '管理员取消',
+      aggregateType: 'ORDER',
+      aggregateId: 91
+    }, tx);
     expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
       productId: 18,
       eventType: 'ProductAvailabilityChanged'
@@ -430,7 +440,28 @@ describe('AdminService', () => {
     const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(52, {
-      nextStatus: 'BAN_RESPONDENT'
+      nextStatus: 'BAN_RESPONDENT',
+      penaltyLevel: 'SEVERE'
+    }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.orderAppeal.update).not.toHaveBeenCalled();
+  });
+
+  it('should reject BAN_RESPONDENT when penalty level is not severe', async () => {
+    const { prisma, tx } = createPrisma();
+    tx.orderAppeal.findUnique.mockResolvedValue({
+      id: 521,
+      orderId: 91,
+      respondentId: 32,
+      status: 'OPEN'
+    });
+
+    const { service } = createService(prisma);
+
+    await expect(service.resolveOrderAppeal(521, {
+      nextStatus: 'BAN_RESPONDENT',
+      penaltyLevel: 'NORMAL'
     }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(tx.user.update).not.toHaveBeenCalled();
@@ -453,7 +484,8 @@ describe('AdminService', () => {
     const { service } = createService(prisma);
 
     await expect(service.resolveOrderAppeal(53, {
-      nextStatus: 'UNBAN_RESPONDENT'
+      nextStatus: 'UNBAN_RESPONDENT',
+      penaltyLevel: 'SEVERE'
     }, adminUser)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(tx.user.update).not.toHaveBeenCalled();
@@ -498,6 +530,7 @@ describe('AdminService', () => {
     const { service } = createService(prisma);
     const result = await service.resolveOrderAppeal(54, {
       nextStatus: 'BAN_RESPONDENT',
+      penaltyLevel: 'SEVERE',
       resolutionNote: '申诉封禁'
     }, adminUser);
 

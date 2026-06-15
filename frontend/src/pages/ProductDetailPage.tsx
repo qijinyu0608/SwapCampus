@@ -242,7 +242,6 @@ export function ProductDetailPage() {
         currentUser: activeUser,
         submit: (reason) => createReport({
           productId: detail.id,
-          targetUserId: detail.seller.id,
           reason
         }),
         onSuccess: () => {
