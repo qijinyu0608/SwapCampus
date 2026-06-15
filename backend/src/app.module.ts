@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import './load-env';
 import { AdminController } from './modules/admin/admin.controller';
 import { AdminService } from './modules/admin/admin.service';
 import { HealthController } from './modules/health/health.controller';
@@ -31,11 +32,8 @@ import { ReportsController } from './modules/reports/reports.controller';
 import { ReportsService } from './modules/reports/reports.service';
 import { PublishingReviewService } from './modules/moderation/publishing-review.service';
 import { OutboxModule } from './modules/outbox/outbox.module';
-import { SearchService } from './modules/search/search.service';
 import { UsersController } from './modules/users/users.controller';
 import { UsersService } from './modules/users/users.service';
-import { VendureService } from './modules/vendure/vendure.service';
-import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [OutboxModule],
@@ -73,10 +71,7 @@ import { PrismaService } from './prisma/prisma.service';
     OrdersService,
     ReportsService,
     PublishingReviewService,
-    SearchService,
-    UsersService,
-    VendureService,
-    PrismaService
+    UsersService
   ]
 })
 export class AppModule implements NestModule {

@@ -3,10 +3,8 @@ import { OutboxEventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VendureService } from '../vendure/vendure.service';
 import {
-  COMMERCE_SYNC_BATCH_SIZE,
-  COMMERCE_SYNC_MAX_RETRIES,
+  getCommerceOutboxConsumerConfig,
   COMMERCE_SYNC_OUTBOX_TOPIC,
-  COMMERCE_SYNC_PROCESSING_TIMEOUT_MS,
   CommerceSyncOutboxEventRecord,
   nextCommerceRetryAt
 } from './outbox.types';
@@ -17,6 +15,10 @@ function toErrorMessage(error: unknown) {
   }
 
   return String(error);
+}
+
+function toPositiveInt(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
 }
 
 function toCommerceSyncOutboxEventRecord(event: {
@@ -41,15 +43,12 @@ function toCommerceSyncOutboxEventRecord(event: {
   };
 }
 
-function toPositiveInt(value: unknown) {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
-}
-
 @Injectable()
 export class CommerceSyncOutboxConsumer implements OnModuleInit {
   private readonly logger = new Logger(CommerceSyncOutboxConsumer.name);
-  private readonly enabled = process.env.COMMERCE_SYNC_ENABLED !== 'false';
-  private readonly pollIntervalMs = Number.parseInt(process.env.COMMERCE_SYNC_OUTBOX_POLL_MS ?? '3000', 10) || 3000;
+  private readonly config = getCommerceOutboxConsumerConfig();
+  private readonly enabled = this.config.enabled;
+  private readonly pollIntervalMs = this.config.pollIntervalMs;
   private timer: NodeJS.Timeout | null = null;
   private pollInFlight = false;
 
@@ -132,7 +131,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
         availableAt: { lte: now }
       },
       orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
-      take: COMMERCE_SYNC_BATCH_SIZE
+      take: this.config.batchSize
     });
 
     if (!pending.length) {
@@ -167,7 +166,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
   }
 
   private async recoverExpiredProcessingEvents(now: Date) {
-    const threshold = new Date(now.getTime() - COMMERCE_SYNC_PROCESSING_TIMEOUT_MS);
+    const threshold = new Date(now.getTime() - this.config.processingTimeoutMs);
     const recovered = await this.prisma.outboxEvent.updateMany({
       where: {
         topic: COMMERCE_SYNC_OUTBOX_TOPIC,
@@ -201,7 +200,7 @@ export class CommerceSyncOutboxConsumer implements OnModuleInit {
       });
     } catch (error) {
       const nextRetryCount = event.retryCount + 1;
-      const terminal = nextRetryCount > COMMERCE_SYNC_MAX_RETRIES;
+      const terminal = nextRetryCount > this.config.maxRetries;
       const message = toErrorMessage(error);
       await this.prisma.outboxEvent.update({
         where: { id: event.id },

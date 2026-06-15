@@ -11,6 +11,57 @@ export const COMMERCE_SYNC_MAX_RETRIES = COMMERCE_SYNC_RETRY_DELAYS_MS.length;
 export const COMMERCE_SYNC_PROCESSING_TIMEOUT_MS = 2 * 60_000;
 export const COMMERCE_SYNC_BATCH_SIZE = 20;
 
+function toPositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function toRetryDelays(rawValue: string | undefined, fallback: readonly number[]) {
+  if (!rawValue?.trim()) {
+    return [...fallback];
+  }
+
+  const parsed = rawValue
+    .split(',')
+    .map((item) => Number.parseInt(item.trim(), 10))
+    .filter((item) => Number.isInteger(item) && item >= 0);
+
+  return parsed.length ? parsed : [...fallback];
+}
+
+export type OutboxConsumerConfig = {
+  enabled: boolean;
+  pollIntervalMs: number;
+  batchSize: number;
+  processingTimeoutMs: number;
+  retryDelaysMs: number[];
+  maxRetries: number;
+};
+
+export function getSearchOutboxConsumerConfig(env: NodeJS.ProcessEnv = process.env): OutboxConsumerConfig {
+  const retryDelaysMs = toRetryDelays(env.SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS, SEARCH_INDEX_RETRY_DELAYS_MS);
+  return {
+    enabled: env.SEARCH_INDEX_OUTBOX_ENABLED !== 'false',
+    pollIntervalMs: toPositiveInt(env.SEARCH_INDEX_OUTBOX_POLL_MS, 3_000),
+    batchSize: toPositiveInt(env.SEARCH_INDEX_OUTBOX_BATCH_SIZE, SEARCH_INDEX_BATCH_SIZE),
+    processingTimeoutMs: toPositiveInt(env.SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS, SEARCH_INDEX_PROCESSING_TIMEOUT_MS),
+    retryDelaysMs,
+    maxRetries: retryDelaysMs.length
+  };
+}
+
+export function getCommerceOutboxConsumerConfig(env: NodeJS.ProcessEnv = process.env): OutboxConsumerConfig {
+  const retryDelaysMs = toRetryDelays(env.COMMERCE_SYNC_OUTBOX_RETRY_DELAYS_MS, COMMERCE_SYNC_RETRY_DELAYS_MS);
+  return {
+    enabled: env.COMMERCE_SYNC_ENABLED !== 'false',
+    pollIntervalMs: toPositiveInt(env.COMMERCE_SYNC_OUTBOX_POLL_MS, 3_000),
+    batchSize: toPositiveInt(env.COMMERCE_SYNC_OUTBOX_BATCH_SIZE, COMMERCE_SYNC_BATCH_SIZE),
+    processingTimeoutMs: toPositiveInt(env.COMMERCE_SYNC_OUTBOX_PROCESSING_TIMEOUT_MS, COMMERCE_SYNC_PROCESSING_TIMEOUT_MS),
+    retryDelaysMs,
+    maxRetries: retryDelaysMs.length
+  };
+}
+
 export const searchEventTypes = [
   'ProductCreated',
   'ProductUpdated',
@@ -161,11 +212,13 @@ export type CommerceSyncOutboxEventRecord = {
 };
 
 export function nextSearchRetryAt(retryCount: number, now = new Date()) {
-  const delay = SEARCH_INDEX_RETRY_DELAYS_MS[Math.min(retryCount, SEARCH_INDEX_RETRY_DELAYS_MS.length - 1)];
+  const config = getSearchOutboxConsumerConfig();
+  const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
   return new Date(now.getTime() + delay);
 }
 
 export function nextCommerceRetryAt(retryCount: number, now = new Date()) {
-  const delay = COMMERCE_SYNC_RETRY_DELAYS_MS[Math.min(retryCount, COMMERCE_SYNC_RETRY_DELAYS_MS.length - 1)];
+  const config = getCommerceOutboxConsumerConfig();
+  const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
   return new Date(now.getTime() + delay);
 }

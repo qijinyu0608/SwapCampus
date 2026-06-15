@@ -7,7 +7,6 @@ import { requireAuthenticatedUser } from '../auth/auth.utils';
 import { OutboxService } from '../outbox/outbox.service';
 import { SearchService } from '../search/search.service';
 import { OrdersService } from '../orders/orders.service';
-import { VendureService } from '../vendure/vendure.service';
 import { isProductCategoryName, normalizeProductCategoryName, PRODUCT_CATEGORY_NAMES } from './product-categories';
 import { isProductConditionValue, normalizeProductConditionValue, parseProductConditionValue } from './product-conditions';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -170,8 +169,6 @@ export class ProductsService {
     private readonly searchService: SearchService,
     @Inject(OutboxService)
     private readonly outboxService: OutboxService,
-    @Inject(VendureService)
-    private readonly vendureService: VendureService,
     @Inject(PublishingReviewService)
     private readonly publishingReviewService?: PublishingReviewService,
     @Inject(OrdersService)

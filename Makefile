@@ -1,4 +1,4 @@
-.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-auth status health down logs backend-test frontend-build prisma-generate screenshots
+.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-search-indexer restart-commerce-sync restart-auth status health down logs backend-test frontend-build prisma-generate backfill-search-outbox screenshots
 
 install:
 	cd backend && npm install
@@ -13,13 +13,19 @@ init-reset:
 up: init start
 
 start: auth-clean-legacy
-	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend frontend
+	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend search-indexer commerce-sync frontend
 
 auth-clean-legacy:
 	-docker rm -f swapcampus-supertokens-local
 
 restart-backend:
 	docker compose restart backend
+
+restart-search-indexer:
+	docker compose restart search-indexer
+
+restart-commerce-sync:
+	docker compose restart commerce-sync
 
 restart-auth: auth-clean-legacy
 	docker compose up -d supertokens
@@ -48,6 +54,9 @@ frontend-build:
 
 prisma-generate:
 	cd backend && npm run prisma:generate
+
+backfill-search-outbox:
+	cd backend && npm run db:backfill-search-outbox
 
 screenshots:
 	node infra/generate-screenshots.mjs

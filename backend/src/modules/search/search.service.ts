@@ -126,11 +126,16 @@ export function buildSearchQuery(query: string) {
   return tokens.map((token) => `"${token}"`).join(' ');
 }
 
+export function shouldInitializeSearchOnStartup(env: NodeJS.ProcessEnv = process.env) {
+  return env.SEARCH_INDEXER_INITIALIZE_ON_STARTUP !== 'false';
+}
+
 @Injectable()
 export class SearchService implements OnModuleInit {
   private readonly logger = new Logger(SearchService.name);
   private readonly client: any;
   private readonly productsIndex: any;
+  private readonly initializeOnStartup = shouldInitializeSearchOnStartup();
   private initialized = false;
   private initializationPromise: Promise<void> | null = null;
 
@@ -156,7 +161,9 @@ export class SearchService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.ensureReady();
+    if (this.initializeOnStartup) {
+      await this.ensureReady();
+    }
   }
 
   private async waitForTask(taskUid: number) {

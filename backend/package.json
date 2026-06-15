@@ -6,6 +6,10 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
+    "start:search-indexer": "SEARCH_INDEX_OUTBOX_ENABLED=true SEARCH_INDEXER_INITIALIZE_ON_STARTUP=true node dist/src/search-indexer.main.js",
+    "start:search-indexer:dev": "SEARCH_INDEX_OUTBOX_ENABLED=true SEARCH_INDEXER_INITIALIZE_ON_STARTUP=true tsx watch src/search-indexer.main.ts",
+    "start:commerce-sync": "COMMERCE_SYNC_ENABLED=true node dist/src/commerce-sync.main.js",
+    "start:commerce-sync:dev": "COMMERCE_SYNC_ENABLED=true tsx watch src/commerce-sync.main.ts",
     "test": "jest --runInBand",
     "prisma:generate": "PRISMA_CLIENT_ENGINE_TYPE=binary prisma generate",
     "db:push": "PRISMA_CLIENT_ENGINE_TYPE=binary prisma db push",
@@ -21,6 +25,7 @@
     "db:import-real-product-samples": "tsx prisma/import-real-product-samples.ts",
     "db:migrate-product-categories": "tsx prisma/migrate-product-categories.ts",
     "db:backfill-product-offline-reasons": "tsx prisma/backfill-product-offline-reasons.ts",
+    "db:backfill-search-outbox": "tsx prisma/backfill-search-outbox.ts",
     "db:clean-domain-data": "tsx prisma/clean-domain-data.ts",
     "db:verify-category-products": "tsx prisma/verify-category-products.ts"
   },

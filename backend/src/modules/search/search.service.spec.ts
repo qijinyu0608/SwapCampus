@@ -1,5 +1,6 @@
 import { buildSearchQuery } from './search.service';
 import { SearchService } from './search.service';
+import { shouldInitializeSearchOnStartup } from './search.service';
 
 describe('search query building', () => {
   it('segments Chinese phrases into quoted search tokens', () => {
@@ -37,5 +38,38 @@ describe('search query building', () => {
       page: 1,
       hitsPerPage: 20
     }));
+  });
+
+  it('initializes search on startup by default', () => {
+    expect(shouldInitializeSearchOnStartup({} as NodeJS.ProcessEnv)).toBe(true);
+    expect(shouldInitializeSearchOnStartup({
+      SEARCH_INDEXER_INITIALIZE_ON_STARTUP: 'true'
+    } as NodeJS.ProcessEnv)).toBe(true);
+  });
+
+  it('allows disabling startup initialization explicitly', () => {
+    expect(shouldInitializeSearchOnStartup({
+      SEARCH_INDEXER_INITIALIZE_ON_STARTUP: 'false'
+    } as NodeJS.ProcessEnv)).toBe(false);
+  });
+
+  it('skips ensureReady when startup initialization is disabled', async () => {
+    const service: any = Object.create(SearchService.prototype);
+    service.initializeOnStartup = false;
+    service.ensureReady = jest.fn().mockResolvedValue(undefined);
+
+    await service.onModuleInit();
+
+    expect(service.ensureReady).not.toHaveBeenCalled();
+  });
+
+  it('calls ensureReady when startup initialization is enabled', async () => {
+    const service: any = Object.create(SearchService.prototype);
+    service.initializeOnStartup = true;
+    service.ensureReady = jest.fn().mockResolvedValue(undefined);
+
+    await service.onModuleInit();
+
+    expect(service.ensureReady).toHaveBeenCalledTimes(1);
   });
 });

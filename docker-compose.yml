@@ -126,6 +126,17 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      SEARCH_INDEX_OUTBOX_ENABLED: ${BACKEND_SEARCH_INDEX_OUTBOX_ENABLED:-false}
+      SEARCH_INDEXER_INITIALIZE_ON_STARTUP: ${BACKEND_SEARCH_INDEXER_INITIALIZE_ON_STARTUP:-false}
+      SEARCH_INDEX_OUTBOX_POLL_MS: ${SEARCH_INDEX_OUTBOX_POLL_MS:-3000}
+      SEARCH_INDEX_OUTBOX_BATCH_SIZE: ${SEARCH_INDEX_OUTBOX_BATCH_SIZE:-20}
+      SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS: ${SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS:-120000}
+      SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS: ${SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS:-5000,15000,60000,300000,900000}
+      COMMERCE_SYNC_ENABLED: ${BACKEND_COMMERCE_SYNC_ENABLED:-false}
+      COMMERCE_SYNC_OUTBOX_POLL_MS: ${COMMERCE_SYNC_OUTBOX_POLL_MS:-3000}
+      COMMERCE_SYNC_OUTBOX_BATCH_SIZE: ${COMMERCE_SYNC_OUTBOX_BATCH_SIZE:-20}
+      COMMERCE_SYNC_OUTBOX_PROCESSING_TIMEOUT_MS: ${COMMERCE_SYNC_OUTBOX_PROCESSING_TIMEOUT_MS:-120000}
+      COMMERCE_SYNC_OUTBOX_RETRY_DELAYS_MS: ${COMMERCE_SYNC_OUTBOX_RETRY_DELAYS_MS:-5000,15000,60000,300000,900000}
     ports:
       - "3001:3000"
     depends_on:
@@ -136,6 +147,52 @@ services:
       meilisearch:
         condition: service_started
       supertokens:
+        condition: service_healthy
+      vendure:
+        condition: service_started
+
+  search-indexer:
+    build:
+      context: .
+      dockerfile: ./search-indexer/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://swapcampus:swapcampus@mysql:3306/swapcampus
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_API_KEY: swapcampus-meili-dev-key
+      SEARCH_INDEX_OUTBOX_ENABLED: ${SEARCH_INDEX_OUTBOX_ENABLED:-true}
+      SEARCH_INDEXER_INITIALIZE_ON_STARTUP: ${SEARCH_INDEXER_INITIALIZE_ON_STARTUP:-true}
+      SEARCH_INDEX_OUTBOX_POLL_MS: ${SEARCH_INDEX_OUTBOX_POLL_MS:-3000}
+      SEARCH_INDEX_OUTBOX_BATCH_SIZE: ${SEARCH_INDEX_OUTBOX_BATCH_SIZE:-20}
+      SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS: ${SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS:-120000}
+      SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS: ${SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS:-5000,15000,60000,300000,900000}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+
+  commerce-sync:
+    build:
+      context: .
+      dockerfile: ./commerce-sync/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://swapcampus:swapcampus@mysql:3306/swapcampus
+      VENDURE_ENABLED: ${VENDURE_ENABLED:-true}
+      VENDURE_ADMIN_API_URL: ${VENDURE_ADMIN_API_URL:-http://vendure:3000/admin-api}
+      VENDURE_ADMIN_USERNAME: ${VENDURE_ADMIN_USERNAME:-superadmin}
+      VENDURE_ADMIN_PASSWORD: ${VENDURE_ADMIN_PASSWORD:-superadmin}
+      VENDURE_ADMIN_TOKEN: ${VENDURE_ADMIN_TOKEN:-}
+      COMMERCE_SYNC_ENABLED: ${COMMERCE_SYNC_ENABLED:-true}
+      COMMERCE_SYNC_OUTBOX_POLL_MS: ${COMMERCE_SYNC_OUTBOX_POLL_MS:-3000}
+      COMMERCE_SYNC_OUTBOX_BATCH_SIZE: ${COMMERCE_SYNC_OUTBOX_BATCH_SIZE:-20}
+      COMMERCE_SYNC_OUTBOX_PROCESSING_TIMEOUT_MS: ${COMMERCE_SYNC_OUTBOX_PROCESSING_TIMEOUT_MS:-120000}
+      COMMERCE_SYNC_OUTBOX_RETRY_DELAYS_MS: ${COMMERCE_SYNC_OUTBOX_RETRY_DELAYS_MS:-5000,15000,60000,300000,900000}
+    depends_on:
+      mysql:
         condition: service_healthy
       vendure:
         condition: service_started

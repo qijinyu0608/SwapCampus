@@ -3,11 +3,9 @@ import { OutboxAggregateType, OutboxEventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
 import {
+  getSearchOutboxConsumerConfig,
   nextSearchRetryAt,
-  SEARCH_INDEX_BATCH_SIZE,
-  SEARCH_INDEX_MAX_RETRIES,
   SEARCH_INDEX_OUTBOX_TOPIC,
-  SEARCH_INDEX_PROCESSING_TIMEOUT_MS,
   SearchOutboxEventRecord
 } from './outbox.types';
 
@@ -44,8 +42,9 @@ function toSearchOutboxEventRecord(event: {
 @Injectable()
 export class SearchIndexOutboxConsumer implements OnModuleInit {
   private readonly logger = new Logger(SearchIndexOutboxConsumer.name);
-  private readonly enabled = process.env.SEARCH_INDEX_OUTBOX_ENABLED !== 'false';
-  private readonly pollIntervalMs = Number.parseInt(process.env.SEARCH_INDEX_OUTBOX_POLL_MS ?? '3000', 10) || 3000;
+  private readonly config = getSearchOutboxConsumerConfig();
+  private readonly enabled = this.config.enabled;
+  private readonly pollIntervalMs = this.config.pollIntervalMs;
   private timer: NodeJS.Timeout | null = null;
   private pollInFlight = false;
 
@@ -125,7 +124,7 @@ export class SearchIndexOutboxConsumer implements OnModuleInit {
         availableAt: { lte: now }
       },
       orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
-      take: SEARCH_INDEX_BATCH_SIZE
+      take: this.config.batchSize
     });
 
     if (!pending.length) {
@@ -160,7 +159,7 @@ export class SearchIndexOutboxConsumer implements OnModuleInit {
   }
 
   private async recoverExpiredProcessingEvents(now: Date) {
-    const threshold = new Date(now.getTime() - SEARCH_INDEX_PROCESSING_TIMEOUT_MS);
+    const threshold = new Date(now.getTime() - this.config.processingTimeoutMs);
     const recovered = await this.prisma.outboxEvent.updateMany({
       where: {
         topic: SEARCH_INDEX_OUTBOX_TOPIC,
@@ -193,7 +192,7 @@ export class SearchIndexOutboxConsumer implements OnModuleInit {
       });
     } catch (error) {
       const nextRetryCount = event.retryCount + 1;
-      const terminal = nextRetryCount > SEARCH_INDEX_MAX_RETRIES;
+      const terminal = nextRetryCount > this.config.maxRetries;
       await this.prisma.outboxEvent.update({
         where: { id: event.id },
         data: {

@@ -111,7 +111,7 @@ describe('ProductsService', () => {
       productImage: {
         findMany: jest.fn()
       }
-    } as any, searchService, outboxService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, publishingReviewService);
 
     const stats = await service.getDashboardStats();
 
@@ -133,7 +133,7 @@ describe('ProductsService', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
     });
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
+    const service = new ProductsService(prisma, searchService, outboxService, publishingReviewService);
 
     const product = await service.createProduct({
       title: '高数教材',
@@ -180,7 +180,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, outboxService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, publishingReviewService);
 
     await expect(service.createProduct({
       title: '课程代写服务',
@@ -204,7 +204,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
-    } as any, searchService, outboxService, vendureService, {
+    } as any, searchService, outboxService, {
       reviewProduct: jest.fn().mockResolvedValue({
         provider: 'deepseek',
         model: 'deepseek-v4-flash',
@@ -244,7 +244,7 @@ describe('ProductsService', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
     });
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
+    const service = new ProductsService(prisma, searchService, outboxService, publishingReviewService);
 
     const product = await service.createProduct({
       title: '10000mAh 充电宝',
@@ -288,7 +288,7 @@ describe('ProductsService', () => {
         findUnique: jest.fn().mockResolvedValue({ id: 1, accountStatus: 'ACTIVE' })
       }
     });
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService, publishingReviewService);
+    const service = new ProductsService(prisma, searchService, outboxService, publishingReviewService);
 
     await service.createProduct({
       title: '二手显示器',
@@ -331,7 +331,7 @@ describe('ProductsService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({ id: 1, isBanned: false })
       }
-    } as any, searchService, outboxService, vendureService, publishingReviewService);
+    } as any, searchService, outboxService, publishingReviewService);
 
     await expect(service.createProduct({
       title: '无图商品',
@@ -382,7 +382,7 @@ describe('ProductsService', () => {
         totalHits: 17,
         totalPages: 4
       })
-    } as any, outboxService, vendureService);
+    } as any, outboxService);
 
     const result = await service.searchProducts({
       q: '教材',
@@ -438,7 +438,7 @@ describe('ProductsService', () => {
     } as any, {
       isEnabled: jest.fn().mockReturnValue(true),
       searchProducts: search
-    } as any, outboxService, vendureService);
+    } as any, outboxService);
 
     const result = await service.searchProducts({
       q: '教材',
@@ -492,7 +492,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService);
 
     await service.getHomeRecommendations(2);
 
@@ -575,7 +575,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService);
     const result = await service.getProductDetail(301);
 
     expect(result.detailBase).toEqual({
@@ -699,7 +699,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService);
 
     await service.getProductDetail(301, 1001);
     await service.getProductDetail(301, 1001);
@@ -744,7 +744,7 @@ describe('ProductsService', () => {
       }
     } as any;
 
-    const service = new ProductsService(prisma, searchService, outboxService, vendureService);
+    const service = new ProductsService(prisma, searchService, outboxService);
     const result = await service.recordProductContact(301, {
       id: 1001,
       studentId: '2026001001',

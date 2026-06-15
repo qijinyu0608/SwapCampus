@@ -1,65 +1,30 @@
 # SwapCampus 校园闲置物品交易平台
 
-> 一个面向课程设计交付的校园二手交易系统，当前已实现从浏览、发布、沟通、下单到审核治理的完整主链路，并支持 Docker 一键部署。
+SwapCampus 是一个面向课程设计交付的校园闲置交易系统，围绕浏览、发布、沟通、下单和审核治理等主链路组织实现，并提供可复现的 Docker 部署方式。
 
 ## 项目概述
-- 当前形态：`React + NestJS` 前后端分离，后端仍是单体服务，不是微服务架构
-- 交付目标：让老师和评审看到真实业务闭环、可复现部署方式和清晰的软件工程痕迹
-- 适用场景：课程答辩、本地演示、小规模校内试用
+
+仓库采用 `React + NestJS` 的前后端分离架构，后端保持单体形态，便于在课程项目周期内稳定交付。项目的重点不是堆砌功能，而是把需求、设计、实现、测试、部署和文档对应起来，形成一套能够演示、复核和继续迭代的工程成果。
+
+系统适合课程答辩、本地演示和小规模校内试用。
 
 ## 当前已完成功能
-- 认证与角色
-  - 支持普通用户、管理员两类认证账号，以及未登录浏览态
-  - 已接入 `SuperTokens`，支持邮箱或学号登录、普通用户注册、封禁账号拦截
-- 商品浏览、筛选、发布、审核
-  - 首页支持真实商品流、搜索、分类、折叠筛选和推荐流
-  - 发布页支持分类、成色、价格、描述、规则提示和审核拦截
-  - 管理员可审核商品上架、下架和处理违规内容
-- 商品详情、举报、推荐
-  - 详情页展示图片、交易参考、卖家可信度、同类推荐
-  - 支持举报商品或用户，并在后台处理
-  - 推荐模块已接入行为记录，支持浏览、想要、联系、下单等信号
-- 订单闭环
-  - 支持线下面交订单创建、状态流转、取消、完成和评价
-  - 订单创建后会自动生成关联会话，形成完整交易留痕
-- 消息会话与演示级实时推送
-  - 支持会话列表、消息明细、文本发送
-  - 支持基于 Socket.IO 的实时追加，握手与会话订阅已接入认证校验
-- 校园服务子模块
-  - 独立支持跑腿、代办、拼单、临时帮忙
-  - 已实现任务发布、接单、完成和消息联动
-- 后台治理
-  - 支持商品审核、举报处理、用户封禁/解封、操作留痕
-  - 管理后台可查看待审核、待处理举报和治理摘要
-- 发布前 LLM 审核
-  - 商品和校园服务发布前会先走本地规则，再走 DeepSeek 二次审核与分类建议
-  - 通过环境变量配置 `DEEPSEEK_API_KEY`，未配置时自动跳过 LLM 审核
-- Docker 化部署与 CI
-  - 提供 `docker-compose.yml`、前后端 Dockerfile、Makefile
-  - 提供 GitHub Actions 基础 CI：后端 Jest 测试、前端构建检查
 
-## 当前不成熟 / 已知边界
-- Socket.IO 目前只是演示级实时推送，缺少已读回执、在线状态、断线补偿等完整 IM 能力
-- 登录用户的“想要/收藏”已接入后端 `Favorite` 表，游客仍保留本地临时想要
-- 当前认证已统一到 `SuperTokens session`，但仍未补 refresh / rotation 等更完整的会话治理策略
-- MinIO、媒体上传和商品多图链路已落地，后续仍可继续增强媒体治理和生产化能力
-- 自动化验证目前以后端 Jest 和前端 build 为主，前端交互级测试还不充分
+认证链路已经接入 `SuperTokens`，支持邮箱或学号登录、普通用户注册和封禁账号拦截。商品部分覆盖首页流、搜索、分类、详情、发布和后台审核；详情页可以展示图片、卖家信息、交易参考和同类推荐，也保留了举报入口与行为信号。订单链路支持创建、状态流转、取消、完成、评价和申诉，订单建立后会自动关联会话，保证交易留痕。
+
+消息模块已支持会话列表、消息明细和文本发送，并接入 `Socket.IO` 做演示级实时追加。校园服务子模块围绕跑腿、代办、拼单和临时帮忙展开，已具备发布、接单、完成和消息联动能力。后台侧则覆盖商品审核、举报处理、用户封禁与解封等治理动作，同时保留操作留痕。商品与校园服务在发布前会先经过本地规则校验，再按配置决定是否进入 `DeepSeek` 二次审核。
+
+仓库同时提供 `docker-compose.yml`、前后端 Dockerfile、Makefile 和基础 CI，便于本地复现和交付检查。
+
+## 当前边界
+
+消息能力目前仍以演示级实时推送为主，尚未补齐已读回执、在线状态和断线补偿。登录用户的收藏已经落库，游客侧仍保留本地临时想要。认证链路虽然已统一到 `SuperTokens session`，但 refresh 和 rotation 等会话治理还可以继续完善。MinIO、媒体上传和商品多图链路已经落地，生产化媒体治理仍有提升空间。自动化验证目前以后端 Jest 和前端构建为主，前端交互级测试还不够完整。
 
 ## 技术栈与架构现状
-- Frontend：React 18 + TypeScript + Vite + Ant Design
-- Backend：NestJS + TypeScript + Prisma
-- Database：MySQL 8
-- Object Storage：MinIO
-- Realtime：Socket.IO
-- Deploy：Docker Compose + Nginx 静态托管前端
 
-当前架构关键词：
-- 前后端分离
-- 单体后端按领域模块拆分
-- Prisma 统一数据访问
-- Docs as Code
-- IaC
-- 事件驱动预留
+前端采用 React 18、TypeScript、Vite 和 Ant Design。后端采用 NestJS、TypeScript 和 Prisma。数据库使用 MySQL 8，对象存储使用 MinIO，实时通信通过 Socket.IO 完成，部署则通过 Docker Compose 和 Nginx 静态托管前端。
+
+架构层面保留了前后端分离、单体后端按领域模块拆分、Prisma 统一数据访问、文档与代码同仓维护以及事件驱动能力预留等约束。
 
 ## 文档与规范入口
 
@@ -152,10 +117,11 @@ SwapCampus
 ```
 
 关键目录说明：
-- `backend/src/modules`：按领域拆分的单体后端模块，当前业务核心都在这里
+
+- `backend/src/modules`：按领域拆分的后端模块，承载当前业务核心
 - `backend/prisma`：数据库模型、初始化、种子数据和补齐脚本
-- `frontend/src/pages`：主要页面入口，包括首页、详情、发布、消息、个人中心、校园服务、下单和后台
-- `frontend/src/services`：前端接口调用、登录态、收藏、行为埋点封装
+- `frontend/src/pages`：首页、详情、发布、消息、个人中心、校园服务、下单和后台等页面入口
+- `frontend/src/services`：前端接口调用、登录态、收藏和行为埋点封装
 - `agent`：当前有效工程规范入口
 - `docs`：当前有效课程设计文档、专题分析和交付材料
 - `docs/archive`：历史过程材料、课程表单和归档专题
@@ -164,6 +130,7 @@ SwapCampus
 
 ## 本地部署与运行验证
 ### 环境要求
+
 - Docker Desktop
 - 如果只按 Docker 方式运行，不要求提前安装本地 MySQL
 
@@ -174,17 +141,20 @@ make start
 ```
 
 说明：
-- `db-init` 现在是一次性初始化任务，放在 `init` profile 下
+
+- `db-init` 是一次性初始化任务，放在 `init` profile 下
 - 首次启动或需要重置数据时，先执行 `db-init`
 - `db-init` 只负责建表与基础初始化，不再自动写入商品、服务、用户演示数据
 - 如需显式清库重置，执行 `make init-reset`
-- 日常开发重启 `backend` / `frontend` 不会再重复触发数据库 reset 和 seed
-- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`vendure`、`backend`、`frontend`
+- 日常开发重启 `backend` 和 `frontend` 不会重复触发数据库 reset 和 seed
+- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`vendure`、`backend`、`search-indexer`、`commerce-sync`、`frontend`
 - 前端生产镜像使用 `nginx` 托管静态资源
 - 默认认证 Core 使用容器内自托管 `http://supertokens:3567`
 - SuperTokens 通过独立 PostgreSQL 容器持久化认证数据，容器重启后账号不会丢失
-- `backend` 会等待 `supertokens` 健康后再启动，避免认证接口在默认开发环境下处于不可用状态
-- `make start` / `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
+- `backend` 会等待 `supertokens` 健康后再启动，避免认证接口在默认开发环境下不可用
+- `make start` 和 `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
+- 搜索索引消费默认由独立 `search-indexer` 负责，`backend` 默认不直接消费 `search.index` 主题事件
+- 商品与订单的电商同步默认由独立 `commerce-sync` 负责，`backend` 默认不直接消费 `commerce.sync` 主题事件
 
 ### 访问地址
 - Frontend：`http://127.0.0.1:5178`
@@ -216,6 +186,7 @@ cd backend && npm run db:reset-and-seed-demo
 ```bash
 docker compose ps
 docker compose logs backend --tail=50
+docker compose logs search-indexer --tail=50
 curl http://127.0.0.1:3001/api/health
 ```
 
@@ -228,6 +199,9 @@ make up
 make start
 make restart-auth
 make restart-backend
+make restart-search-indexer
+make restart-commerce-sync
+make backfill-search-outbox
 make status
 make health
 make down
@@ -243,6 +217,9 @@ make frontend-build
 最常用的独立配置项：
 
 - 后端运行时：`API_DOMAIN`、`WEBSITE_DOMAIN`
+- 后端内置 worker 开关：`BACKEND_SEARCH_INDEX_OUTBOX_ENABLED`、`BACKEND_SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`BACKEND_COMMERCE_SYNC_ENABLED`
+- 独立 worker 开关：`SEARCH_INDEX_OUTBOX_ENABLED`、`SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`COMMERCE_SYNC_ENABLED`
+- 轮询参数：`SEARCH_INDEX_OUTBOX_POLL_MS`、`SEARCH_INDEX_OUTBOX_BATCH_SIZE`、`SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS`、`SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS`
 - 前端构建时：`VITE_API_BASE_URL`、`VITE_API_DOMAIN`、`VITE_SOCKET_URL`、`VITE_WEBSITE_DOMAIN`
 - 外部密钥：`SUPERTOKENS_API_KEY`、`VENDURE_ADMIN_TOKEN`、`DEEPSEEK_API_KEY`
 
@@ -251,6 +228,16 @@ make frontend-build
 - 修改 `VITE_*` 后需要重建前端镜像
 - 仅修改后端变量时，重启相关容器即可
 - 更完整的 AI 执行步骤和 ignore 文件分发说明见 [docs/27-AI部署启动与测试指南.md](/home/th1rt3en/dev/forge/SwapCampus/docs/27-AI部署启动与测试指南.md)
+
+### 搜索索引迁移与回填
+
+当 `OutboxEvent` 已建表、但历史商品和卖家还没有补投搜索事件时，可执行：
+
+```bash
+make backfill-search-outbox
+```
+
+该脚本会为现存商品和卖家补写 `search.index` 主题事件，供独立 `search-indexer` 继续消费。补投策略按 `aggregateId + updatedAt` 去重，避免对已经完成过的新状态重复写入。
 
 ## 演示路径
 ### 推荐演示路径
@@ -314,6 +301,7 @@ make frontend-build
 ## 页面截图
 - 首页：[home-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/home-final.png)
 - 登录：[login-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/login-final.png)
+- 校园服务：[campus-services-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/campus-services-final.png)
 - 详情：[detail-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/detail-final.png)
 - 发布：[publish-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/publish-final.png)
 - 消息：[messages-final.png](/home/th1rt3en/dev/forge/SwapCampus/artifacts/screenshots/messages-final.png)
