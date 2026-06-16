@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OutboxEventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MessagesGateway } from '../messages/messages.gateway';
 import {
   getMessageOutboxConsumerConfig,
   MESSAGE_OUTBOX_TOPIC,
@@ -53,7 +54,9 @@ export class MessageOutboxConsumer implements OnModuleInit {
 
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(MessagesGateway)
+    private readonly messagesGateway: MessagesGateway
   ) {}
 
   async onModuleInit() {
@@ -111,6 +114,7 @@ export class MessageOutboxConsumer implements OnModuleInit {
             lastReadAt: new Date()
           }
         });
+        await this.messagesGateway.emitMessageById(event.payload.conversationId, event.payload.messageId);
         return;
       }
       default:

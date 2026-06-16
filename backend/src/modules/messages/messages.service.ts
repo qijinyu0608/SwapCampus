@@ -14,7 +14,6 @@ import { OutboxService } from '../outbox/outbox.service';
 import { SearchService } from '../search/search.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
-import { MessagesGateway } from './messages.gateway';
 import { moderateText } from '../products/product-moderation';
 import { normalizeProductConditionValue } from '../products/product-conditions';
 import {
@@ -57,9 +56,7 @@ export class MessagesService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(OutboxService)
-    private readonly outboxService: OutboxService,
-    @Inject(MessagesGateway)
-    private readonly messagesGateway: MessagesGateway
+    private readonly outboxService: OutboxService
   ) {}
 
   private getMessagePreview(type: MessageType, content: string) {
@@ -806,11 +803,6 @@ export class MessagesService {
         avatarFrame: sender.avatarFrame ?? null
       }
     }, { avatarFrameUnlocked, trustedBadgeUnlocked });
-
-    this.messagesGateway.emitNewMessage({
-      conversationId,
-      message: response
-    });
 
     return response;
   }

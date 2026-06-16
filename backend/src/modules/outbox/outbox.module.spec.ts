@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MessagesGateway } from '../messages/messages.gateway';
 import { SearchService } from '../search/search.service';
 import { VendureService } from '../vendure/vendure.service';
 import { CommerceSyncOutboxConsumer } from './commerce-sync-outbox.consumer';
@@ -17,6 +18,7 @@ describe('OutboxModule', () => {
 
     expect(providers).toEqual(expect.arrayContaining([
       PrismaService,
+      MessagesGateway,
       SearchService,
       OutboxService,
       SearchIndexOutboxConsumer,
@@ -28,6 +30,7 @@ describe('OutboxModule', () => {
     expect(providers).not.toContain(CommerceSyncOutboxConsumer);
     expect(exports).toEqual(expect.arrayContaining([
       PrismaService,
+      MessagesGateway,
       SearchService,
       OutboxService,
       SearchIndexOutboxConsumer,
