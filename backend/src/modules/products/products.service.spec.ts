@@ -496,6 +496,212 @@ describe('ProductsService', () => {
     expect(productCreate).toHaveBeenCalledTimes(1);
   });
 
+  it('should update product, refresh conversations and publish sync events', async () => {
+    const reviewProduct = jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      status: 'enabled',
+      decision: 'APPROVED',
+      shouldBlock: false,
+      selectedCategory: '数码电子',
+      reason: '商品信息基本完整',
+      issues: [],
+      priceReview: null
+    });
+    const update = jest.fn().mockResolvedValue({
+      id: 401,
+      title: '升级款机械键盘',
+      status: 'ON_SALE'
+    });
+    const conversationUpdateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const prisma = createPrisma({
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 401,
+          sellerId: 1,
+          title: '旧款机械键盘',
+          description: '老描述',
+          price: 88,
+          category: '数码电子',
+          condition: '八成',
+          tags: ['键盘'],
+          status: 'ON_SALE',
+          images: [
+            { imageUrl: 'https://img.example.com/old.jpg', sortOrder: 0 }
+          ]
+        }),
+        update
+      },
+      order: {
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findMany: jest.fn()
+      },
+      conversation: {
+        updateMany: conversationUpdateMany
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, {
+      reviewProduct
+    } as any);
+
+    const result = await service.updateProduct(401, {
+      title: ' 升级款机械键盘 ',
+      description: ' 新描述 ',
+      price: 128,
+      category: '数码电子',
+      condition: '九成',
+      tags: ['键盘', 'rgb'],
+      imageUrls: ['https://img.example.com/new.jpg']
+    }, authUser);
+
+    expect(reviewProduct).toHaveBeenCalledWith(expect.objectContaining({
+      title: '升级款机械键盘',
+      description: '新描述',
+      price: 128,
+      category: '数码电子',
+      condition: '九成',
+      imageUrls: ['https://img.example.com/new.jpg']
+    }));
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 401 },
+      data: expect.objectContaining({
+        title: '升级款机械键盘',
+        description: '新描述',
+        price: 128,
+        category: '数码电子',
+        condition: '九成',
+        commerceSyncStatus: 'PENDING',
+        commerceSyncError: null,
+        images: {
+          deleteMany: {},
+          create: [{ imageUrl: 'https://img.example.com/new.jpg', sortOrder: 0 }]
+        }
+      })
+    });
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { productId: 401 },
+      data: { updatedAt: expect.any(Date) }
+    });
+    expect(outboxService.publishProductSearchEvent).toHaveBeenCalledWith({
+      productId: 401,
+      eventType: 'ProductUpdated',
+      changedBy: 'products',
+      reason: 'PRODUCT_UPDATED'
+    }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 401,
+      eventType: 'ProductPublished'
+    }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 401,
+      eventType: 'ProductAvailabilityChanged'
+    }, expect.anything());
+    expect(outboxService.publishProductCommerceSyncEvent).toHaveBeenCalledWith({
+      productId: 401,
+      eventType: 'ProductInventoryChanged'
+    }, expect.anything());
+    expect(result).toMatchObject({
+      id: 401,
+      title: '升级款机械键盘',
+      status: 'ON_SALE'
+    });
+  });
+
+  it('should reject product update when product already entered order flow', async () => {
+    const prisma = createPrisma({
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 402,
+          sellerId: 1,
+          title: '二手耳机',
+          description: '老描述',
+          price: 66,
+          category: '数码电子',
+          condition: '八成',
+          tags: ['耳机'],
+          status: 'ON_SALE',
+          images: [
+            { imageUrl: 'https://img.example.com/old.jpg', sortOrder: 0 }
+          ]
+        })
+      },
+      order: {
+        count: jest.fn().mockResolvedValueOnce(1),
+        findMany: jest.fn()
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, publishingReviewService);
+
+    await expect(service.updateProduct(402, {
+      title: '新标题'
+    }, authUser)).rejects.toThrow('商品已进入交易链路，不能编辑');
+  });
+
+  it('should require explicit price confirmation when updating product with suspicious price', async () => {
+    const reviewProduct = jest.fn().mockResolvedValue({
+      provider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      status: 'enabled',
+      decision: 'APPROVED',
+      shouldBlock: false,
+      selectedCategory: '教材资料',
+      reason: '商品信息基本完整',
+      issues: [],
+      priceReview: {
+        verdict: 'HIGH',
+        confidence: 'HIGH',
+        reason: '同类商品通常不会接近这个价位',
+        suggestedPriceMin: 20,
+        suggestedPriceMax: 80,
+        requiresConfirmation: true
+      }
+    });
+    const prisma = createPrisma({
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 403,
+          sellerId: 1,
+          title: '高数教材',
+          description: '老描述',
+          price: 20,
+          category: '教材资料',
+          condition: '九成',
+          tags: ['教材'],
+          status: 'ON_SALE',
+          images: [
+            { imageUrl: 'https://img.example.com/old.jpg', sortOrder: 0 }
+          ]
+        })
+      },
+      order: {
+        count: jest.fn()
+          .mockResolvedValueOnce(0)
+          .mockResolvedValueOnce(0),
+        findMany: jest.fn()
+      }
+    });
+    const service = new ProductsService(prisma, searchService, outboxService, {
+      reviewProduct
+    } as any);
+
+    await expect(service.updateProduct(403, {
+      price: 399
+    }, authUser)).rejects.toMatchObject({
+      response: {
+        code: 'PRICE_CONFIRMATION_REQUIRED',
+        review: expect.objectContaining({
+          priceReview: expect.objectContaining({
+            verdict: 'HIGH',
+            suggestedPriceMin: 20,
+            suggestedPriceMax: 80
+          })
+        })
+      }
+    });
+  });
+
   it('should persist uploaded product images with normalized unique urls', async () => {
     const productCreate = jest.fn().mockResolvedValue({
       id: 202,
