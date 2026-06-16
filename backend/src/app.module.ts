@@ -20,7 +20,6 @@ import { CampusServiceFavoritesService } from './modules/favorites/campus-servic
 import { FavoritesController } from './modules/favorites/favorites.controller';
 import { FavoritesService } from './modules/favorites/favorites.service';
 import { MessagesController } from './modules/messages/messages.controller';
-import { MessagesGateway } from './modules/messages/messages.gateway';
 import { MessagesService } from './modules/messages/messages.service';
 import { MediaController } from './modules/media/media.controller';
 import { MediaService } from './modules/media/media.service';
@@ -65,7 +64,6 @@ import { UsersService } from './modules/users/users.service';
     CampusServiceFavoritesService,
     FavoritesService,
     MediaService,
-    MessagesGateway,
     MessagesService,
     ProductsService,
     OrdersService,
