@@ -1,0 +1,398 @@
+@startuml
+title SwapCampus Core Domain Class Diagram
+
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #4B5563
+skinparam packageBorderColor #6B7280
+skinparam classBorderColor #6B7280
+skinparam noteBorderColor #9CA3AF
+skinparam noteBackgroundColor #FFFFFF
+
+hide methods
+
+left to right direction
+
+package "Identity" {
+  enum UserRole {
+    USER
+    ADMIN
+  }
+
+  enum VerificationStatus {
+    PENDING
+    APPROVED
+    REJECTED
+  }
+
+  enum AccountStatus {
+    ACTIVE
+    BANNED
+  }
+
+  class User {
+    +id: Int
+    +studentId: String?
+    +displayName: String
+    +email: String
+    +role: UserRole
+    +verificationStatus: VerificationStatus
+    +accountStatus: AccountStatus
+    +creditScore: Int
+  }
+
+  class StudentVerification {
+    +id: Int
+    +realName: String
+    +college: String
+    +graduationYear: Int?
+    +phone: String
+  }
+
+  note right of User
+  One account can act as buyer, seller,
+  requester and provider.
+  end note
+}
+
+package "Marketplace" {
+  enum ProductStatus {
+    PENDING
+    ON_SALE
+    SOLD
+    OFFLINE
+  }
+
+  enum OrderStatus {
+    PENDING
+    IN_PROGRESS
+    WAITING_REVIEW
+    COMPLETED
+    CANCELED
+  }
+
+  enum ExternalSyncStatus {
+    PENDING
+    PROCESSING
+    SYNCED
+    FAILED
+  }
+
+  enum BehaviorEventType {
+    VIEW
+    FAVORITE
+    UNFAVORITE
+    CONTACT
+    ORDER
+  }
+
+  class Product {
+    +id: Int
+    +title: String
+    +price: Decimal
+    +category: String
+    +condition: String
+    +status: ProductStatus
+    +commerceSyncStatus: ExternalSyncStatus
+  }
+
+  class ProductImage {
+    +id: Int
+    +imageUrl: String
+    +sortOrder: Int
+  }
+
+  class Favorite {
+    +id: Int
+    +createdAt: DateTime
+  }
+
+  class Order {
+    +id: Int
+    +status: OrderStatus
+    +meetupLocation: String?
+    +orderSnapshot: Json?
+    +autoConfirmAt: DateTime?
+    +commerceSyncStatus: ExternalSyncStatus
+  }
+
+  class Review {
+    +id: Int
+    +rating: Int
+    +content: String
+    +createdAt: DateTime
+  }
+
+  class OrderAppeal {
+    +id: Int
+    +issueType: String
+    +reason: String
+    +status: String
+    +expectedAction: String?
+  }
+
+  class UserBehavior {
+    +id: Int
+    +eventType: BehaviorEventType
+    +createdAt: DateTime
+  }
+}
+
+package "Campus Service" {
+  enum CampusServiceIntent {
+    REQUEST
+    OFFER
+  }
+
+  enum CampusServiceListingStatus {
+    OPEN
+    BUSY
+    PAUSED
+    ENDED
+    CANCELED
+  }
+
+  enum CampusServiceOrderStatus {
+    PENDING_CONFIRMATION
+    CONFIRMED
+    WAITING_COMPLETE_CONFIRM
+    COMPLETED
+    REJECTED
+    CANCELED
+    EXPIRED
+  }
+
+  class CampusServiceListing {
+    +id: Int
+    +intent: CampusServiceIntent
+    +category: String
+    +title: String
+    +priceMode: String
+    +amount: Decimal?
+    +status: CampusServiceListingStatus
+    +validUntilAt: DateTime
+  }
+
+  class CampusServiceImage {
+    +id: Int
+    +imageUrl: String
+    +sortOrder: Int
+  }
+
+  class CampusServiceFavorite {
+    +id: Int
+    +createdAt: DateTime
+  }
+
+  class CampusServiceBehavior {
+    +id: Int
+    +eventType: BehaviorEventType
+    +createdAt: DateTime
+  }
+
+  class CampusServiceOrder {
+    +id: Int
+    +status: CampusServiceOrderStatus
+    +applyMessage: String?
+    +finalAmount: Decimal?
+    +confirmedAt: DateTime?
+    +completionRequestedAt: DateTime?
+  }
+}
+
+package "Messaging & Governance" {
+  enum MessageType {
+    TEXT
+    IMAGE
+    VIDEO
+    EMOJI
+    ORDER_EVENT
+  }
+
+  class Conversation {
+    +id: Int
+    +orderId: Int?
+    +productId: Int?
+    +campusServiceOrderId: Int?
+    +initiatorId: Int?
+    +updatedAt: DateTime
+  }
+
+  class Message {
+    +id: Int
+    +type: MessageType
+    +content: String
+    +createdAt: DateTime
+  }
+
+  class ConversationReadCursor {
+    +conversationId: Int
+    +userId: Int
+    +lastReadMessageId: Int?
+    +lastReadAt: DateTime
+  }
+
+  class Report {
+    +id: Int
+    +reason: String
+    +status: String
+    +resolutionNote: String?
+    +createdAt: DateTime
+  }
+
+  class AuditLog {
+    +id: Int
+    +actorName: String
+    +action: String
+    +targetType: String
+    +targetId: Int
+    +createdAt: DateTime
+  }
+}
+
+package "Credit Center" {
+  enum CreditPointChangeType {
+    EARN
+    SPEND
+    ADJUST
+  }
+
+  enum CreditPointSourceType {
+    SIGNIN
+    MISSION
+    REDEEM
+    ADMIN
+  }
+
+  enum CreditRedeemOrderStatus {
+    CREATED
+    FULFILLED
+    CANCELED
+    REJECTED
+  }
+
+  class UserCreditAsset {
+    +userId: Int
+    +availablePoints: Int
+    +totalEarnedPoints: Int
+    +totalSpentPoints: Int
+    +signInStreak: Int
+    +lastSignInAt: DateTime?
+  }
+
+  class CreditPointLedger {
+    +id: Int
+    +changeType: CreditPointChangeType
+    +sourceType: CreditPointSourceType
+    +sourceId: String?
+    +pointsDelta: Int
+    +balanceAfter: Int
+  }
+
+  class CreditRedeemOrder {
+    +id: Int
+    +rewardCode: String
+    +pointsCost: Int
+    +status: CreditRedeemOrderStatus
+    +fulfilledAt: DateTime?
+  }
+}
+
+package "Event Infrastructure" {
+  enum OutboxEventStatus {
+    PENDING
+    PROCESSING
+    PROCESSED
+    FAILED
+  }
+
+  class OutboxEvent {
+    +id: Int
+    +topic: String
+    +eventType: String
+    +aggregateType: String
+    +aggregateId: Int
+    +status: OutboxEventStatus
+    +retryCount: Int
+    +availableAt: DateTime
+  }
+}
+
+User "1" -- "0..1" StudentVerification : verification
+
+User "1" -- "0..*" Product : publishes >
+Product "1" *-- "0..*" ProductImage : images
+User "1" -- "0..*" Favorite
+Product "1" -- "0..*" Favorite
+Product "1" -- "0..*" Order
+User "1" -- "0..*" Order : buyer >
+User "1" -- "0..*" Order : seller >
+Order "1" -- "0..*" Review
+User "1" -- "0..*" Review : reviewer >
+Order "1" -- "0..*" OrderAppeal
+User "1" -- "0..*" OrderAppeal : appellant >
+User "1" -- "0..*" OrderAppeal : respondent >
+User "0..1" -- "0..*" OrderAppeal : handler >
+User "1" -- "0..*" UserBehavior
+Product "1" -- "0..*" UserBehavior
+
+User "1" -- "0..*" CampusServiceListing : owns >
+CampusServiceListing "1" *-- "0..*" CampusServiceImage : images
+User "1" -- "0..*" CampusServiceFavorite
+CampusServiceListing "1" -- "0..*" CampusServiceFavorite
+User "1" -- "0..*" CampusServiceBehavior
+CampusServiceListing "1" -- "0..*" CampusServiceBehavior
+CampusServiceListing "1" -- "0..*" CampusServiceOrder
+User "1" -- "0..*" CampusServiceOrder : requester >
+User "1" -- "0..*" CampusServiceOrder : provider >
+
+Conversation "1" -- "0..*" Message
+Conversation "1" -- "0..*" ConversationReadCursor
+User "1" -- "0..*" Message : sends >
+User "1" -- "0..*" ConversationReadCursor
+Order "0..1" -- "0..*" Conversation
+Product "0..1" -- "0..*" Conversation
+CampusServiceOrder "0..1" -- "0..*" Conversation
+User "0..1" -- "0..*" Conversation : initiates >
+
+User "1" -- "0..*" Report : reporter >
+Product "0..1" -- "0..*" Report
+CampusServiceListing "0..1" -- "0..*" Report
+User "0..1" -- "0..*" Report : targetUser >
+User "0..1" -- "0..*" Report : handler >
+User "0..1" -- "0..*" AuditLog : actor >
+
+User "1" -- "0..1" UserCreditAsset
+UserCreditAsset "1" -- "0..*" CreditPointLedger
+UserCreditAsset "1" -- "0..*" CreditRedeemOrder
+User "1" -- "0..*" CreditPointLedger
+User "1" -- "0..*" CreditRedeemOrder
+
+Product ..> OutboxEvent : emits domain events
+Order ..> OutboxEvent : emits domain events
+User ..> OutboxEvent : emits domain events
+CampusServiceListing ..> OutboxEvent : emits domain events
+
+note right of Conversation
+Conversation unifies three contexts:
+- product inquiry
+- order negotiation
+- campus service fulfillment
+end note
+
+note bottom of OutboxEvent
+aggregateType + aggregateId point to
+business facts without strict foreign keys.
+Consumers use this table for async sync,
+search indexing and internal side effects.
+end note
+
+note bottom
+This diagram focuses on core domain entities.
+Some supporting tables are intentionally omitted
+to keep the main business structure readable.
+end note
+
+@enduml

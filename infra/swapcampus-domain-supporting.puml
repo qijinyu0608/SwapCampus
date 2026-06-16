@@ -1,0 +1,122 @@
+@startuml
+title SwapCampus Core Subgraph: Supporting Domains
+
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #4B5563
+skinparam packageBorderColor #6B7280
+skinparam classBorderColor #6B7280
+skinparam noteBorderColor #9CA3AF
+skinparam noteBackgroundColor #FFFFFF
+skinparam linetype ortho
+skinparam ranksep 120
+skinparam nodesep 90
+
+hide methods
+left to right direction
+
+class "User" as User {
+  +id
+  +name
+  +credit
+}
+
+package "Messaging and Governance" {
+  class "Conversation" as Conversation {
+    +id
+    +updatedAt
+  }
+
+  class "Message" as Message {
+    +id
+    +type
+    +content
+  }
+
+  class "Report" as Report {
+    +id
+    +reason
+    +status
+  }
+
+  class "Audit Log" as AuditLog {
+    +id
+    +action
+    +target
+  }
+}
+
+package "Credit and Async" {
+  class "Credit Asset" as UserCreditAsset {
+    +userId
+    +availablePoints
+    +totalPoints
+  }
+
+  class "Point Ledger" as CreditPointLedger {
+    +id
+    +change
+    +source
+    +balance
+  }
+
+  class "Redeem Order" as CreditRedeemOrder {
+    +id
+    +reward
+    +status
+  }
+
+  class "Outbox Event" as OutboxEvent {
+    +id
+    +topic
+    +type
+    +status
+  }
+}
+
+User -[hidden]right- Conversation
+Conversation -[hidden]down- Message
+Conversation -[hidden]down- Report
+Report -[hidden]down- AuditLog
+User -[hidden]right- UserCreditAsset
+UserCreditAsset -[hidden]down- CreditPointLedger
+UserCreditAsset -[hidden]right- CreditRedeemOrder
+CreditRedeemOrder -[hidden]down- OutboxEvent
+
+User "1" -right- "0..*" Conversation : initiates / joins
+Conversation "1" -down- "0..*" Message : contains
+User "1" -[norank]right- "0..*" Report : reporter / target / handler
+User "0..1" -[norank]right- "0..*" AuditLog : acts in
+
+User "1" -down- "0..1" UserCreditAsset : owns
+UserCreditAsset "1" -down- "0..*" CreditPointLedger : records
+UserCreditAsset "1" -right- "0..*" CreditRedeemOrder : creates
+
+note bottom of Conversation
+A conversation may be
+attached to a product,
+product order, or
+service order.
+Those context entities
+are omitted here.
+end note
+
+note bottom of Report
+Reports may target
+users, products, or
+service listings.
+Polymorphic targets
+are not expanded here.
+end note
+
+note bottom of OutboxEvent
+Outbox events capture
+asynchronous side effects.
+Products, orders, users,
+and service listings may
+all write here.
+end note
+
+@enduml

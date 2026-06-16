@@ -1,0 +1,82 @@
+@startuml
+title SwapCampus Core Subgraph: Marketplace
+
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #4B5563
+skinparam packageBorderColor #6B7280
+skinparam classBorderColor #6B7280
+skinparam noteBorderColor #9CA3AF
+skinparam noteBackgroundColor #FFFFFF
+skinparam linetype ortho
+skinparam ranksep 110
+skinparam nodesep 80
+
+hide methods
+top to bottom direction
+
+class "User" as User {
+  +id
+  +name
+  +credit
+}
+
+class "Product" as Product {
+  +id
+  +title
+  +price
+  +status
+}
+
+class "Product Image" as ProductImage {
+  +image
+}
+
+class "Order" as Order {
+  +id
+  +status
+  +location
+}
+
+class "Review" as Review {
+  +id
+  +rating
+}
+
+class "Appeal" as Appeal {
+  +id
+  +reason
+  +status
+}
+
+User -[hidden]down- Product
+Product -[hidden]down- Order
+Order -[hidden]down- Review
+Review -[hidden]down- Appeal
+Product -[hidden]right- ProductImage
+
+User "1" -down- "0..*" Product : publishes
+Product "1" -down- "0..*" Order : creates
+User "1" -[norank]right- "0..*" Order : buyer / seller
+Product "1" -right- "1..*" ProductImage : has
+Order "1" -down- "0..*" Review : produces
+Order "1" -down- "0..*" Appeal : produces
+
+note bottom of User
+Favorites and other
+supporting entities
+are omitted here.
+end note
+
+note right of Order
+An order connects
+the product and users.
+The same user can act
+as buyer or seller.
+Reviews and appeals
+are attached to orders.
+end note
+
+@enduml

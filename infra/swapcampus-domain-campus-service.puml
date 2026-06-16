@@ -1,0 +1,70 @@
+@startuml
+title SwapCampus Core Subgraph: Campus Service
+
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #4B5563
+skinparam packageBorderColor #6B7280
+skinparam classBorderColor #6B7280
+skinparam noteBorderColor #9CA3AF
+skinparam noteBackgroundColor #FFFFFF
+skinparam linetype ortho
+skinparam ranksep 110
+skinparam nodesep 80
+
+hide methods
+top to bottom direction
+
+class "User" as User {
+  +id
+  +name
+  +credit
+}
+
+class "Service Listing" as CampusServiceListing {
+  +id
+  +intent
+  +title
+  +amount
+  +status
+}
+
+class "Service Image" as CampusServiceImage {
+  +image
+}
+
+class "Service Order" as CampusServiceOrder {
+  +id
+  +status
+  +note
+  +amount
+}
+
+User -[hidden]down- CampusServiceListing
+CampusServiceListing -[hidden]down- CampusServiceOrder
+CampusServiceListing -[hidden]right- CampusServiceImage
+
+User "1" -down- "0..*" CampusServiceListing : publishes / offers
+CampusServiceListing "1" -down- "0..*" CampusServiceOrder : turns into
+User "1" -[norank]right- "0..*" CampusServiceOrder : requester / provider
+CampusServiceListing "1" -right- "0..*" CampusServiceImage : has
+
+note right of CampusServiceListing
+The listing is the
+information layer.
+It supports two-way
+supply and demand.
+end note
+
+note right of CampusServiceOrder
+The order is the
+fulfillment layer.
+It records matching
+and completion.
+Favorites and behavior
+records are omitted.
+end note
+
+@enduml
