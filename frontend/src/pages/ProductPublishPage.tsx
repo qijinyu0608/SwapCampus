@@ -144,19 +144,7 @@ export function ProductPublishPage() {
 
       setMessage({ type: 'success', text: isEditMode ? `商品已更新：${result.title}` : `商品已提交：${result.title}（ID ${result.id}，状态 ${result.status}）` });
       setPendingPriceReview(null);
-      if (isEditMode) {
-        void navigate(`/products/${result.id}`);
-      } else {
-        form.resetFields();
-        setUploadedImages((current) => {
-          current.forEach((item) => {
-            if (item.previewUrl.startsWith('blob:')) {
-              URL.revokeObjectURL(item.previewUrl);
-            }
-          });
-          return [];
-        });
-      }
+      void navigate(`/products/${result.id}`, { replace: true });
     } catch (error) {
       const maybePayload = typeof error === 'object' && error && 'response' in error
         ? (error as {

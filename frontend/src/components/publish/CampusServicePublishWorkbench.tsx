@@ -362,19 +362,9 @@ export function CampusServicePublishWorkbench({
         });
         setEditListingIntent(saved.intent);
         form.setFieldsValue(buildEditInitialValues(saved));
-        void navigate(`/campus-services/${saved.id}`);
+        void navigate(`/campus-services/${saved.id}`, { replace: true });
       } else {
-        form.resetFields();
-        setUploadedImages((current) => {
-          current.forEach((item) => {
-            if (item.previewUrl.startsWith('blob:')) {
-              URL.revokeObjectURL(item.previewUrl);
-            }
-          });
-          return [];
-        });
-        applyPublishStrategy(lockedIntent ?? 'REQUEST', 'ONE_TIME');
-        void navigate('/campus-services', { state: { selectedListingId: saved.id } });
+        void navigate(`/campus-services/${saved.id}`, { replace: true });
       }
     } catch (error) {
       setMessage({ type: 'error', text: getApiErrorMessage(error, isEditMode ? '保存失败，请稍后重试。' : '发布失败，请稍后重试。') });

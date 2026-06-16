@@ -25,6 +25,7 @@ import {
 } from '@prisma/client';
 import { formatProductConditionValue } from '../src/modules/products/product-conditions';
 import type { ProductCategoryName } from '../src/modules/products/product-categories';
+import { resolveLocalCampusServiceImage } from './campus-service-image-pool';
 import { syncSuperTokensUser } from './supertokens-sync';
 
 export type DemoUserSeed = {
@@ -360,6 +361,336 @@ const DEMO_USERS: DemoUserSeed[] = [
     college: '动物科技学院',
     role: UserRole.USER,
     creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user13@swapcampus.local',
+    password: 'user13',
+    displayName: '资同学',
+    studentId: '20260013',
+    college: '资源与环境学院',
+    role: UserRole.USER,
+    creditScore: 82,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user14@swapcampus.local',
+    password: 'user14',
+    displayName: '食同学',
+    studentId: '20260014',
+    college: '食品科学技术学院',
+    role: UserRole.USER,
+    creditScore: 73,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user15@swapcampus.local',
+    password: 'user15',
+    displayName: '机同学',
+    studentId: '20260015',
+    college: '机电工程学院',
+    role: UserRole.USER,
+    creditScore: 78,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user16@swapcampus.local',
+    password: 'user16',
+    displayName: '植同学',
+    studentId: '20260016',
+    college: '植物保护学院',
+    role: UserRole.USER,
+    creditScore: 80,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user17@swapcampus.local',
+    password: 'user17',
+    displayName: '水同学',
+    studentId: '20260017',
+    college: '水利与土木工程学院',
+    role: UserRole.USER,
+    creditScore: 75,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user18@swapcampus.local',
+    password: 'user18',
+    displayName: '经同学二',
+    studentId: '20260018',
+    college: '经济管理学院',
+    role: UserRole.USER,
+    creditScore: 72,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user19@swapcampus.local',
+    password: 'user19',
+    displayName: '材同学',
+    studentId: '20260019',
+    college: '材料科学与工程学院',
+    role: UserRole.USER,
+    creditScore: 74,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user20@swapcampus.local',
+    password: 'user20',
+    displayName: '国同学',
+    studentId: '20260020',
+    college: '国际学院',
+    role: UserRole.USER,
+    creditScore: 79,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user21@swapcampus.local',
+    password: 'user21',
+    displayName: '理同学',
+    studentId: '20260021',
+    college: '理学院',
+    role: UserRole.USER,
+    creditScore: 77,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user22@swapcampus.local',
+    password: 'user22',
+    displayName: '草同学',
+    studentId: '20260022',
+    college: '草业与草原学院',
+    role: UserRole.USER,
+    creditScore: 70,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user23@swapcampus.local',
+    password: 'user23',
+    displayName: '土同学',
+    studentId: '20260023',
+    college: '水土保持学院',
+    role: UserRole.USER,
+    creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user24@swapcampus.local',
+    password: 'user24',
+    displayName: '马同学',
+    studentId: '20260024',
+    college: '马克思主义学院',
+    role: UserRole.USER,
+    creditScore: 81,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user25@swapcampus.local',
+    password: 'user25',
+    displayName: '环同学',
+    studentId: '20260025',
+    college: '环境科学与工程学院',
+    role: UserRole.USER,
+    creditScore: 74,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user26@swapcampus.local',
+    password: 'user26',
+    displayName: '计同学',
+    studentId: '20260026',
+    college: '计算机与控制工程学院',
+    role: UserRole.USER,
+    creditScore: 86,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user27@swapcampus.local',
+    password: 'user27',
+    displayName: '英同学',
+    studentId: '20260027',
+    college: '英语学院',
+    role: UserRole.USER,
+    creditScore: 73,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user28@swapcampus.local',
+    password: 'user28',
+    displayName: '机同学二',
+    studentId: '20260028',
+    college: '机械与电气工程学院',
+    role: UserRole.USER,
+    creditScore: 78,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user29@swapcampus.local',
+    password: 'user29',
+    displayName: '数同学',
+    studentId: '20260029',
+    college: '数学与统计学院',
+    role: UserRole.USER,
+    creditScore: 80,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user30@swapcampus.local',
+    password: 'user30',
+    displayName: '新同学',
+    studentId: '20260030',
+    college: '新能源学院',
+    role: UserRole.USER,
+    creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user31@swapcampus.local',
+    password: 'user31',
+    displayName: '化同学',
+    studentId: '20260031',
+    college: '化学与化工学院',
+    role: UserRole.USER,
+    creditScore: 84,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user32@swapcampus.local',
+    password: 'user32',
+    displayName: '地同学',
+    studentId: '20260032',
+    college: '地理科学学院',
+    role: UserRole.USER,
+    creditScore: 72,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user33@swapcampus.local',
+    password: 'user33',
+    displayName: '金同学',
+    studentId: '20260033',
+    college: '金融学院',
+    role: UserRole.USER,
+    creditScore: 79,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user34@swapcampus.local',
+    password: 'user34',
+    displayName: '旅同学',
+    studentId: '20260034',
+    college: '旅游管理学院',
+    role: UserRole.USER,
+    creditScore: 68,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user35@swapcampus.local',
+    password: 'user35',
+    displayName: '传同学',
+    studentId: '20260035',
+    college: '传媒学院',
+    role: UserRole.USER,
+    creditScore: 87,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user36@swapcampus.local',
+    password: 'user36',
+    displayName: '海同学',
+    studentId: '20260036',
+    college: '海洋学院',
+    role: UserRole.USER,
+    creditScore: 75,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user37@swapcampus.local',
+    password: 'user37',
+    displayName: '文同学',
+    studentId: '20260037',
+    college: '人文社会科学学院',
+    role: UserRole.USER,
+    creditScore: 78,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user38@swapcampus.local',
+    password: 'user38',
+    displayName: '继同学',
+    studentId: '20260038',
+    college: '继续教育学院',
+    role: UserRole.USER,
+    creditScore: 71,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user39@swapcampus.local',
+    password: 'user39',
+    displayName: '保同学',
+    studentId: '20260039',
+    college: '生态与自然保护学院',
+    role: UserRole.USER,
+    creditScore: 82,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user40@swapcampus.local',
+    password: 'user40',
+    displayName: '材同学二',
+    studentId: '20260040',
+    college: '材料科学与技术学院',
+    role: UserRole.USER,
+    creditScore: 69,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user41@swapcampus.local',
+    password: 'user41',
+    displayName: '继同学二',
+    studentId: '20260041',
+    college: '继续教育学院',
+    role: UserRole.USER,
+    creditScore: 80,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user42@swapcampus.local',
+    password: 'user42',
+    displayName: '国同学二',
+    studentId: '20260042',
+    college: '国际学院',
+    role: UserRole.USER,
+    creditScore: 77,
     verificationStatus: VerificationStatus.APPROVED,
     accountStatus: AccountStatus.ACTIVE
   }
@@ -869,6 +1200,488 @@ const CAMPUS_SERVICE_BLUEPRINTS: CampusServiceTemplate[] = [
       tags: ['下午'],
       status: CampusServiceListingStatus.OPEN
     }
+  },
+  {
+    title: '学院资料代交',
+    category: CampusServiceCategory.AGENCY,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.ONE_TIME,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 8,
+    locationMode: CampusServiceLocationMode.ON_SITE,
+    locationNote: '材料整理完毕后送到学院办公室。',
+    routeFrom: '宿舍楼',
+    routeTo: '学院办公室',
+    validHours: 18,
+    estimatedMinutes: 25,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    itemCount: 1,
+    maxTotalOrders: 1,
+    maxConcurrentOrders: 1,
+    autoConfirm: false,
+    trustNote: '材料清单已整理。',
+    tags: ['代交', '材料'],
+    imageUrl: '/images/products/archive/books-1.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '上午档',
+      amountDelta: 0,
+      tags: ['上午']
+    },
+    variantB: {
+      suffix: '下午档',
+      amountDelta: 2,
+      tags: ['下午'],
+      locationMode: CampusServiceLocationMode.FLEXIBLE
+    }
+  },
+  {
+    title: '实验室拍照整理',
+    category: CampusServiceCategory.SKILL,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 22,
+    locationMode: CampusServiceLocationMode.ONLINE,
+    locationNote: '支持图片整理与简单排版。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 48,
+    estimatedMinutes: 45,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '可整理图片、表格与简报。',
+    tags: ['整理', '图片'],
+    imageUrl: '/images/products/archive/fan.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '简版',
+      amountDelta: 0,
+      tags: ['简版']
+    },
+    variantB: {
+      suffix: '增强版',
+      amountDelta: 6,
+      tags: ['增强'],
+      fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE
+    }
+  },
+  {
+    title: '周末活动搭子',
+    category: CampusServiceCategory.EVENT,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FREE,
+    amount: 0,
+    locationMode: CampusServiceLocationMode.FLEXIBLE,
+    locationNote: '周末可一起跑步、自习或签到。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 72,
+    estimatedMinutes: 20,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '时间灵活。',
+    tags: ['活动', '搭子'],
+    imageUrl: '/images/products/archive/plush.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '跑步版',
+      amountDelta: 0,
+      tags: ['跑步']
+    },
+    variantB: {
+      suffix: '自习版',
+      amountDelta: 0,
+      tags: ['自习']
+    }
+  },
+  {
+    title: '宿舍小修预约',
+    category: CampusServiceCategory.REPAIR,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.ONE_TIME,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 16,
+    locationMode: CampusServiceLocationMode.ON_SITE,
+    locationNote: '台灯、插线板、小家具基础维修。',
+    routeFrom: '宿舍楼',
+    routeTo: '宿舍楼',
+    validHours: 24,
+    estimatedMinutes: 30,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    itemCount: 1,
+    maxTotalOrders: 1,
+    maxConcurrentOrders: 1,
+    autoConfirm: false,
+    trustNote: '先拍照确认故障。',
+    tags: ['维修', '宿舍'],
+    imageUrl: '/images/products/archive/lamp.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '台灯',
+      amountDelta: 0,
+      tags: ['台灯']
+    },
+    variantB: {
+      suffix: '插线板',
+      amountDelta: 2,
+      tags: ['插线板']
+    }
+  },
+  {
+    title: '图书馆资料代拿',
+    category: CampusServiceCategory.ERRAND,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.ONE_TIME,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 5,
+    locationMode: CampusServiceLocationMode.ON_SITE,
+    locationNote: '图书馆服务台到教学楼或宿舍楼下。',
+    routeFrom: '图书馆服务台',
+    routeTo: '教学楼',
+    validHours: 10,
+    estimatedMinutes: 20,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    itemCount: 1,
+    maxTotalOrders: 1,
+    maxConcurrentOrders: 1,
+    autoConfirm: false,
+    trustNote: '代拿前先确认预约信息。',
+    tags: ['资料', '代拿'],
+    imageUrl: '/images/products/archive/books-2.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '午间',
+      amountDelta: 0,
+      tags: ['午间']
+    },
+    variantB: {
+      suffix: '晚间',
+      amountDelta: 1,
+      tags: ['晚间']
+    }
+  },
+  {
+    title: 'PPT 结构梳理',
+    category: CampusServiceCategory.SKILL,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 26,
+    locationMode: CampusServiceLocationMode.ONLINE,
+    locationNote: '线上沟通演示结构和视觉层级。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 48,
+    estimatedMinutes: 50,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '适合课程汇报和答辩演示。',
+    tags: ['PPT', '演示'],
+    imageUrl: '/images/products/archive/keyboard.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '答辩版',
+      amountDelta: 0,
+      tags: ['答辩']
+    },
+    variantB: {
+      suffix: '汇报版',
+      amountDelta: 4,
+      tags: ['汇报']
+    }
+  },
+  {
+    title: '考试周早起搭子',
+    category: CampusServiceCategory.HELP,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FREE,
+    amount: 0,
+    locationMode: CampusServiceLocationMode.FLEXIBLE,
+    locationNote: '可顺路提醒、占座或一起去自习室。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 36,
+    estimatedMinutes: 15,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '适合考试周互助。',
+    tags: ['互助', '自习'],
+    imageUrl: '/images/products/archive/plush.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '早八版',
+      amountDelta: 0,
+      tags: ['早八']
+    },
+    variantB: {
+      suffix: '晚自习版',
+      amountDelta: 0,
+      tags: ['晚自习']
+    }
+  },
+  {
+    title: '跨楼资料搬箱',
+    category: CampusServiceCategory.MOVING,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.ONE_TIME,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 14,
+    locationMode: CampusServiceLocationMode.ON_SITE,
+    locationNote: '教学楼和实验楼之间搬两箱资料，适合顺路同学。',
+    routeFrom: '理科楼',
+    routeTo: '实验楼',
+    validHours: 10,
+    estimatedMinutes: 30,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.FACE_TO_FACE,
+    itemCount: 2,
+    maxTotalOrders: 1,
+    maxConcurrentOrders: 1,
+    autoConfirm: false,
+    trustNote: '仅搬资料箱，不含大件设备。',
+    tags: ['搬箱', '资料'],
+    imageUrl: '/images/products/archive/storage-shelf.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '课间档',
+      amountDelta: 0,
+      routeFrom: '理科楼',
+      routeTo: '实验楼',
+      tags: ['课间']
+    },
+    variantB: {
+      suffix: '晚课后',
+      amountDelta: 3,
+      routeFrom: '实验楼',
+      routeTo: '研究生楼',
+      tags: ['晚课后']
+    }
+  },
+  {
+    title: '公开演讲陪练',
+    category: CampusServiceCategory.TUTORING,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 28,
+    locationMode: CampusServiceLocationMode.ONLINE,
+    locationNote: '支持线上梳理公开表达节奏、开场过渡和讲解逻辑。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 72,
+    estimatedMinutes: 50,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '适合社团路演、活动宣讲和公开表达练习。',
+    tags: ['表达', '演讲'],
+    imageUrl: '/images/products/archive/books-2.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '路演版',
+      amountDelta: 0,
+      tags: ['路演']
+    },
+    variantB: {
+      suffix: '宣讲版',
+      amountDelta: 6,
+      tags: ['宣讲']
+    }
+  },
+  {
+    title: '晚间咖啡拼单',
+    category: CampusServiceCategory.GROUP_BUY,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 2,
+    locationMode: CampusServiceLocationMode.ONLINE,
+    locationNote: '群里确认门店和口味后统一下单。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 18,
+    estimatedMinutes: 15,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 3,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 3,
+    autoConfirm: true,
+    trustNote: '按人数平摊，截图回传订单。',
+    tags: ['拼单', '咖啡'],
+    imageUrl: '/images/products/archive/fan.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '自习前',
+      amountDelta: 0,
+      tags: ['自习']
+    },
+    variantB: {
+      suffix: '熬夜版',
+      amountDelta: 1,
+      tags: ['熬夜']
+    }
+  },
+  {
+    title: '晨读占座互助',
+    category: CampusServiceCategory.HELP,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FREE,
+    amount: 0,
+    locationMode: CampusServiceLocationMode.FLEXIBLE,
+    locationNote: '可顺路提醒、占自习室前排座位或一起晨读。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 24,
+    estimatedMinutes: 15,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '适合考试周和晨读打卡互助。',
+    tags: ['晨读', '占座'],
+    imageUrl: '/images/products/archive/plush.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '图书馆版',
+      amountDelta: 0,
+      tags: ['图书馆']
+    },
+    variantB: {
+      suffix: '教学楼版',
+      amountDelta: 0,
+      tags: ['教学楼']
+    }
+  },
+  {
+    title: '社团展板送签',
+    category: CampusServiceCategory.AGENCY,
+    intent: CampusServiceIntent.REQUEST,
+    pattern: CampusServicePattern.ONE_TIME,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 9,
+    locationMode: CampusServiceLocationMode.ON_SITE,
+    locationNote: '社团活动展板和登记表需要顺路送到学院办事窗口。',
+    routeFrom: '社团办公室',
+    routeTo: '学院窗口',
+    validHours: 12,
+    estimatedMinutes: 25,
+    urgency: CampusServiceUrgency.TODAY,
+    fulfillmentMode: CampusServiceFulfillmentMode.DROP_OFF,
+    itemCount: 1,
+    maxTotalOrders: 1,
+    maxConcurrentOrders: 1,
+    autoConfirm: false,
+    trustNote: '文件已整理，窗口信息明确。',
+    tags: ['社团', '送签'],
+    imageUrl: '/images/products/archive/books-1.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '午后档',
+      amountDelta: 0,
+      tags: ['午后']
+    },
+    variantB: {
+      suffix: '傍晚档',
+      amountDelta: 1,
+      tags: ['傍晚']
+    }
+  },
+  {
+    title: '证书扫描排版',
+    category: CampusServiceCategory.SKILL,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FIXED,
+    amount: 18,
+    locationMode: CampusServiceLocationMode.ONLINE,
+    locationNote: '支持证书扫描整理、信息脱敏和打印版排版。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 36,
+    estimatedMinutes: 35,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 2,
+    autoConfirm: true,
+    trustNote: '适合求职材料和社团报名资料整理。',
+    tags: ['扫描', '排版'],
+    imageUrl: '/images/products/archive/keyboard.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '简洁版',
+      amountDelta: 0,
+      tags: ['简洁']
+    },
+    variantB: {
+      suffix: '展示版',
+      amountDelta: 4,
+      tags: ['展示']
+    }
+  },
+  {
+    title: '林间夜跑搭子',
+    category: CampusServiceCategory.EVENT,
+    intent: CampusServiceIntent.OFFER,
+    pattern: CampusServicePattern.REUSABLE,
+    priceMode: CampusServicePriceMode.FREE,
+    amount: 0,
+    locationMode: CampusServiceLocationMode.FLEXIBLE,
+    locationNote: '晚饭后可一起夜跑打卡，也能顺路互相提醒。',
+    routeFrom: null,
+    routeTo: null,
+    validHours: 48,
+    estimatedMinutes: 40,
+    urgency: CampusServiceUrgency.NORMAL,
+    fulfillmentMode: CampusServiceFulfillmentMode.FLEXIBLE,
+    itemCount: 1,
+    maxTotalOrders: null,
+    maxConcurrentOrders: 3,
+    autoConfirm: true,
+    trustNote: '适合校内固定路线夜跑。',
+    tags: ['夜跑', '打卡'],
+    imageUrl: '/images/products/archive/fan.jpg',
+    status: CampusServiceListingStatus.OPEN,
+    variantA: {
+      suffix: '操场版',
+      amountDelta: 0,
+      tags: ['操场']
+    },
+    variantB: {
+      suffix: '林荫道版',
+      amountDelta: 0,
+      tags: ['林荫道']
+    }
   }
 ];
 
@@ -885,6 +1698,7 @@ function uniqueStrings(values: string[]) {
 }
 
 export function buildDemoSeedPlan(now = new Date()): DemoSeedPlan {
+  const demoUserCount = DEMO_USERS.length - 1;
   const products: DemoProductSeed[] = PRODUCT_BLUEPRINTS.flatMap((template, index) => {
     const pair = [template.variantA, template.variantB];
     return pair.map((variant, variantIndex) => ({
@@ -895,7 +1709,7 @@ export function buildDemoSeedPlan(now = new Date()): DemoSeedPlan {
       tags: uniqueStrings([template.tags, variant.tags ?? []].flat()),
       description: `${template.description}${variant.descriptionSuffix ? ` ${variant.descriptionSuffix}` : ''}`,
       imageUrl: template.imageUrl,
-      sellerIndex: 1 + ((index + variantIndex) % 8),
+      sellerIndex: 1 + ((index + variantIndex) % Math.min(demoUserCount, 16)),
       status: variant.status ?? ProductStatus.ON_SALE
     }));
   });
@@ -932,8 +1746,14 @@ export function buildDemoSeedPlan(now = new Date()): DemoSeedPlan {
         autoConfirm: variant.autoConfirm ?? template.autoConfirm,
         trustNote: variant.trustNote ?? template.trustNote,
         tags: uniqueStrings([template.tags, variant.tags ?? []].flat()),
-        imageUrl: template.imageUrl,
-        ownerIndex: 1 + (((index * 2) + variantIndex) % 12),
+        imageUrl: resolveLocalCampusServiceImage({
+          category: template.category,
+          intent: template.intent,
+          listingId: (index * 10) + variantIndex,
+          title: `${template.title}${variant.suffix ? ` ${variant.suffix}` : ''}`,
+          imageUrl: template.imageUrl
+        }),
+        ownerIndex: 1 + (((index * 2) + variantIndex) % demoUserCount),
         status: variant.status ?? template.status
       };
     });

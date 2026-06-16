@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { getCampusServiceLocalImage } from './campus-service-local-images.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'artifacts', 'e2e');
@@ -17,6 +18,14 @@ const PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_PUBLIC_PROFILE_ACCOUNT ?? 
 const PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_PUBLIC_PROFILE_PASSWORD ?? 'user01';
 const SECOND_PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_SECOND_PUBLIC_PROFILE_ACCOUNT ?? 'user10@swapcampus.local';
 const SECOND_PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_SECOND_PUBLIC_PROFILE_PASSWORD ?? 'user10';
+const THIRD_PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_THIRD_PUBLIC_PROFILE_ACCOUNT ?? 'user13@swapcampus.local';
+const THIRD_PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_THIRD_PUBLIC_PROFILE_PASSWORD ?? 'user13';
+const FOURTH_PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_FOURTH_PUBLIC_PROFILE_ACCOUNT ?? 'user19@swapcampus.local';
+const FOURTH_PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_FOURTH_PUBLIC_PROFILE_PASSWORD ?? 'user19';
+const FIFTH_PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_FIFTH_PUBLIC_PROFILE_ACCOUNT ?? 'user26@swapcampus.local';
+const FIFTH_PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_FIFTH_PUBLIC_PROFILE_PASSWORD ?? 'user26';
+const SIXTH_PUBLIC_PROFILE_ACCOUNT = process.env.SWAPCAMPUS_SIXTH_PUBLIC_PROFILE_ACCOUNT ?? 'user31@swapcampus.local';
+const SIXTH_PUBLIC_PROFILE_PASSWORD = process.env.SWAPCAMPUS_SIXTH_PUBLIC_PROFILE_PASSWORD ?? 'user31';
 const SESSION_KEY = 'swapcampus-session';
 const DEV_AUTH_TOKEN_KEY = 'swapcampus-dev-auth-token';
 const FAVORITES_KEY = 'swapcampus-favorites';
@@ -249,7 +258,7 @@ async function createCampusServiceListing(seed, auth) {
       itemCount: 1,
       maxTotalOrders: seed.intent === 'OFFER' ? 2 : 1,
       maxConcurrentOrders: 1,
-      imageUrls: ['https://cdn.example.com/e2e-campus-service.jpg']
+      imageUrls: [getCampusServiceLocalImage(seed.category)]
     }
   }, typeof auth === 'string' ? auth : undefined);
 }
@@ -301,6 +310,14 @@ async function main() {
   assert(publicProfileSession?.user?.id, 'public profile session missing user');
   const secondPublicProfileSession = await loginAccount(SECOND_PUBLIC_PROFILE_ACCOUNT, SECOND_PUBLIC_PROFILE_PASSWORD);
   assert(secondPublicProfileSession?.user?.id, 'second public profile session missing user');
+  const thirdPublicProfileSession = await loginAccount(THIRD_PUBLIC_PROFILE_ACCOUNT, THIRD_PUBLIC_PROFILE_PASSWORD);
+  assert(thirdPublicProfileSession?.user?.id, 'third public profile session missing user');
+  const fourthPublicProfileSession = await loginAccount(FOURTH_PUBLIC_PROFILE_ACCOUNT, FOURTH_PUBLIC_PROFILE_PASSWORD);
+  assert(fourthPublicProfileSession?.user?.id, 'fourth public profile session missing user');
+  const fifthPublicProfileSession = await loginAccount(FIFTH_PUBLIC_PROFILE_ACCOUNT, FIFTH_PUBLIC_PROFILE_PASSWORD);
+  assert(fifthPublicProfileSession?.user?.id, 'fifth public profile session missing user');
+  const sixthPublicProfileSession = await loginAccount(SIXTH_PUBLIC_PROFILE_ACCOUNT, SIXTH_PUBLIC_PROFILE_PASSWORD);
+  assert(sixthPublicProfileSession?.user?.id, 'sixth public profile session missing user');
   const createdRequest = await createCampusServiceListing({
     intent: 'REQUEST',
     category: 'ERRAND',
@@ -371,6 +388,86 @@ async function main() {
   }, secondPublicProfileSession.devAuthToken ? String(secondPublicProfileSession.devAuthToken) : secondPublicProfileSession.authHeaders);
   assert(createdSecondPublicHelp?.id, 'failed to create second public help listing for e2e');
   assert(createdSecondPublicSkill?.id, 'failed to create second public skill listing for e2e');
+  const createdThirdPublicEvent = await createCampusServiceListing({
+    intent: 'REQUEST',
+    category: 'EVENT',
+    title: `资源学院活动签到值守 ${E2E_TS}`,
+    description: '明天下午活动开始前需要同学先到教室门口帮忙看签到台和引导入场 20 分钟。',
+    priceMode: 'FIXED',
+    amount: 12,
+    locationNote: '资源与环境学院报告厅门口'
+  }, thirdPublicProfileSession.devAuthToken ? String(thirdPublicProfileSession.devAuthToken) : thirdPublicProfileSession.authHeaders);
+  const createdThirdPublicTutoring = await createCampusServiceListing({
+    intent: 'OFFER',
+    category: 'TUTORING',
+    title: `资源学院数据处理答疑 ${E2E_TS}`,
+    description: '这周可线上答疑 Excel 数据清洗、基础图表和公开展示排版。',
+    priceMode: 'FIXED',
+    amount: 24,
+    locationNote: '线上语音或站内消息约时间'
+  }, thirdPublicProfileSession.devAuthToken ? String(thirdPublicProfileSession.devAuthToken) : thirdPublicProfileSession.authHeaders);
+  assert(createdThirdPublicEvent?.id, 'failed to create third public event listing for e2e');
+  assert(createdThirdPublicTutoring?.id, 'failed to create third public tutoring listing for e2e');
+  const createdFourthPublicAgency = await createCampusServiceListing({
+    intent: 'REQUEST',
+    category: 'AGENCY',
+    title: `材料学院资料代交 ${E2E_TS}`,
+    description: '整理好的纸质材料需要帮忙送到学院办公室。',
+    priceMode: 'FIXED',
+    amount: 8,
+    locationNote: '材料科学与工程学院办公室'
+  }, fourthPublicProfileSession.devAuthToken ? String(fourthPublicProfileSession.devAuthToken) : fourthPublicProfileSession.authHeaders);
+  const createdFourthPublicHelp = await createCampusServiceListing({
+    intent: 'OFFER',
+    category: 'HELP',
+    title: `材料学院晚间顺路帮忙 ${E2E_TS}`,
+    description: '晚间回宿舍途中可顺路帮忙带饭、送资料。',
+    priceMode: 'FREE',
+    amount: 0,
+    locationNote: '材料学院宿舍区内顺路帮忙'
+  }, fourthPublicProfileSession.devAuthToken ? String(fourthPublicProfileSession.devAuthToken) : fourthPublicProfileSession.authHeaders);
+  assert(createdFourthPublicAgency?.id, 'failed to create fourth public agency listing for e2e');
+  assert(createdFourthPublicHelp?.id, 'failed to create fourth public help listing for e2e');
+  const createdFifthPublicErrand = await createCampusServiceListing({
+    intent: 'REQUEST',
+    category: 'ERRAND',
+    title: `计控学院资料代拿 ${E2E_TS}`,
+    description: '图书馆服务台的资料需要顺路代拿到教学楼。',
+    priceMode: 'FIXED',
+    amount: 5,
+    locationNote: '图书馆服务台到教学楼'
+  }, fifthPublicProfileSession.devAuthToken ? String(fifthPublicProfileSession.devAuthToken) : fifthPublicProfileSession.authHeaders);
+  const createdFifthPublicSkill = await createCampusServiceListing({
+    intent: 'OFFER',
+    category: 'SKILL',
+    title: `计控学院 PPT 梳理 ${E2E_TS}`,
+    description: '今晚可帮忙梳理课程汇报 PPT 结构和视觉层级。',
+    priceMode: 'FIXED',
+    amount: 26,
+    locationNote: '线上沟通'
+  }, fifthPublicProfileSession.devAuthToken ? String(fifthPublicProfileSession.devAuthToken) : fifthPublicProfileSession.authHeaders);
+  assert(createdFifthPublicErrand?.id, 'failed to create fifth public errand listing for e2e');
+  assert(createdFifthPublicSkill?.id, 'failed to create fifth public skill listing for e2e');
+  const createdSixthPublicMoving = await createCampusServiceListing({
+    intent: 'REQUEST',
+    category: 'MOVING',
+    title: `化工学院跨楼搬箱 ${E2E_TS}`,
+    description: '理科楼和实验楼之间需要搬两箱课程资料，适合顺路同学帮忙。',
+    priceMode: 'FIXED',
+    amount: 14,
+    locationNote: '理科楼到实验楼'
+  }, sixthPublicProfileSession.devAuthToken ? String(sixthPublicProfileSession.devAuthToken) : sixthPublicProfileSession.authHeaders);
+  const createdSixthPublicTutoring = await createCampusServiceListing({
+    intent: 'OFFER',
+    category: 'TUTORING',
+    title: `化工学院公开演讲陪练 ${E2E_TS}`,
+    description: '今晚可线上梳理公开表达节奏、开场过渡和讲解逻辑。',
+    priceMode: 'FIXED',
+    amount: 28,
+    locationNote: '线上语音或站内消息约时间'
+  }, sixthPublicProfileSession.devAuthToken ? String(sixthPublicProfileSession.devAuthToken) : sixthPublicProfileSession.authHeaders);
+  assert(createdSixthPublicMoving?.id, 'failed to create sixth public moving listing for e2e');
+  assert(createdSixthPublicTutoring?.id, 'failed to create sixth public tutoring listing for e2e');
 
   const { chromium } = await ensurePlaywrightCore();
   const browser = await chromium.launch({
@@ -549,6 +646,134 @@ async function main() {
         skillListingId: createdSecondPublicSkill.id,
         helpTitle: createdSecondPublicHelp.title,
         skillTitle: createdSecondPublicSkill.title,
+        url: page.url(),
+        screenshot
+      };
+    }));
+
+    results.push(await runCase('public-user.third-publisher-visibility', async () => {
+      await page.goto(`${BASE_URL}/users/${thirdPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+
+      await page.getByRole('tab', { name: /发布的需求/ }).click();
+      await waitStable(page);
+      await page.getByText(createdThirdPublicEvent.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdThirdPublicEvent.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdThirdPublicEvent.id}`);
+
+      await page.goto(`${BASE_URL}/users/${thirdPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+      await page.getByRole('tab', { name: /发布的服务/ }).click();
+      await waitStable(page);
+      await page.getByText(createdThirdPublicTutoring.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdThirdPublicTutoring.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdThirdPublicTutoring.id}`);
+      const screenshot = await takeScreenshot(page, 'e2e-public-user-third-publisher.png');
+
+      return {
+        publicUserId: thirdPublicProfileSession.user.id,
+        eventListingId: createdThirdPublicEvent.id,
+        tutoringListingId: createdThirdPublicTutoring.id,
+        eventTitle: createdThirdPublicEvent.title,
+        tutoringTitle: createdThirdPublicTutoring.title,
+        url: page.url(),
+        screenshot
+      };
+    }));
+
+    results.push(await runCase('public-user.fourth-publisher-visibility', async () => {
+      await page.goto(`${BASE_URL}/users/${fourthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+
+      await page.getByRole('tab', { name: /发布的需求/ }).click();
+      await waitStable(page);
+      await page.getByText(createdFourthPublicAgency.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdFourthPublicAgency.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdFourthPublicAgency.id}`);
+
+      await page.goto(`${BASE_URL}/users/${fourthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+      await page.getByRole('tab', { name: /发布的服务/ }).click();
+      await waitStable(page);
+      await page.getByText(createdFourthPublicHelp.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdFourthPublicHelp.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdFourthPublicHelp.id}`);
+      const screenshot = await takeScreenshot(page, 'e2e-public-user-fourth-publisher.png');
+
+      return {
+        publicUserId: fourthPublicProfileSession.user.id,
+        agencyListingId: createdFourthPublicAgency.id,
+        helpListingId: createdFourthPublicHelp.id,
+        agencyTitle: createdFourthPublicAgency.title,
+        helpTitle: createdFourthPublicHelp.title,
+        url: page.url(),
+        screenshot
+      };
+    }));
+
+    results.push(await runCase('public-user.fifth-publisher-visibility', async () => {
+      await page.goto(`${BASE_URL}/users/${fifthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+
+      await page.getByRole('tab', { name: /发布的需求/ }).click();
+      await waitStable(page);
+      await page.getByText(createdFifthPublicErrand.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdFifthPublicErrand.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdFifthPublicErrand.id}`);
+
+      await page.goto(`${BASE_URL}/users/${fifthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+      await page.getByRole('tab', { name: /发布的服务/ }).click();
+      await waitStable(page);
+      await page.getByText(createdFifthPublicSkill.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdFifthPublicSkill.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdFifthPublicSkill.id}`);
+      const screenshot = await takeScreenshot(page, 'e2e-public-user-fifth-publisher.png');
+
+      return {
+        publicUserId: fifthPublicProfileSession.user.id,
+        errandListingId: createdFifthPublicErrand.id,
+        skillListingId: createdFifthPublicSkill.id,
+        errandTitle: createdFifthPublicErrand.title,
+        skillTitle: createdFifthPublicSkill.title,
+        url: page.url(),
+        screenshot
+      };
+    }));
+
+    results.push(await runCase('public-user.sixth-publisher-visibility', async () => {
+      await page.goto(`${BASE_URL}/users/${sixthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+
+      await page.getByRole('tab', { name: /发布的需求/ }).click();
+      await waitStable(page);
+      await page.getByText(createdSixthPublicMoving.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdSixthPublicMoving.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdSixthPublicMoving.id}`);
+
+      await page.goto(`${BASE_URL}/users/${sixthPublicProfileSession.user.id}`, { waitUntil: 'domcontentloaded' });
+      await waitStable(page);
+      await page.getByRole('tab', { name: /发布的服务/ }).click();
+      await waitStable(page);
+      await page.getByText(createdSixthPublicTutoring.title).first().waitFor({ state: 'visible', timeout: 10000 });
+      await page.getByText(createdSixthPublicTutoring.title).first().click();
+      await waitStable(page);
+      await expectUrlIncludes(page, `/campus-services/${createdSixthPublicTutoring.id}`);
+      const screenshot = await takeScreenshot(page, 'e2e-public-user-sixth-publisher.png');
+
+      return {
+        publicUserId: sixthPublicProfileSession.user.id,
+        movingListingId: createdSixthPublicMoving.id,
+        tutoringListingId: createdSixthPublicTutoring.id,
+        movingTitle: createdSixthPublicMoving.title,
+        tutoringTitle: createdSixthPublicTutoring.title,
         url: page.url(),
         screenshot
       };

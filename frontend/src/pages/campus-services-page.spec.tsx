@@ -261,6 +261,21 @@ describe('CampusServicesPage', () => {
     expect(await screen.findByText('校园服务加载失败，请确认 Docker 后端已启动。')).toBeInTheDocument();
   });
 
+  it('shows the empty state when no listings are returned', async () => {
+    mocks.fetchCampusServiceListings.mockResolvedValueOnce({
+      items: [],
+      pagination: { page: 1, pageSize: 12, total: 0, totalPages: 0 }
+    });
+
+    render(
+      <MemoryRouter>
+        <CampusServicesPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('暂无任务')).toBeInTheDocument();
+  });
+
   it('discovers group-buy listings through the category filter', async () => {
     const user = userEvent.setup();
     mocks.fetchCampusServiceListings.mockImplementation(async (params: any) => {

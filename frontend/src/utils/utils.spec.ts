@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRODUCT_CATEGORY_NAMES, isProductCategoryName, normalizeProductCategoryName } from '../constants/productCategories';
 import { formatProductConditionValue, parseProductConditionValue, PRODUCT_CONDITION_MAX } from '../constants/productConditions';
 import {
+  executeCampusServiceOrderAction,
   getCampusServiceOrderRejectOrCancelText,
   getCampusServiceOrderRequestLabel
 } from './campusServiceOrderActions';
@@ -258,6 +259,49 @@ describe('frontend utility coverage', () => {
       actionState: { canReject: false },
       actionLabels: { cancel: '结束协作' }
     } as any)).toEqual({ title: '结束协作', confirmText: '结束协作' });
+    expect(getCampusServiceOrderRejectOrCancelText({
+      actionState: { canReject: true },
+      actionLabels: {}
+    } as any)).toEqual({ title: '拒绝申请', confirmText: '确认拒绝' });
+    expect(getCampusServiceOrderRejectOrCancelText({
+      actionState: { canReject: false },
+      actionLabels: {}
+    } as any)).toEqual({ title: '取消当前协作', confirmText: '确认取消' });
+  });
+
+  it('wraps campus service order actions with success, error and finally handlers', async () => {
+    const notifySuccess = vi.fn();
+    const notifyError = vi.fn();
+    const onSuccess = vi.fn(async () => undefined);
+    const onFinally = vi.fn();
+
+    await executeCampusServiceOrderAction({
+      run: vi.fn(async () => undefined),
+      onSuccess,
+      onFinally,
+      notifySuccess,
+      notifyError,
+      successMessage: '更新成功',
+      fallbackErrorMessage: '更新失败'
+    });
+
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(notifySuccess).toHaveBeenCalledWith('更新成功');
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(onFinally).toHaveBeenCalledTimes(1);
+
+    const error = new Error('bad');
+    await executeCampusServiceOrderAction({
+      run: vi.fn(async () => Promise.reject(error)),
+      onFinally,
+      notifySuccess,
+      notifyError,
+      successMessage: '不会触发',
+      fallbackErrorMessage: '更新失败'
+    });
+
+    expect(notifyError).toHaveBeenCalledWith('更新失败');
+    expect(onFinally).toHaveBeenCalledTimes(2);
   });
 
   it('builds user presentation details', () => {

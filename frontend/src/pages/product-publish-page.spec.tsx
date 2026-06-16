@@ -6,10 +6,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { ProductPublishPage } from './ProductPublishPage';
 
 const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
   createProductWithImages: vi.fn(),
+  fetchProductDetail: vi.fn(),
+  params: {} as { id?: string },
+  serviceWorkbench: vi.fn(),
   uploadProductImageAsset: vi.fn(),
   fetchPublishingRules: vi.fn(),
   getApiErrorMessage: vi.fn((_error: unknown, fallback: string) => fallback),
+  updateProductWithImages: vi.fn(),
   antMessageError: vi.fn()
 }));
 
@@ -34,6 +39,15 @@ vi.mock('antd', async () => {
   };
 });
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mocks.navigate,
+    useParams: () => mocks.params
+  };
+});
+
 vi.mock('../services/auth-state', () => ({
   useAuthState: () => ({
     currentUser: { id: 1, displayName: '用户', role: 'USER' }
@@ -41,12 +55,14 @@ vi.mock('../services/auth-state', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  fetchProductDetail: mocks.fetchProductDetail,
   fetchPublishingRules: mocks.fetchPublishingRules,
   getApiErrorMessage: mocks.getApiErrorMessage
 }));
 
 vi.mock('../services/product-publish', () => ({
   createProductWithImages: (payload: unknown) => mocks.createProductWithImages(payload),
+  updateProductWithImages: (id: number, payload: unknown) => mocks.updateProductWithImages(id, payload),
   uploadProductImageAsset: (file: File) => mocks.uploadProductImageAsset(file)
 }));
 
@@ -68,7 +84,10 @@ vi.mock('../components/publish', () => ({
     }, [items, onChange]);
     return <div>mock-image-manager</div>;
   },
-  CampusServicePublishWorkbench: () => null
+  CampusServicePublishWorkbench: ({ sectionTitle, presetIntent }: any) => {
+    mocks.serviceWorkbench({ sectionTitle, presetIntent });
+    return <div>{`${sectionTitle}-${presetIntent}`}</div>;
+  }
 }));
 
 vi.mock('../components/layout', () => ({
@@ -96,11 +115,55 @@ describe('ProductPublishPage', () => {
   beforeEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mocks.navigate.mockReset();
+    mocks.params = {};
     mocks.fetchPublishingRules.mockResolvedValue({ titleRules: [], descriptionRules: [] });
+    mocks.fetchProductDetail.mockResolvedValue({
+      id: 88,
+      title: '二手教材',
+      description: '九成新教材',
+      price: 52,
+      category: '教材资料',
+      condition: '9成新',
+      images: ['https://img.example.com/existing.jpg']
+    });
     mocks.createProductWithImages.mockResolvedValue({
       id: 88,
       title: '高数教材',
       status: 'ON_SALE'
+    });
+    mocks.updateProductWithImages.mockResolvedValue({
+      id: 88,
+      title: '二手教材',
+      status: 'ON_SALE'
+    });
+  });
+
+  it('redirects to the product detail page after creating a product', async () => {
+    const user = userEvent.setup();
+
+    const { container } = render(
+      <MemoryRouter>
+        <ProductPublishPage />
+      </MemoryRouter>
+    );
+
+    await user.type(screen.getByPlaceholderText('例如：九成计算机网络教材'), '高数教材');
+    await user.type(screen.getByPlaceholderText('88'), '88');
+    await user.type(screen.getByPlaceholderText('写清使用情况、配件、容量/版本、可交易地点。'), '期末复习用书，少量笔记');
+
+    const form = container.querySelector('form');
+    if (!form) {
+      throw new Error('publish form not found');
+    }
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mocks.createProductWithImages).toHaveBeenCalledWith(expect.objectContaining({
+        title: '高数教材',
+        price: 88
+      }));
+      expect(mocks.navigate).toHaveBeenCalledWith('/products/88', { replace: true });
     });
   });
 
@@ -169,6 +232,60 @@ describe('ProductPublishPage', () => {
         price: 399,
         confirmPriceReview: true
       }));
+      expect(mocks.navigate).toHaveBeenCalledWith('/products/99', { replace: true });
+    });
+  });
+
+  it('switches to service publish mode and renders the campus service workbench', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <ProductPublishPage />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole('tab', { name: '我要接单挣钱' }));
+    expect(await screen.findByText('发布可预约服务-OFFER')).toBeInTheDocument();
+    expect(mocks.serviceWorkbench).toHaveBeenCalledWith({
+      sectionTitle: '发布可预约服务',
+      presetIntent: 'OFFER'
+    });
+  });
+
+  it('loads product edit mode and saves with the update API', async () => {
+    const user = userEvent.setup();
+    mocks.params = { id: '88' };
+
+    render(
+      <MemoryRouter>
+        <ProductPublishPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(mocks.fetchProductDetail).toHaveBeenCalledWith(88);
+    });
+
+    await user.clear(screen.getByPlaceholderText('例如：九成计算机网络教材'));
+    await user.type(screen.getByPlaceholderText('例如：九成计算机网络教材'), '更新后的教材');
+    await user.clear(screen.getByPlaceholderText('88'));
+    await user.type(screen.getByPlaceholderText('88'), '66');
+    await user.clear(screen.getByPlaceholderText('写清使用情况、配件、容量/版本、可交易地点。'));
+    await user.type(screen.getByPlaceholderText('写清使用情况、配件、容量/版本、可交易地点。'), '更新后的描述');
+
+    const form = document.querySelector('form');
+    if (!form) {
+      throw new Error('publish form not found');
+    }
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mocks.updateProductWithImages).toHaveBeenCalledWith(88, expect.objectContaining({
+        title: '更新后的教材',
+        price: 66
+      }));
+      expect(mocks.navigate).toHaveBeenCalledWith('/products/88', { replace: true });
     });
   });
 });

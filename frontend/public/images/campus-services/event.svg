@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="560" viewBox="0 0 720 560" role="img" aria-labelledby="title desc">
+  <title id="title">Campus Event</title>
+  <desc id="desc">check-in, volunteers, and activity support</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff1f4" />
+      <stop offset="100%" stop-color="#ffdbe4" />
+    </linearGradient>
+    <linearGradient id="panelFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fffdfd" stop-opacity="0.98" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.88" />
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#4a2430" flood-opacity="0.12" />
+    </filter>
+  </defs>
+  <rect width="720" height="560" rx="24" fill="url(#bg)" />
+  <circle cx="106" cy="88" r="58" fill="#ff9eb7" fill-opacity="0.36" />
+  <circle cx="612" cy="94" r="76" fill="#ff9eb7" fill-opacity="0.22" />
+  <circle cx="630" cy="442" r="86" fill="#ff9eb7" fill-opacity="0.18" />
+  <rect x="26" y="26" width="668" height="508" rx="22" fill="#ffffff" fill-opacity="0.18" />
+  <rect x="46" y="42" width="128" height="38" rx="10" fill="#ffffff" fill-opacity="0.92" />
+  <text x="110" y="67" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800" fill="#cf5f7e">EVENT</text>
+  <g filter="url(#softShadow)">
+    <rect x="110" y="108" width="500" height="262" rx="34" fill="#ffffff" fill-opacity="0.72" stroke="#f0c0cf" stroke-width="2" />
+  </g>
+  
+      <g transform="translate(208 146)">
+        <path d="M88 0 h136 a20 20 0 0 1 20 20 v36 h-52 v26 a36 36 0 0 1 -72 0 v-26 h-52 v-36 a20 20 0 0 1 20 -20 z" fill="#ffffff" stroke="#d98aa3" stroke-width="6" />
+        <rect x="86" y="86" width="140" height="170" rx="24" fill="#ffffff" stroke="#d98aa3" stroke-width="6" />
+        <rect x="118" y="116" width="76" height="18" rx="9" fill="#cf5f7e" fill-opacity="0.18" />
+        <rect x="110" y="154" width="92" height="58" rx="14" fill="#ffe6ed" stroke="#d98aa3" stroke-width="4" />
+        <circle cx="156" cy="184" r="14" fill="#cf5f7e" fill-opacity="0.28" />
+        <path d="M36 88 l12 28 l30 4 l-22 20 l6 30 l-26 -14 l-26 14 l6 -30 l-22 -20 l30 -4 z" fill="#cf5f7e" fill-opacity="0.2" />
+        <path d="M278 106 l10 22 l24 4 l-18 18 l4 24 l-20 -10 l-20 10 l4 -24 l-18 -18 l24 -4 z" fill="#cf5f7e" fill-opacity="0.2" />
+      </g>
+    
+  <rect x="48" y="404" width="624" height="104" rx="20" fill="url(#panelFill)" stroke="#f0c0cf" stroke-width="2" />
+  <text x="78" y="448" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="800" fill="#4a2430">Campus Event</text>
+  <text x="78" y="482" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600" fill="#cf5f7e" fill-opacity="0.86">check-in, volunteers, and activity support</text>
+  <circle cx="606" cy="454" r="26" fill="#cf5f7e" fill-opacity="0.12" stroke="#cf5f7e" stroke-width="2" />
+  <path d="M592 454h28M606 440v28" stroke="#cf5f7e" stroke-width="4" stroke-linecap="round" />
+</svg>
+

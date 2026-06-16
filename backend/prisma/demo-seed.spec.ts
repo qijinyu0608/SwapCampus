@@ -14,9 +14,9 @@ describe('demo seed plan', () => {
   it('should build a substantial demo dataset with products and campus services', () => {
     const plan = buildDemoSeedPlan(new Date('2026-06-14T08:00:00.000Z'));
 
-    expect(plan.users.length).toBeGreaterThanOrEqual(13);
+    expect(plan.users.length).toBeGreaterThanOrEqual(43);
     expect(plan.products.length).toBeGreaterThanOrEqual(28);
-    expect(plan.campusServices.length).toBeGreaterThanOrEqual(18);
+    expect(plan.campusServices.length).toBeGreaterThanOrEqual(46);
     expect(plan.productOrders.length).toBeGreaterThanOrEqual(6);
     expect(plan.campusServiceOrders.length).toBeGreaterThanOrEqual(4);
     expect(plan.reports.length).toBeGreaterThanOrEqual(4);
@@ -61,7 +61,7 @@ describe('demo seed plan', () => {
     expect(statuses.has(CampusServiceListingStatus.BUSY)).toBe(true);
     expect(statuses.has(CampusServiceListingStatus.PAUSED)).toBe(true);
     expect(categories.has(CampusServiceCategory.HELP)).toBe(true);
-    expect(ownerIndexes).toEqual(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
+    expect(ownerIndexes).toEqual(new Set(Array.from({ length: plan.users.length - 1 }, (_value, index) => index + 1)));
   });
 
   it('should include product order states suitable for order, review, and message pages', () => {
