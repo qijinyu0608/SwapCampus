@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PrismaClient, ProductStatus } from '@prisma/client';
 import { normalizeProductCategoryName } from './product-category-migration';
+import { ensureRemoteProductImageAsset } from './remote-product-image-assets';
 import { SearchService } from '../src/modules/search/search.service';
 
 const prisma = new PrismaClient();
@@ -40,6 +41,7 @@ type NormalizedProductSeed = {
   price: number;
   tags: string[];
   imageUrl: string;
+  localImageUrl?: string;
 };
 
 const REMOTE_SOURCES: Array<{
@@ -303,6 +305,11 @@ async function main() {
     fetchSourceProducts()
   ]);
 
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    sample.localImageUrl = await ensureRemoteProductImageAsset(sample);
+  }
+
   await prisma.productImage.deleteMany();
   await prisma.product.deleteMany();
 
@@ -322,7 +329,7 @@ async function main() {
         tags: [...new Set(tagCandidates)].slice(0, 6),
         status: ProductStatus.ON_SALE,
         images: {
-          create: [{ imageUrl: sample.imageUrl, sortOrder: 0 }]
+          create: [{ imageUrl: sample.localImageUrl ?? sample.imageUrl, sortOrder: 0 }]
         }
       }
     });

@@ -15,7 +15,8 @@
         "beauty",
         "mascara"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/essence-mascara-lash-princess/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/essence-mascara-lash-princess/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3d673163128b.webp"
     },
     {
       "source": "dummyjson",
@@ -30,7 +31,8 @@
         "beauty",
         "eyeshadow"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/eyeshadow-palette-with-mirror/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/eyeshadow-palette-with-mirror/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-720b74e92793.webp"
     },
     {
       "source": "dummyjson",
@@ -45,7 +47,8 @@
         "beauty",
         "face powder"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/powder-canister/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/powder-canister/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2454f08bf782.webp"
     },
     {
       "source": "dummyjson",
@@ -60,7 +63,8 @@
         "beauty",
         "lipstick"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/red-lipstick/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/red-lipstick/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-aa6cc96e5710.webp"
     },
     {
       "source": "dummyjson",
@@ -75,7 +79,8 @@
         "beauty",
         "nail polish"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/red-nail-polish/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/beauty/red-nail-polish/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-201c84dce915.webp"
     },
     {
       "source": "dummyjson",
@@ -90,7 +95,8 @@
         "fragrances",
         "perfumes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/calvin-klein-ck-one/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/calvin-klein-ck-one/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-166c9b4b6593.webp"
     },
     {
       "source": "dummyjson",
@@ -105,7 +111,8 @@
         "fragrances",
         "perfumes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/chanel-coco-noir-eau-de/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/chanel-coco-noir-eau-de/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-f8697dcf1143.webp"
     },
     {
       "source": "dummyjson",
@@ -120,7 +127,8 @@
         "fragrances",
         "perfumes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/dior-j'adore/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/dior-j'adore/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-a21d7701b195.webp"
     },
     {
       "source": "dummyjson",
@@ -135,7 +143,8 @@
         "fragrances",
         "perfumes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/dolce-shine-eau-de/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/dolce-shine-eau-de/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b40aac1a573a.webp"
     },
     {
       "source": "dummyjson",
@@ -150,7 +159,8 @@
         "fragrances",
         "perfumes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/gucci-bloom-eau-de/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/fragrances/gucci-bloom-eau-de/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4e68c12468a6.webp"
     },
     {
       "source": "dummyjson",
@@ -165,7 +175,8 @@
         "furniture",
         "beds"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-bed/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-bed/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ef39d83b7c5e.webp"
     },
     {
       "source": "dummyjson",
@@ -180,7 +191,8 @@
         "furniture",
         "sofas"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-sofa/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/annibale-colombo-sofa/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-fa29e4cf2eaa.webp"
     },
     {
       "source": "dummyjson",
@@ -195,7 +207,8 @@
         "furniture",
         "bedside tables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/bedside-table-african-cherry/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/bedside-table-african-cherry/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2f19330bffe1.webp"
     },
     {
       "source": "dummyjson",
@@ -210,7 +223,8 @@
         "furniture",
         "office chairs"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/knoll-saarinen-executive-conference-chair/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/knoll-saarinen-executive-conference-chair/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9e2b80c2bb2e.webp"
     },
     {
       "source": "dummyjson",
@@ -225,7 +239,8 @@
         "furniture",
         "bathroom"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/wooden-bathroom-sink-with-mirror/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/furniture/wooden-bathroom-sink-with-mirror/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4bf01b596777.webp"
     },
     {
       "source": "dummyjson",
@@ -238,7 +253,8 @@
       "tags": [
         "fruits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/apple/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/apple/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-f6c39a83c2df.webp"
     },
     {
       "source": "dummyjson",
@@ -251,7 +267,8 @@
       "tags": [
         "meat"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/beef-steak/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/beef-steak/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-f819a499ec19.webp"
     },
     {
       "source": "dummyjson",
@@ -265,7 +282,8 @@
         "pet supplies",
         "cat food"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cat-food/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cat-food/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-de973c0c3484.webp"
     },
     {
       "source": "dummyjson",
@@ -278,7 +296,8 @@
       "tags": [
         "meat"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/chicken-meat/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/chicken-meat/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-db3394b15899.webp"
     },
     {
       "source": "dummyjson",
@@ -291,7 +310,8 @@
       "tags": [
         "cooking essentials"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cooking-oil/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cooking-oil/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-debc055f7d8c.webp"
     },
     {
       "source": "dummyjson",
@@ -304,7 +324,8 @@
       "tags": [
         "vegetables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cucumber/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/cucumber/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c8afe9e6d6fa.webp"
     },
     {
       "source": "dummyjson",
@@ -318,7 +339,8 @@
         "pet supplies",
         "dog food"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/dog-food/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/dog-food/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7a57043aca21.webp"
     },
     {
       "source": "dummyjson",
@@ -331,7 +353,8 @@
       "tags": [
         "dairy"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/eggs/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/eggs/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9bda4d1144d9.webp"
     },
     {
       "source": "dummyjson",
@@ -344,7 +367,8 @@
       "tags": [
         "seafood"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/fish-steak/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/fish-steak/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3a3b47d9c4ef.webp"
     },
     {
       "source": "dummyjson",
@@ -357,7 +381,8 @@
       "tags": [
         "vegetables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/green-bell-pepper/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/green-bell-pepper/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-67a2862edffb.webp"
     },
     {
       "source": "dummyjson",
@@ -370,7 +395,8 @@
       "tags": [
         "vegetables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/green-chili-pepper/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/green-chili-pepper/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-a84f154a4bfb.webp"
     },
     {
       "source": "dummyjson",
@@ -383,7 +409,8 @@
       "tags": [
         "condiments"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/honey-jar/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/honey-jar/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-aab5cc04a22e.webp"
     },
     {
       "source": "dummyjson",
@@ -396,7 +423,8 @@
       "tags": [
         "desserts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/ice-cream/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/ice-cream/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0db7ae9c4756.webp"
     },
     {
       "source": "dummyjson",
@@ -409,7 +437,8 @@
       "tags": [
         "beverages"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/juice/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/juice/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-f51a0e072063.webp"
     },
     {
       "source": "dummyjson",
@@ -422,7 +451,8 @@
       "tags": [
         "fruits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/kiwi/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/kiwi/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4975cd7410c9.webp"
     },
     {
       "source": "dummyjson",
@@ -435,7 +465,8 @@
       "tags": [
         "fruits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/lemon/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/lemon/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-f93cddd3119f.webp"
     },
     {
       "source": "dummyjson",
@@ -448,7 +479,8 @@
       "tags": [
         "dairy"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/milk/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/milk/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-06a406b35d91.webp"
     },
     {
       "source": "dummyjson",
@@ -461,7 +493,8 @@
       "tags": [
         "fruits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/mulberry/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/mulberry/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ff5168f9ba2d.webp"
     },
     {
       "source": "dummyjson",
@@ -475,7 +508,8 @@
         "beverages",
         "coffee"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/nescafe-coffee/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/nescafe-coffee/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-10cc3eadea0b.webp"
     },
     {
       "source": "dummyjson",
@@ -488,7 +522,8 @@
       "tags": [
         "vegetables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/potatoes/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/potatoes/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bb8cec68350b.webp"
     },
     {
       "source": "dummyjson",
@@ -501,7 +536,8 @@
       "tags": [
         "health supplements"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/protein-powder/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/protein-powder/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7b538c6961a8.webp"
     },
     {
       "source": "dummyjson",
@@ -514,7 +550,8 @@
       "tags": [
         "vegetables"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/red-onions/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/red-onions/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-05d6c4485bda.webp"
     },
     {
       "source": "dummyjson",
@@ -527,7 +564,8 @@
       "tags": [
         "grains"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/rice/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/rice/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5f6310f5b943.webp"
     },
     {
       "source": "dummyjson",
@@ -540,7 +578,8 @@
       "tags": [
         "beverages"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/soft-drinks/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/soft-drinks/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-fb0890efde87.webp"
     },
     {
       "source": "dummyjson",
@@ -553,7 +592,8 @@
       "tags": [
         "fruits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/strawberry/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/strawberry/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b453a1f6f759.webp"
     },
     {
       "source": "dummyjson",
@@ -566,7 +606,8 @@
       "tags": [
         "household essentials"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/tissue-paper-box/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/tissue-paper-box/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-53b1647785ae.webp"
     },
     {
       "source": "dummyjson",
@@ -579,7 +620,8 @@
       "tags": [
         "beverages"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/water/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/groceries/water/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-46f7d63bb46c.webp"
     },
     {
       "source": "dummyjson",
@@ -593,7 +635,8 @@
         "home decor",
         "swing"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/decoration-swing/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/decoration-swing/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9198774012df.webp"
     },
     {
       "source": "dummyjson",
@@ -607,7 +650,8 @@
         "home decor",
         "photo frame"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/family-tree-photo-frame/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/family-tree-photo-frame/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b924ef281b34.webp"
     },
     {
       "source": "dummyjson",
@@ -621,7 +665,8 @@
         "home decor",
         "artificial plants"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/house-showpiece-plant/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/house-showpiece-plant/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-38c15a39b23f.webp"
     },
     {
       "source": "dummyjson",
@@ -635,7 +680,8 @@
         "home decor",
         "plant accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/plant-pot/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/plant-pot/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3075125b86e1.webp"
     },
     {
       "source": "dummyjson",
@@ -649,7 +695,8 @@
         "home decor",
         "lighting"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/table-lamp/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/home-decoration/table-lamp/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-a1de007eeb43.webp"
     },
     {
       "source": "dummyjson",
@@ -663,7 +710,8 @@
         "kitchen tools",
         "utensils"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/bamboo-spatula/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/bamboo-spatula/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-1ec969531b0f.webp"
     },
     {
       "source": "dummyjson",
@@ -677,7 +725,8 @@
         "drinkware",
         "cups"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/black-aluminium-cup/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/black-aluminium-cup/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-957ba40a779d.webp"
     },
     {
       "source": "dummyjson",
@@ -691,7 +740,8 @@
         "kitchen tools",
         "utensils"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/black-whisk/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/black-whisk/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c798951e77bd.webp"
     },
     {
       "source": "dummyjson",
@@ -705,7 +755,8 @@
         "kitchen appliances",
         "blenders"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/boxed-blender/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-336d14bf228c.webp"
     },
     {
       "source": "dummyjson",
@@ -719,7 +770,8 @@
         "cookware",
         "woks"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/carbon-steel-wok/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/carbon-steel-wok/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-879ab7d4dcf4.webp"
     },
     {
       "source": "dummyjson",
@@ -733,7 +785,8 @@
         "kitchen tools",
         "cutting boards"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/chopping-board/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/chopping-board/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-70dabbc519ba.webp"
     },
     {
       "source": "dummyjson",
@@ -747,7 +800,8 @@
         "kitchen tools",
         "juicers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/citrus-squeezer-yellow/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/citrus-squeezer-yellow/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-57679d145b7e.webp"
     },
     {
       "source": "dummyjson",
@@ -761,7 +815,8 @@
         "kitchen tools",
         "slicers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/egg-slicer/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/egg-slicer/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-48689cde712c.webp"
     },
     {
       "source": "dummyjson",
@@ -775,7 +830,8 @@
         "kitchen appliances",
         "cooktops"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/electric-stove/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bfcdb908af5d.webp"
     },
     {
       "source": "dummyjson",
@@ -789,7 +845,8 @@
         "kitchen tools",
         "strainers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/fine-mesh-strainer/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/fine-mesh-strainer/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-aa10d96384de.webp"
     },
     {
       "source": "dummyjson",
@@ -803,7 +860,8 @@
         "kitchen tools",
         "utensils"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/fork/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/fork/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-af67b90cacc0.webp"
     },
     {
       "source": "dummyjson",
@@ -817,7 +875,8 @@
         "drinkware",
         "glasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/glass/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/glass/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-076181622f34.webp"
     },
     {
       "source": "dummyjson",
@@ -831,7 +890,8 @@
         "kitchen tools",
         "graters"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/grater-black/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/grater-black/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0a1bbbe2223a.webp"
     },
     {
       "source": "dummyjson",
@@ -845,7 +905,8 @@
         "kitchen appliances",
         "blenders"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/hand-blender/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/hand-blender/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-24fc6bf2d807.webp"
     },
     {
       "source": "dummyjson",
@@ -859,7 +920,8 @@
         "kitchen tools",
         "ice cube trays"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/ice-cube-tray/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/ice-cube-tray/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0ca24d1d9383.webp"
     },
     {
       "source": "dummyjson",
@@ -873,7 +935,8 @@
         "kitchen tools",
         "strainers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/kitchen-sieve/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/kitchen-sieve/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-34698a866c5a.webp"
     },
     {
       "source": "dummyjson",
@@ -887,7 +950,8 @@
         "kitchen tools",
         "cutlery"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/knife/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/knife/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-48f084a69ab5.webp"
     },
     {
       "source": "dummyjson",
@@ -901,7 +965,8 @@
         "kitchen tools",
         "storage"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/lunch-box/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/lunch-box/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-420fbc30584d.webp"
     },
     {
       "source": "dummyjson",
@@ -915,7 +980,8 @@
         "kitchen appliances",
         "microwaves"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/microwave-oven/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/microwave-oven/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c31bc8daa5ff.webp"
     },
     {
       "source": "dummyjson",
@@ -929,7 +995,8 @@
         "kitchen tools",
         "organization"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/mug-tree-stand/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/mug-tree-stand/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4d921f3821bf.webp"
     },
     {
       "source": "dummyjson",
@@ -943,7 +1010,8 @@
         "cookware",
         "pans"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/pan/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/pan/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0432992ded5a.webp"
     },
     {
       "source": "dummyjson",
@@ -957,7 +1025,8 @@
         "dinnerware",
         "plates"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/plate/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/plate/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-e9f6bd3b17af.webp"
     },
     {
       "source": "dummyjson",
@@ -971,7 +1040,8 @@
         "kitchen tools",
         "tongs"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/red-tongs/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/red-tongs/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3f2584005377.webp"
     },
     {
       "source": "dummyjson",
@@ -985,7 +1055,8 @@
         "cookware",
         "pots"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/silver-pot-with-glass-cap/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/silver-pot-with-glass-cap/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-400aeff51107.webp"
     },
     {
       "source": "dummyjson",
@@ -999,7 +1070,8 @@
         "kitchen tools",
         "turners"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/slotted-turner/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/slotted-turner/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-1449bf914f4e.webp"
     },
     {
       "source": "dummyjson",
@@ -1013,7 +1085,8 @@
         "kitchen tools",
         "organization"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/spice-rack/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/spice-rack/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7d74ce79d65d.webp"
     },
     {
       "source": "dummyjson",
@@ -1027,7 +1100,8 @@
         "kitchen tools",
         "utensils"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/spoon/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/spoon/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ab544eba321c.webp"
     },
     {
       "source": "dummyjson",
@@ -1041,7 +1115,8 @@
         "serveware",
         "trays"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/tray/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/tray/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-16d32a5d92a7.webp"
     },
     {
       "source": "dummyjson",
@@ -1055,7 +1130,8 @@
         "kitchen tools",
         "baking"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/wooden-rolling-pin/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/wooden-rolling-pin/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b9795887b9ed.webp"
     },
     {
       "source": "dummyjson",
@@ -1069,7 +1145,8 @@
         "kitchen tools",
         "peelers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/yellow-peeler/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/kitchen-accessories/yellow-peeler/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ec1bba538f5d.webp"
     },
     {
       "source": "dummyjson",
@@ -1084,7 +1161,8 @@
         "laptops",
         "apple"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/apple-macbook-pro-14-inch-space-grey/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/apple-macbook-pro-14-inch-space-grey/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bf7b427778a9.webp"
     },
     {
       "source": "dummyjson",
@@ -1098,7 +1176,8 @@
         "Asus",
         "laptops"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/asus-zenbook-pro-dual-screen-laptop/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/asus-zenbook-pro-dual-screen-laptop/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-721863845173.webp"
     },
     {
       "source": "dummyjson",
@@ -1112,7 +1191,8 @@
         "Huawei",
         "laptops"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/huawei-matebook-x-pro/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/huawei-matebook-x-pro/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-37cccdb9e966.webp"
     },
     {
       "source": "dummyjson",
@@ -1126,7 +1206,8 @@
         "Lenovo",
         "laptops"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/lenovo-yoga-920/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/lenovo-yoga-920/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-1937668f2c56.webp"
     },
     {
       "source": "dummyjson",
@@ -1140,7 +1221,8 @@
         "Dell",
         "laptops"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/new-dell-xps-13-9300-laptop/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/laptops/new-dell-xps-13-9300-laptop/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4513ec0e95de.webp"
     },
     {
       "source": "dummyjson",
@@ -1155,7 +1237,8 @@
         "clothing",
         "men's shirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/blue-&-black-check-shirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/blue-&-black-check-shirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b5b06942e506.webp"
     },
     {
       "source": "dummyjson",
@@ -1170,7 +1253,8 @@
         "clothing",
         "men's t-shirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/gigabyte-aorus-men-tshirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/gigabyte-aorus-men-tshirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c2d8f08c8857.webp"
     },
     {
       "source": "dummyjson",
@@ -1185,7 +1269,8 @@
         "clothing",
         "men's shirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/man-plaid-shirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/man-plaid-shirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-947de128d522.webp"
     },
     {
       "source": "dummyjson",
@@ -1200,7 +1285,8 @@
         "clothing",
         "men's shirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-104e1096e883.webp"
     },
     {
       "source": "dummyjson",
@@ -1215,7 +1301,8 @@
         "clothing",
         "men's shirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4be0100f635e.webp"
     },
     {
       "source": "dummyjson",
@@ -1230,7 +1317,8 @@
         "footwear",
         "athletic shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/nike-air-jordan-1-red-and-black/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/nike-air-jordan-1-red-and-black/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-10e2ac2d539e.webp"
     },
     {
       "source": "dummyjson",
@@ -1245,7 +1333,8 @@
         "footwear",
         "sports cleats"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-94301a989d0a.webp"
     },
     {
       "source": "dummyjson",
@@ -1260,7 +1349,8 @@
         "footwear",
         "casual shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/puma-future-rider-trainers/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/puma-future-rider-trainers/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-83bd81497910.webp"
     },
     {
       "source": "dummyjson",
@@ -1275,7 +1365,8 @@
         "footwear",
         "athletic shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7e7cda872e93.webp"
     },
     {
       "source": "dummyjson",
@@ -1290,7 +1381,8 @@
         "footwear",
         "casual shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-eb8fce7be9bc.webp"
     },
     {
       "source": "dummyjson",
@@ -1305,7 +1397,8 @@
         "watches",
         "leather watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/brown-leather-belt-watch/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/brown-leather-belt-watch/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-cf44d99050d3.webp"
     },
     {
       "source": "dummyjson",
@@ -1320,7 +1413,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/longines-master-collection/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/longines-master-collection/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2870f4cdbd61.webp"
     },
     {
       "source": "dummyjson",
@@ -1335,7 +1429,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-cellini-date-black-dial/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-cellini-date-black-dial/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7f189e298b00.webp"
     },
     {
       "source": "dummyjson",
@@ -1350,7 +1445,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-cellini-moonphase/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-cellini-moonphase/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ed5e6a37751a.webp"
     },
     {
       "source": "dummyjson",
@@ -1365,7 +1461,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-datejust/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-datejust/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-add3ec7d55fb.webp"
     },
     {
       "source": "dummyjson",
@@ -1380,7 +1477,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-submariner-watch/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mens-watches/rolex-submariner-watch/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-abdd89f1bcc6.webp"
     },
     {
       "source": "dummyjson",
@@ -1395,7 +1493,8 @@
         "electronics",
         "smart speakers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/amazon-echo-plus/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/amazon-echo-plus/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9c80ab70e3f2.webp"
     },
     {
       "source": "dummyjson",
@@ -1410,7 +1509,8 @@
         "electronics",
         "wireless earphones"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2ba86e15ece1.webp"
     },
     {
       "source": "dummyjson",
@@ -1425,7 +1525,8 @@
         "electronics",
         "over-ear headphones"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods-max-silver/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpods-max-silver/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-745a9ec17267.webp"
     },
     {
       "source": "dummyjson",
@@ -1440,7 +1541,8 @@
         "electronics",
         "wireless chargers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpower-wireless-charger/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-airpower-wireless-charger/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5cf1174128b1.webp"
     },
     {
       "source": "dummyjson",
@@ -1455,7 +1557,8 @@
         "electronics",
         "smart speakers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-homepod-mini-cosmic-grey/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-homepod-mini-cosmic-grey/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-6193ccaca0f1.webp"
     },
     {
       "source": "dummyjson",
@@ -1470,7 +1573,8 @@
         "electronics",
         "chargers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-iphone-charger/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-iphone-charger/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-904e53a885a3.webp"
     },
     {
       "source": "dummyjson",
@@ -1485,7 +1589,8 @@
         "electronics",
         "power banks"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-magsafe-battery-pack/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-magsafe-battery-pack/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2addf3c77148.webp"
     },
     {
       "source": "dummyjson",
@@ -1500,7 +1605,8 @@
         "electronics",
         "smartwatches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-watch-series-4-gold/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/apple-watch-series-4-gold/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-8a7f9e922945.webp"
     },
     {
       "source": "dummyjson",
@@ -1515,7 +1621,8 @@
         "electronics",
         "wireless earphones"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/beats-flex-wireless-earphones/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/beats-flex-wireless-earphones/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-139d87c15864.webp"
     },
     {
       "source": "dummyjson",
@@ -1530,7 +1637,8 @@
         "electronics",
         "phone accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/iphone-12-silicone-case-with-magsafe-plum/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/iphone-12-silicone-case-with-magsafe-plum/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b460989a7be2.webp"
     },
     {
       "source": "dummyjson",
@@ -1545,7 +1653,8 @@
         "electronics",
         "camera accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/monopod/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/monopod/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0d0bda27b3e4.webp"
     },
     {
       "source": "dummyjson",
@@ -1560,7 +1669,8 @@
         "electronics",
         "selfie accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-lamp-with-iphone/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-lamp-with-iphone/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-ae25c1d34d4c.webp"
     },
     {
       "source": "dummyjson",
@@ -1575,7 +1685,8 @@
         "electronics",
         "selfie accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-stick-monopod/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/selfie-stick-monopod/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3a25bcf62362.webp"
     },
     {
       "source": "dummyjson",
@@ -1590,7 +1701,8 @@
         "electronics",
         "camera accessories"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/tv-studio-camera-pedestal/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/mobile-accessories/tv-studio-camera-pedestal/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-1c7771dbea28.webp"
     },
     {
       "source": "dummyjson",
@@ -1604,7 +1716,8 @@
         "Generic Motors",
         "motorcycles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/generic-motorcycle/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/generic-motorcycle/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-8e043199417c.webp"
     },
     {
       "source": "dummyjson",
@@ -1619,7 +1732,8 @@
         "motorcycles",
         "sportbikes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/kawasaki-z800/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/kawasaki-z800/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-558d3035c8af.webp"
     },
     {
       "source": "dummyjson",
@@ -1634,7 +1748,8 @@
         "motorcycles",
         "sportbikes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/motogp-ci.h1/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/motogp-ci.h1/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c36d7cd1b238.webp"
     },
     {
       "source": "dummyjson",
@@ -1649,7 +1764,8 @@
         "motorcycles",
         "scooters"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/scooter-motorcycle/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/scooter-motorcycle/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b5c364e915a8.webp"
     },
     {
       "source": "dummyjson",
@@ -1664,7 +1780,8 @@
         "motorcycles",
         "sportbikes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/sportbike-motorcycle/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/motorcycle/sportbike-motorcycle/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5e5284d95bd9.webp"
     },
     {
       "source": "dummyjson",
@@ -1679,7 +1796,8 @@
         "personal care",
         "hand soap"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/attitude-super-leaves-hand-soap/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/attitude-super-leaves-hand-soap/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-318b2c241bfe.webp"
     },
     {
       "source": "dummyjson",
@@ -1694,7 +1812,8 @@
         "personal care",
         "body wash"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/olay-ultra-moisture-shea-butter-body-wash/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/olay-ultra-moisture-shea-butter-body-wash/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-306ff5b51a8a.webp"
     },
     {
       "source": "dummyjson",
@@ -1709,7 +1828,8 @@
         "personal care",
         "body lotion"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/vaseline-men-body-and-face-lotion/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/skin-care/vaseline-men-body-and-face-lotion/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3f48969242bb.webp"
     },
     {
       "source": "dummyjson",
@@ -1724,7 +1844,8 @@
         "smartphones",
         "apple"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-5s/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-5s/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-6fb8f7de2d73.webp"
     },
     {
       "source": "dummyjson",
@@ -1739,7 +1860,8 @@
         "smartphones",
         "apple"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-6/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-6/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-6d2625fb3afb.webp"
     },
     {
       "source": "dummyjson",
@@ -1754,7 +1876,8 @@
         "smartphones",
         "apple"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-13-pro/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-13-pro/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-42d3922e2d30.webp"
     },
     {
       "source": "dummyjson",
@@ -1769,7 +1892,8 @@
         "smartphones",
         "apple"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-x/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/iphone-x/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-944b16d8b3b8.webp"
     },
     {
       "source": "dummyjson",
@@ -1784,7 +1908,8 @@
         "smartphones",
         "oppo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-a57/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-a57/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c8129198db90.webp"
     },
     {
       "source": "dummyjson",
@@ -1799,7 +1924,8 @@
         "smartphones",
         "oppo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-f19-pro-plus/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-f19-pro-plus/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-846d84378246.webp"
     },
     {
       "source": "dummyjson",
@@ -1814,7 +1940,8 @@
         "smartphones",
         "oppo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0d104c3e469e.webp"
     },
     {
       "source": "dummyjson",
@@ -1829,7 +1956,8 @@
         "smartphones",
         "realme"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-c35/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-c35/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-71fcf8c3cbfa.webp"
     },
     {
       "source": "dummyjson",
@@ -1844,7 +1972,8 @@
         "smartphones",
         "realme"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-x/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-x/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3c392cd23319.webp"
     },
     {
       "source": "dummyjson",
@@ -1859,7 +1988,8 @@
         "smartphones",
         "realme"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-xt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/realme-xt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-e4e0ddf6562d.webp"
     },
     {
       "source": "dummyjson",
@@ -1874,7 +2004,8 @@
         "smartphones",
         "samsung galaxy"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s7/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s7/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-925cef644c15.webp"
     },
     {
       "source": "dummyjson",
@@ -1889,7 +2020,8 @@
         "smartphones",
         "samsung galaxy"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s8/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s8/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3245e9b6f472.webp"
     },
     {
       "source": "dummyjson",
@@ -1904,7 +2036,8 @@
         "smartphones",
         "samsung galaxy"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s10/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/samsung-galaxy-s10/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9bf0c09d9364.webp"
     },
     {
       "source": "dummyjson",
@@ -1919,7 +2052,8 @@
         "smartphones",
         "vivo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-s1/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-s1/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4535bed1967e.webp"
     },
     {
       "source": "dummyjson",
@@ -1934,7 +2068,8 @@
         "smartphones",
         "vivo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-v9/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-v9/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4776e56124fc.webp"
     },
     {
       "source": "dummyjson",
@@ -1949,7 +2084,8 @@
         "smartphones",
         "vivo"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-x21/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/smartphones/vivo-x21/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-b0d3ab367cf0.webp"
     },
     {
       "source": "dummyjson",
@@ -1963,7 +2099,8 @@
         "sports equipment",
         "american football"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/american-football/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/american-football/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-acc0c6c26142.webp"
     },
     {
       "source": "dummyjson",
@@ -1977,7 +2114,8 @@
         "sports equipment",
         "baseball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/baseball-ball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/baseball-ball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5ab5033f67f8.webp"
     },
     {
       "source": "dummyjson",
@@ -1991,7 +2129,8 @@
         "sports equipment",
         "baseball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/baseball-glove/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/baseball-glove/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-35592dee700d.webp"
     },
     {
       "source": "dummyjson",
@@ -2005,7 +2144,8 @@
         "sports equipment",
         "basketball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/basketball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/basketball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-fa70ebf2b562.webp"
     },
     {
       "source": "dummyjson",
@@ -2019,7 +2159,8 @@
         "sports equipment",
         "basketball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/basketball-rim/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/basketball-rim/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-d61cdfc7c9e3.webp"
     },
     {
       "source": "dummyjson",
@@ -2033,7 +2174,8 @@
         "sports equipment",
         "cricket"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-ball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-ball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-d47745a08f19.webp"
     },
     {
       "source": "dummyjson",
@@ -2047,7 +2189,8 @@
         "sports equipment",
         "cricket"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-bat/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-bat/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-6029b28fc9cf.webp"
     },
     {
       "source": "dummyjson",
@@ -2061,7 +2204,8 @@
         "sports equipment",
         "cricket"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-73d26224feb8.webp"
     },
     {
       "source": "dummyjson",
@@ -2075,7 +2219,8 @@
         "sports equipment",
         "cricket"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-wicket/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-wicket/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5544f9cb1967.webp"
     },
     {
       "source": "dummyjson",
@@ -2089,7 +2234,8 @@
         "sports equipment",
         "badminton"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/feather-shuttlecock/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/feather-shuttlecock/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bcee3b66627c.webp"
     },
     {
       "source": "dummyjson",
@@ -2103,7 +2249,8 @@
         "sports equipment",
         "football"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/football/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/football/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3ef7745f0871.webp"
     },
     {
       "source": "dummyjson",
@@ -2117,7 +2264,8 @@
         "sports equipment",
         "golf"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/golf-ball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/golf-ball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-e2a1c127d70e.webp"
     },
     {
       "source": "dummyjson",
@@ -2131,7 +2279,8 @@
         "sports equipment",
         "golf"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/iron-golf/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/iron-golf/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-e8575bdf9cf1.webp"
     },
     {
       "source": "dummyjson",
@@ -2145,7 +2294,8 @@
         "sports equipment",
         "baseball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/metal-baseball-bat/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/metal-baseball-bat/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-413f8b3623be.webp"
     },
     {
       "source": "dummyjson",
@@ -2159,7 +2309,8 @@
         "sports equipment",
         "tennis"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-ball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-ball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2a3bba202e06.webp"
     },
     {
       "source": "dummyjson",
@@ -2173,7 +2324,8 @@
         "sports equipment",
         "tennis"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-racket/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/tennis-racket/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-14739763d89f.webp"
     },
     {
       "source": "dummyjson",
@@ -2187,7 +2339,8 @@
         "sports equipment",
         "volleyball"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/volleyball/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sports-accessories/volleyball/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-a865da681679.webp"
     },
     {
       "source": "dummyjson",
@@ -2202,7 +2355,8 @@
         "eyewear",
         "sunglasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/black-sun-glasses/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/black-sun-glasses/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7bd5cd7f6324.webp"
     },
     {
       "source": "dummyjson",
@@ -2217,7 +2371,8 @@
         "eyewear",
         "sunglasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/classic-sun-glasses/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/classic-sun-glasses/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-76df441222ad.webp"
     },
     {
       "source": "dummyjson",
@@ -2232,7 +2387,8 @@
         "eyewear",
         "sunglasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/green-and-black-glasses/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/green-and-black-glasses/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-73faa7591b82.webp"
     },
     {
       "source": "dummyjson",
@@ -2247,7 +2403,8 @@
         "eyewear",
         "party glasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/party-glasses/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/party-glasses/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-6ed8ebb5289a.webp"
     },
     {
       "source": "dummyjson",
@@ -2262,7 +2419,8 @@
         "eyewear",
         "sunglasses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/sunglasses/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/sunglasses/sunglasses/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bcced2acb504.webp"
     },
     {
       "source": "dummyjson",
@@ -2277,7 +2435,8 @@
         "electronics",
         "tablets"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5dd5cf488df8.webp"
     },
     {
       "source": "dummyjson",
@@ -2292,7 +2451,8 @@
         "electronics",
         "tablets"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-2a12e1dbd917.webp"
     },
     {
       "source": "dummyjson",
@@ -2307,7 +2467,8 @@
         "electronics",
         "tablets"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-7be619480475.webp"
     },
     {
       "source": "dummyjson",
@@ -2321,7 +2482,8 @@
         "clothing",
         "dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/blue-frock/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/blue-frock/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5eb937d97026.webp"
     },
     {
       "source": "dummyjson",
@@ -2335,7 +2497,8 @@
         "clothing",
         "girls' dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-144c031ed8c0.webp"
     },
     {
       "source": "dummyjson",
@@ -2349,7 +2512,8 @@
         "clothing",
         "dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/gray-dress/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/gray-dress/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-d7d77fddfb00.webp"
     },
     {
       "source": "dummyjson",
@@ -2363,7 +2527,8 @@
         "clothing",
         "dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/short-frock/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/short-frock/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-86837c03bf78.webp"
     },
     {
       "source": "dummyjson",
@@ -2377,7 +2542,8 @@
         "clothing",
         "dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/tartan-dress/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/tops/tartan-dress/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c012af92a863.webp"
     },
     {
       "source": "dummyjson",
@@ -2392,7 +2558,8 @@
         "sedans",
         "vehicles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/300-touring/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/300-touring/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-02adc80ab9b2.webp"
     },
     {
       "source": "dummyjson",
@@ -2408,7 +2575,8 @@
         "sports cars",
         "vehicles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/charger-sxt-rwd/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/charger-sxt-rwd/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-37f3e87b9b71.webp"
     },
     {
       "source": "dummyjson",
@@ -2424,7 +2592,8 @@
         "compact cars",
         "vehicles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/dodge-hornet-gt-plus/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/dodge-hornet-gt-plus/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-af58b157d577.webp"
     },
     {
       "source": "dummyjson",
@@ -2439,7 +2608,8 @@
         "suvs",
         "vehicles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/durango-sxt-rwd/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/durango-sxt-rwd/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-04e3f527c8c5.webp"
     },
     {
       "source": "dummyjson",
@@ -2454,7 +2624,8 @@
         "minivans",
         "vehicles"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/pacifica-touring/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/vehicle/pacifica-touring/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-a2912c204a2f.webp"
     },
     {
       "source": "dummyjson",
@@ -2469,7 +2640,8 @@
         "fashion accessories",
         "handbags"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/blue-women's-handbag/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/blue-women's-handbag/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-35fcfa78d6e9.webp"
     },
     {
       "source": "dummyjson",
@@ -2484,7 +2656,8 @@
         "fashion accessories",
         "leather bags"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/heshe-women's-leather-bag/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/heshe-women's-leather-bag/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-d3dc5566ffad.webp"
     },
     {
       "source": "dummyjson",
@@ -2499,7 +2672,8 @@
         "fashion accessories",
         "designer bags"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/prada-women-bag/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/prada-women-bag/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-929e028048bb.webp"
     },
     {
       "source": "dummyjson",
@@ -2514,7 +2688,8 @@
         "fashion accessories",
         "backpacks"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/white-faux-leather-backpack/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/white-faux-leather-backpack/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3a8e759765fb.webp"
     },
     {
       "source": "dummyjson",
@@ -2529,7 +2704,8 @@
         "fashion accessories",
         "handbags"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/women-handbag-black/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-bags/women-handbag-black/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-3a3ac8e2199c.webp"
     },
     {
       "source": "dummyjson",
@@ -2543,7 +2719,8 @@
         "clothing",
         "gowns"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-113211244e62.webp"
     },
     {
       "source": "dummyjson",
@@ -2558,7 +2735,8 @@
         "corsets",
         "skirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/corset-leather-with-skirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/corset-leather-with-skirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-e4c24197e118.webp"
     },
     {
       "source": "dummyjson",
@@ -2573,7 +2751,8 @@
         "corsets",
         "skirts"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/corset-with-black-skirt/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/corset-with-black-skirt/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9bf826a558b6.webp"
     },
     {
       "source": "dummyjson",
@@ -2587,7 +2766,8 @@
         "clothing",
         "dresses"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/dress-pea/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/dress-pea/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-9355e4ea55f2.webp"
     },
     {
       "source": "dummyjson",
@@ -2601,7 +2781,8 @@
         "clothing",
         "suits"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/marni-red-&-black-suit/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-dresses/marni-red-&-black-suit/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-bdd7616419fb.webp"
     },
     {
       "source": "dummyjson",
@@ -2615,7 +2796,8 @@
         "fashion accessories",
         "earrings"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/green-crystal-earring/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/green-crystal-earring/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4d7e1f28316a.webp"
     },
     {
       "source": "dummyjson",
@@ -2629,7 +2811,8 @@
         "fashion accessories",
         "earrings"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/green-oval-earring/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/green-oval-earring/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-33b29bf5bbaa.webp"
     },
     {
       "source": "dummyjson",
@@ -2643,7 +2826,8 @@
         "fashion accessories",
         "earrings"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/tropical-earring/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-jewellery/tropical-earring/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-228364ab86b5.webp"
     },
     {
       "source": "dummyjson",
@@ -2658,7 +2842,8 @@
         "footwear",
         "slippers"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-839431e5e254.webp"
     },
     {
       "source": "dummyjson",
@@ -2673,7 +2858,8 @@
         "footwear",
         "heel shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-8c197087846c.webp"
     },
     {
       "source": "dummyjson",
@@ -2688,7 +2874,8 @@
         "footwear",
         "women's shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/golden-shoes-woman/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/golden-shoes-woman/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-1fee8960b79e.webp"
     },
     {
       "source": "dummyjson",
@@ -2703,7 +2890,8 @@
         "footwear",
         "casual shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/pampi-shoes/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/pampi-shoes/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-0c5ec5f1a50c.webp"
     },
     {
       "source": "dummyjson",
@@ -2718,7 +2906,8 @@
         "footwear",
         "women's shoes"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4ac8ced4f29c.webp"
     },
     {
       "source": "dummyjson",
@@ -2733,7 +2922,8 @@
         "watches",
         "luxury watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/iwc-ingenieur-automatic-steel/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/iwc-ingenieur-automatic-steel/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-42cd0e654dbe.webp"
     },
     {
       "source": "dummyjson",
@@ -2749,7 +2939,8 @@
         "luxury watches",
         "women's watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/rolex-datejust-women/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/rolex-datejust-women/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-c333d5732f52.webp"
     },
     {
       "source": "dummyjson",
@@ -2764,7 +2955,8 @@
         "watches",
         "women's watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/watch-gold-for-women/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/watch-gold-for-women/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-4ecbf58410bb.webp"
     },
     {
       "source": "dummyjson",
@@ -2779,7 +2971,8 @@
         "watches",
         "women's watches"
       ],
-      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/women's-wrist-watch/1.webp"
+      "imageUrl": "https://cdn.dummyjson.com/product-images/womens-watches/women's-wrist-watch/1.webp",
+      "localImageUrl": "/images/products/remote/dummyjson-5e2cceedb2eb.webp"
     },
     {
       "source": "escuelajs",
@@ -2790,7 +2983,8 @@
       "condition": "全新",
       "price": 619,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/wXuQ7bm.jpeg"
+      "imageUrl": "https://i.imgur.com/wXuQ7bm.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-4393d12080b9.jpg"
     },
     {
       "source": "escuelajs",
@@ -2801,7 +2995,8 @@
       "condition": "九五成",
       "price": 252,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/cBuLvBi.jpeg"
+      "imageUrl": "https://i.imgur.com/cBuLvBi.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-90e0170430dd.jpg"
     },
     {
       "source": "escuelajs",
@@ -2812,7 +3007,8 @@
       "condition": "九成",
       "price": 418,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/KeqG6r4.jpeg"
+      "imageUrl": "https://i.imgur.com/KeqG6r4.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-d77ad166a105.jpg"
     },
     {
       "source": "escuelajs",
@@ -2823,7 +3019,8 @@
       "condition": "八五成",
       "price": 605,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/UsFIvYs.jpeg"
+      "imageUrl": "https://i.imgur.com/UsFIvYs.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-3adcaf3efd86.jpg"
     },
     {
       "source": "escuelajs",
@@ -2834,7 +3031,8 @@
       "condition": "八成",
       "price": 310,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/eGOUveI.jpeg"
+      "imageUrl": "https://i.imgur.com/eGOUveI.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-8c25d6e003d8.jpg"
     },
     {
       "source": "escuelajs",
@@ -2845,7 +3043,8 @@
       "condition": "全新",
       "price": 281,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/axsyGpD.jpeg"
+      "imageUrl": "https://i.imgur.com/axsyGpD.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-c8688a43fd38.jpg"
     },
     {
       "source": "escuelajs",
@@ -2856,7 +3055,8 @@
       "condition": "九五成",
       "price": 526,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/Y54Bt8J.jpeg"
+      "imageUrl": "https://i.imgur.com/Y54Bt8J.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-d99b97ff7bd5.jpg"
     },
     {
       "source": "escuelajs",
@@ -2867,7 +3067,8 @@
       "condition": "九成",
       "price": 252,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/9DqEOV5.jpeg"
+      "imageUrl": "https://i.imgur.com/9DqEOV5.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-a62ff90ba8af.jpg"
     },
     {
       "source": "escuelajs",
@@ -2878,7 +3079,8 @@
       "condition": "八五成",
       "price": 497,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/ZANVnHE.jpeg"
+      "imageUrl": "https://i.imgur.com/ZANVnHE.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-38d255595566.jpg"
     },
     {
       "source": "escuelajs",
@@ -2889,7 +3091,8 @@
       "condition": "八成",
       "price": 317,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/yVeIeDa.jpeg"
+      "imageUrl": "https://i.imgur.com/yVeIeDa.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-87248403631d.jpg"
     },
     {
       "source": "escuelajs",
@@ -2900,7 +3103,8 @@
       "condition": "全新",
       "price": 202,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/SolkFEB.jpeg"
+      "imageUrl": "https://i.imgur.com/SolkFEB.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-b046604b1e45.jpg"
     },
     {
       "source": "escuelajs",
@@ -2911,7 +3115,8 @@
       "condition": "九五成",
       "price": 346,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/keVCVIa.jpeg"
+      "imageUrl": "https://i.imgur.com/keVCVIa.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-69f4a63938f1.jpg"
     },
     {
       "source": "escuelajs",
@@ -2922,7 +3127,8 @@
       "condition": "九成",
       "price": 310,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/OKn1KFI.jpeg"
+      "imageUrl": "https://i.imgur.com/OKn1KFI.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-8674026eb482.jpg"
     },
     {
       "source": "escuelajs",
@@ -2933,7 +3139,8 @@
       "condition": "八五成",
       "price": 698,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/ItHcq7o.jpeg"
+      "imageUrl": "https://i.imgur.com/ItHcq7o.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-b920191eaff3.jpg"
     },
     {
       "source": "escuelajs",
@@ -2944,7 +3151,8 @@
       "condition": "八成",
       "price": 281,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/YaSqa06.jpeg"
+      "imageUrl": "https://i.imgur.com/YaSqa06.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-40f53d8b6215.jpg"
     },
     {
       "source": "escuelajs",
@@ -2955,7 +3163,8 @@
       "condition": "全新",
       "price": 194,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/yb9UQKL.jpeg"
+      "imageUrl": "https://i.imgur.com/yb9UQKL.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-6cac45593c9e.jpg"
     },
     {
       "source": "escuelajs",
@@ -2966,7 +3175,8 @@
       "condition": "九五成",
       "price": 115,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/LGk9Jn2.jpeg"
+      "imageUrl": "https://i.imgur.com/LGk9Jn2.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-ada3cb78927f.jpg"
     },
     {
       "source": "escuelajs",
@@ -2977,7 +3187,8 @@
       "condition": "九成",
       "price": 382,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/Qphac99.jpeg"
+      "imageUrl": "https://i.imgur.com/Qphac99.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-55a9b6382d5d.jpg"
     },
     {
       "source": "escuelajs",
@@ -2988,7 +3199,8 @@
       "condition": "八五成",
       "price": 173,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/DMQHGA0.jpeg"
+      "imageUrl": "https://i.imgur.com/DMQHGA0.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-8d003a61cccf.jpg"
     },
     {
       "source": "escuelajs",
@@ -2999,7 +3211,8 @@
       "condition": "八成",
       "price": 475,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/NWIJKUj.jpeg"
+      "imageUrl": "https://i.imgur.com/NWIJKUj.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-b72f133ae78b.jpg"
     },
     {
       "source": "escuelajs",
@@ -3010,7 +3223,8 @@
       "condition": "全新",
       "price": 180,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/6wkyyIN.jpeg"
+      "imageUrl": "https://i.imgur.com/6wkyyIN.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-95ec85226d20.jpg"
     },
     {
       "source": "escuelajs",
@@ -3021,7 +3235,8 @@
       "condition": "九五成",
       "price": 482,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/4lTaHfF.jpeg"
+      "imageUrl": "https://i.imgur.com/4lTaHfF.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-53d40ad1a356.jpg"
     },
     {
       "source": "escuelajs",
@@ -3032,7 +3247,8 @@
       "condition": "九成",
       "price": 353,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/3oXNBst.jpeg"
+      "imageUrl": "https://i.imgur.com/3oXNBst.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-2ca2d6ef5ad8.jpg"
     },
     {
       "source": "escuelajs",
@@ -3043,7 +3259,8 @@
       "condition": "八五成",
       "price": 511,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/3dU0m72.jpeg"
+      "imageUrl": "https://i.imgur.com/3dU0m72.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-abb6974e51ed.jpg"
     },
     {
       "source": "escuelajs",
@@ -3054,7 +3271,8 @@
       "condition": "八成",
       "price": 281,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/qNOjJje.jpeg"
+      "imageUrl": "https://i.imgur.com/qNOjJje.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-682bddabb2ea.jpg"
     },
     {
       "source": "escuelajs",
@@ -3065,7 +3283,8 @@
       "condition": "全新",
       "price": 281,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/62gGzeF.jpeg"
+      "imageUrl": "https://i.imgur.com/62gGzeF.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-24173774dfdf.jpg"
     },
     {
       "source": "escuelajs",
@@ -3076,7 +3295,8 @@
       "condition": "九五成",
       "price": 238,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/9qrmE1b.jpeg"
+      "imageUrl": "https://i.imgur.com/9qrmE1b.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-024b3dcf9436.jpg"
     },
     {
       "source": "escuelajs",
@@ -3087,7 +3307,8 @@
       "condition": "九成",
       "price": 194,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/hKcMNJs.jpeg"
+      "imageUrl": "https://i.imgur.com/hKcMNJs.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-559b07280340.jpg"
     },
     {
       "source": "escuelajs",
@@ -3098,7 +3319,8 @@
       "condition": "八五成",
       "price": 605,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/mcW42Gi.jpeg"
+      "imageUrl": "https://i.imgur.com/mcW42Gi.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-480838679983.jpg"
     },
     {
       "source": "escuelajs",
@@ -3109,7 +3331,8 @@
       "condition": "八成",
       "price": 490,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/npLfCGq.jpeg"
+      "imageUrl": "https://i.imgur.com/npLfCGq.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-762e7a9b8b41.jpg"
     },
     {
       "source": "escuelajs",
@@ -3120,7 +3343,8 @@
       "condition": "全新",
       "price": 259,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/HqYqLnW.jpeg"
+      "imageUrl": "https://i.imgur.com/HqYqLnW.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-afc3eb277d82.jpg"
     },
     {
       "source": "escuelajs",
@@ -3131,7 +3355,8 @@
       "condition": "九五成",
       "price": 382,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/AzAY4Ed.jpeg"
+      "imageUrl": "https://i.imgur.com/AzAY4Ed.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-40af8c58bd02.jpg"
     },
     {
       "source": "escuelajs",
@@ -3142,7 +3367,8 @@
       "condition": "九成",
       "price": 122,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/Au8J9sX.jpeg"
+      "imageUrl": "https://i.imgur.com/Au8J9sX.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-9602c6b43e92.jpg"
     },
     {
       "source": "escuelajs",
@@ -3153,7 +3379,8 @@
       "condition": "八五成",
       "price": 281,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/sC0ztOB.jpeg"
+      "imageUrl": "https://i.imgur.com/sC0ztOB.jpeg",
+      "localImageUrl": "/images/products/remote/escuelajs-0624d37626e2.jpg"
     },
     {
       "source": "escuelajs",
@@ -3164,7 +3391,8 @@
       "condition": "八成",
       "price": 158,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/BG8J0Fj.jpg"
+      "imageUrl": "https://i.imgur.com/BG8J0Fj.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-92b10ba38320.jpg"
     },
     {
       "source": "escuelajs",
@@ -3175,7 +3403,8 @@
       "condition": "全新",
       "price": 266,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/Ex5x3IU.jpg"
+      "imageUrl": "https://i.imgur.com/Ex5x3IU.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-3cfa699c9f41.jpg"
     },
     {
       "source": "escuelajs",
@@ -3186,7 +3415,8 @@
       "condition": "九五成",
       "price": 526,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/xPDwUb3.jpg"
+      "imageUrl": "https://i.imgur.com/xPDwUb3.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-f83134554b85.jpg"
     },
     {
       "source": "escuelajs",
@@ -3197,7 +3427,8 @@
       "condition": "九成",
       "price": 346,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/jVfoZnP.jpg"
+      "imageUrl": "https://i.imgur.com/jVfoZnP.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-7cc2277bcd71.jpg"
     },
     {
       "source": "escuelajs",
@@ -3208,7 +3439,8 @@
       "condition": "八五成",
       "price": 439,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/Lqaqz59.jpg"
+      "imageUrl": "https://i.imgur.com/Lqaqz59.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-366993547a86.jpg"
     },
     {
       "source": "escuelajs",
@@ -3219,7 +3451,8 @@
       "condition": "八成",
       "price": 274,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/0qQBkxX.jpg"
+      "imageUrl": "https://i.imgur.com/0qQBkxX.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-786800343674.jpg"
     },
     {
       "source": "escuelajs",
@@ -3230,7 +3463,8 @@
       "condition": "全新",
       "price": 360,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/TF0pXdL.jpg"
+      "imageUrl": "https://i.imgur.com/TF0pXdL.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-e5fc6eb35c0e.jpg"
     },
     {
       "source": "escuelajs",
@@ -3241,7 +3475,8 @@
       "condition": "全新",
       "price": 720,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/example.png"
+      "imageUrl": "https://i.imgur.com/example.png",
+      "localImageUrl": "/images/products/remote/escuelajs-023862fd9b9e.png"
     },
     {
       "source": "escuelajs",
@@ -3252,7 +3487,8 @@
       "condition": "九成",
       "price": 86,
       "tags": [],
-      "imageUrl": "https://placehold.co/400"
+      "imageUrl": "https://placehold.co/400",
+      "localImageUrl": "/images/products/remote/escuelajs-0c8219b40f8e.svg"
     },
     {
       "source": "escuelajs",
@@ -3263,7 +3499,8 @@
       "condition": "八五成",
       "price": 9999,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3274,7 +3511,8 @@
       "condition": "全新",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3285,7 +3523,8 @@
       "condition": "九五成",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3296,7 +3535,8 @@
       "condition": "九成",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3307,7 +3547,8 @@
       "condition": "八成",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3318,7 +3559,8 @@
       "condition": "全新",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3329,7 +3571,8 @@
       "condition": "九五成",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3340,7 +3583,8 @@
       "condition": "九成",
       "price": 108,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3351,7 +3595,8 @@
       "condition": "八五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3362,7 +3607,8 @@
       "condition": "八成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3373,7 +3619,8 @@
       "condition": "全新",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3384,7 +3631,8 @@
       "condition": "九五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3395,7 +3643,8 @@
       "condition": "九成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3406,7 +3655,8 @@
       "condition": "八五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3417,7 +3667,8 @@
       "condition": "八成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3428,7 +3679,8 @@
       "condition": "全新",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3439,7 +3691,8 @@
       "condition": "九五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3450,7 +3703,8 @@
       "condition": "九成",
       "price": 9999,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3461,7 +3715,8 @@
       "condition": "八五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3472,7 +3727,8 @@
       "condition": "八成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3483,7 +3739,8 @@
       "condition": "全新",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3494,7 +3751,8 @@
       "condition": "九五成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3505,7 +3763,8 @@
       "condition": "九成",
       "price": 1080,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3516,7 +3775,8 @@
       "condition": "全新",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3527,7 +3787,8 @@
       "condition": "八成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3538,7 +3799,8 @@
       "condition": "全新",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3549,7 +3811,8 @@
       "condition": "九五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3560,7 +3823,8 @@
       "condition": "九成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3571,7 +3835,8 @@
       "condition": "八五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3582,7 +3847,8 @@
       "condition": "八成",
       "price": 9999,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3593,7 +3859,8 @@
       "condition": "全新",
       "price": 7200,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3604,7 +3871,8 @@
       "condition": "九五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3615,7 +3883,8 @@
       "condition": "九成",
       "price": 7,
       "tags": [],
-      "imageUrl": "https://i.imgur.com/LDOO4Qs.jpg"
+      "imageUrl": "https://i.imgur.com/LDOO4Qs.jpg",
+      "localImageUrl": "/images/products/remote/escuelajs-8039fa960cba.jpg"
     },
     {
       "source": "escuelajs",
@@ -3626,7 +3895,8 @@
       "condition": "八五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3637,7 +3907,8 @@
       "condition": "八成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3648,7 +3919,8 @@
       "condition": "全新",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3659,7 +3931,8 @@
       "condition": "九五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3670,7 +3943,8 @@
       "condition": "九成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3681,7 +3955,8 @@
       "condition": "八五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3692,7 +3967,8 @@
       "condition": "八成",
       "price": 598,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3703,7 +3979,8 @@
       "condition": "全新",
       "price": 58,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3714,7 +3991,8 @@
       "condition": "九五成",
       "price": 101,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3725,7 +4003,8 @@
       "condition": "九成",
       "price": 151,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3736,7 +4015,8 @@
       "condition": "八五成",
       "price": 619,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3747,7 +4027,8 @@
       "condition": "八成",
       "price": 468,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3758,7 +4039,8 @@
       "condition": "全新",
       "price": 454,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3769,7 +4051,8 @@
       "condition": "九五成",
       "price": 497,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3780,7 +4063,8 @@
       "condition": "九成",
       "price": 454,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3791,7 +4075,8 @@
       "condition": "八五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3802,7 +4087,8 @@
       "condition": "八成",
       "price": 144,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3813,7 +4099,8 @@
       "condition": "全新",
       "price": 259,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3824,7 +4111,8 @@
       "condition": "九五成",
       "price": 310,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3835,7 +4123,8 @@
       "condition": "九成",
       "price": 209,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3846,7 +4135,8 @@
       "condition": "八五成",
       "price": 338,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3857,7 +4147,8 @@
       "condition": "八成",
       "price": 590,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3868,7 +4159,8 @@
       "condition": "全新",
       "price": 482,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3879,7 +4171,8 @@
       "condition": "九五成",
       "price": 317,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3890,7 +4183,8 @@
       "condition": "九成",
       "price": 158,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3901,7 +4195,8 @@
       "condition": "八五成",
       "price": 72,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3912,7 +4207,8 @@
       "condition": "八成",
       "price": 583,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3923,7 +4219,8 @@
       "condition": "全新",
       "price": 22,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3934,7 +4231,8 @@
       "condition": "九五成",
       "price": 94,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3945,7 +4243,8 @@
       "condition": "八五成",
       "price": 720,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     },
     {
       "source": "escuelajs",
@@ -3956,7 +4255,8 @@
       "condition": "八成",
       "price": 720,
       "tags": [],
-      "imageUrl": "https://placehold.co/600x400"
+      "imageUrl": "https://placehold.co/600x400",
+      "localImageUrl": "/images/products/remote/escuelajs-004ec8153327.svg"
     }
   ]
 }

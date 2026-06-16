@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5179",
-    "build": "npx -y node@20 ./node_modules/typescript/bin/tsc -b && npx -y node@20 ./node_modules/vite/bin/vite.js build"
+    "build": "npx -y node@20 ./node_modules/typescript/bin/tsc -b && npx -y node@20 ./node_modules/vite/bin/vite.js build",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@ant-design/pro-components": "^2.8.10",
@@ -24,10 +26,16 @@
     "supertokens-auth-react": "^0.51.2"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/coverage-v8": "^2.1.8",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.1.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
   }
 }

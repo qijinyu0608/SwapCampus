@@ -2,6 +2,9 @@ import { OutboxAggregateType, OutboxEventStatus } from '@prisma/client';
 import { OutboxService } from './outbox.service';
 import {
   COMMERCE_SYNC_OUTBOX_TOPIC,
+  GOVERNANCE_OUTBOX_TOPIC,
+  MESSAGE_OUTBOX_TOPIC,
+  RECOMMENDATION_OUTBOX_TOPIC,
   SEARCH_INDEX_OUTBOX_TOPIC
 } from './outbox.types';
 
@@ -221,6 +224,94 @@ describe('OutboxService', () => {
         aggregateId: 101,
         payload: {
           orderId: 101
+        }
+      })
+    });
+  });
+
+  it('should publish message lifecycle event with conversation aggregate', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishMessageEvent({
+      conversationId: 12,
+      messageId: 99,
+      senderId: 7,
+      type: 'TEXT'
+    });
+
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        topic: MESSAGE_OUTBOX_TOPIC,
+        eventType: 'MessageSent',
+        aggregateType: OutboxAggregateType.CONVERSATION,
+        aggregateId: 12,
+        payload: {
+          conversationId: 12,
+          messageId: 99,
+          senderId: 7,
+          type: 'TEXT'
+        }
+      })
+    });
+  });
+
+  it('should publish recommendation event with user aggregate', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishRecommendationEvent({
+      userId: 7,
+      productId: 18,
+      eventType: 'FavoriteChanged',
+      action: 'FAVORITE',
+      occurredAt: new Date('2026-06-15T10:00:00.000Z')
+    });
+
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        topic: RECOMMENDATION_OUTBOX_TOPIC,
+        eventType: 'FavoriteChanged',
+        aggregateType: OutboxAggregateType.USER,
+        aggregateId: 7,
+        payload: {
+          userId: 7,
+          productId: 18,
+          action: 'FAVORITE',
+          occurredAt: '2026-06-15T10:00:00.000Z'
+        }
+      })
+    });
+  });
+
+  it('should publish governance event with target aggregate', async () => {
+    const prisma = createPrisma();
+    const service = new OutboxService(prisma);
+
+    await service.publishGovernanceEvent({
+      actorId: 9,
+      actorName: '管理员#9',
+      action: 'BAN_USER',
+      targetType: 'USER',
+      targetId: 18,
+      detail: '封禁测试',
+      aggregateType: OutboxAggregateType.USER,
+      aggregateId: 18
+    });
+
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        topic: GOVERNANCE_OUTBOX_TOPIC,
+        eventType: 'AuditLogRequested',
+        aggregateType: OutboxAggregateType.USER,
+        aggregateId: 18,
+        payload: {
+          actorId: 9,
+          actorName: '管理员#9',
+          action: 'BAN_USER',
+          targetType: 'USER',
+          targetId: 18,
+          detail: '封禁测试'
         }
       })
     });

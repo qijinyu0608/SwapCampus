@@ -147,6 +147,14 @@ export function OrderDetailPage() {
 
     return Number((scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(2));
   }, [watchedReviewValues]);
+  const hasCurrentUserReviewed = useMemo(() => {
+    if (!detail || !currentUser?.id) {
+      return false;
+    }
+
+    return detail.reviews.some((review) => review.reviewerId === currentUser.id);
+  }, [detail, currentUser?.id]);
+  const canReviewOrder = Boolean(detail?.actionState.canReview && !hasCurrentUserReviewed);
   const counterpart = useMemo(() => {
     if (!detail) {
       return null;
@@ -296,7 +304,7 @@ export function OrderDetailPage() {
                 确认收货
               </Button>
             ) : null}
-            {detail.actionState.canReview ? (
+            {canReviewOrder ? (
               <Button onClick={() => setReviewOpen(true)}>
                 评价订单
               </Button>

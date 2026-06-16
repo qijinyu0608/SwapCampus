@@ -2,6 +2,9 @@ import { OutboxAggregateType, OutboxEventStatus, Prisma } from '@prisma/client';
 
 export const SEARCH_INDEX_OUTBOX_TOPIC = 'search.index';
 export const COMMERCE_SYNC_OUTBOX_TOPIC = 'commerce.sync';
+export const MESSAGE_OUTBOX_TOPIC = 'message.lifecycle';
+export const RECOMMENDATION_OUTBOX_TOPIC = 'recommendation.behavior';
+export const GOVERNANCE_OUTBOX_TOPIC = 'governance.audit';
 export const SEARCH_INDEX_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000] as const;
 export const SEARCH_INDEX_MAX_RETRIES = SEARCH_INDEX_RETRY_DELAYS_MS.length;
 export const SEARCH_INDEX_PROCESSING_TIMEOUT_MS = 2 * 60_000;
@@ -10,6 +13,18 @@ export const COMMERCE_SYNC_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000,
 export const COMMERCE_SYNC_MAX_RETRIES = COMMERCE_SYNC_RETRY_DELAYS_MS.length;
 export const COMMERCE_SYNC_PROCESSING_TIMEOUT_MS = 2 * 60_000;
 export const COMMERCE_SYNC_BATCH_SIZE = 20;
+export const MESSAGE_RETRY_DELAYS_MS = [3_000, 10_000, 30_000, 2 * 60_000] as const;
+export const MESSAGE_MAX_RETRIES = MESSAGE_RETRY_DELAYS_MS.length;
+export const MESSAGE_PROCESSING_TIMEOUT_MS = 60_000;
+export const MESSAGE_BATCH_SIZE = 20;
+export const RECOMMENDATION_RETRY_DELAYS_MS = [3_000, 10_000, 30_000, 2 * 60_000] as const;
+export const RECOMMENDATION_MAX_RETRIES = RECOMMENDATION_RETRY_DELAYS_MS.length;
+export const RECOMMENDATION_PROCESSING_TIMEOUT_MS = 60_000;
+export const RECOMMENDATION_BATCH_SIZE = 30;
+export const GOVERNANCE_RETRY_DELAYS_MS = [3_000, 10_000, 30_000, 2 * 60_000] as const;
+export const GOVERNANCE_MAX_RETRIES = GOVERNANCE_RETRY_DELAYS_MS.length;
+export const GOVERNANCE_PROCESSING_TIMEOUT_MS = 60_000;
+export const GOVERNANCE_BATCH_SIZE = 20;
 
 function toPositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -62,6 +77,42 @@ export function getCommerceOutboxConsumerConfig(env: NodeJS.ProcessEnv = process
   };
 }
 
+export function getMessageOutboxConsumerConfig(env: NodeJS.ProcessEnv = process.env): OutboxConsumerConfig {
+  const retryDelaysMs = toRetryDelays(env.MESSAGE_OUTBOX_RETRY_DELAYS_MS, MESSAGE_RETRY_DELAYS_MS);
+  return {
+    enabled: env.MESSAGE_OUTBOX_ENABLED !== 'false',
+    pollIntervalMs: toPositiveInt(env.MESSAGE_OUTBOX_POLL_MS, 2_000),
+    batchSize: toPositiveInt(env.MESSAGE_OUTBOX_BATCH_SIZE, MESSAGE_BATCH_SIZE),
+    processingTimeoutMs: toPositiveInt(env.MESSAGE_OUTBOX_PROCESSING_TIMEOUT_MS, MESSAGE_PROCESSING_TIMEOUT_MS),
+    retryDelaysMs,
+    maxRetries: retryDelaysMs.length
+  };
+}
+
+export function getRecommendationOutboxConsumerConfig(env: NodeJS.ProcessEnv = process.env): OutboxConsumerConfig {
+  const retryDelaysMs = toRetryDelays(env.RECOMMENDATION_OUTBOX_RETRY_DELAYS_MS, RECOMMENDATION_RETRY_DELAYS_MS);
+  return {
+    enabled: env.RECOMMENDATION_OUTBOX_ENABLED !== 'false',
+    pollIntervalMs: toPositiveInt(env.RECOMMENDATION_OUTBOX_POLL_MS, 2_000),
+    batchSize: toPositiveInt(env.RECOMMENDATION_OUTBOX_BATCH_SIZE, RECOMMENDATION_BATCH_SIZE),
+    processingTimeoutMs: toPositiveInt(env.RECOMMENDATION_OUTBOX_PROCESSING_TIMEOUT_MS, RECOMMENDATION_PROCESSING_TIMEOUT_MS),
+    retryDelaysMs,
+    maxRetries: retryDelaysMs.length
+  };
+}
+
+export function getGovernanceOutboxConsumerConfig(env: NodeJS.ProcessEnv = process.env): OutboxConsumerConfig {
+  const retryDelaysMs = toRetryDelays(env.GOVERNANCE_OUTBOX_RETRY_DELAYS_MS, GOVERNANCE_RETRY_DELAYS_MS);
+  return {
+    enabled: env.GOVERNANCE_OUTBOX_ENABLED !== 'false',
+    pollIntervalMs: toPositiveInt(env.GOVERNANCE_OUTBOX_POLL_MS, 2_000),
+    batchSize: toPositiveInt(env.GOVERNANCE_OUTBOX_BATCH_SIZE, GOVERNANCE_BATCH_SIZE),
+    processingTimeoutMs: toPositiveInt(env.GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS, GOVERNANCE_PROCESSING_TIMEOUT_MS),
+    retryDelaysMs,
+    maxRetries: retryDelaysMs.length
+  };
+}
+
 export const searchEventTypes = [
   'ProductCreated',
   'ProductUpdated',
@@ -86,6 +137,26 @@ export const commerceSyncEventTypes = [
 ] as const;
 
 export type CommerceSyncEventType = (typeof commerceSyncEventTypes)[number];
+
+export const messageEventTypes = [
+  'MessageSent'
+] as const;
+
+export type MessageEventType = (typeof messageEventTypes)[number];
+
+export const recommendationEventTypes = [
+  'BehaviorTracked',
+  'FavoriteChanged',
+  'OrderCompleted'
+] as const;
+
+export type RecommendationEventType = (typeof recommendationEventTypes)[number];
+
+export const governanceEventTypes = [
+  'AuditLogRequested'
+] as const;
+
+export type GovernanceEventType = (typeof governanceEventTypes)[number];
 
 export type SearchEventReason =
   | 'PRODUCT_CREATED'
@@ -138,9 +209,39 @@ export type CommerceSyncOutboxPayload =
   | OrderCommerceSyncPayload
   | UserCommerceSyncPayload;
 
+export type MessageOutboxPayload = {
+  conversationId: number;
+  messageId: number;
+  senderId: number;
+  type: string;
+};
+
+export type RecommendationBehaviorAction =
+  | 'VIEW'
+  | 'CONTACT'
+  | 'FAVORITE'
+  | 'UNFAVORITE'
+  | 'ORDER_COMPLETED';
+
+export type RecommendationOutboxPayload = {
+  userId: number;
+  productId?: number;
+  action: RecommendationBehaviorAction;
+  occurredAt?: string;
+};
+
+export type GovernanceOutboxPayload = {
+  actorId: number | null;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: number;
+  detail: string;
+};
+
 export type PublishOutboxEventInput = {
   topic: string;
-  eventType: SearchEventType | CommerceSyncEventType;
+  eventType: SearchEventType | CommerceSyncEventType | MessageEventType | RecommendationEventType | GovernanceEventType;
   aggregateType: OutboxAggregateType;
   aggregateId: number;
   payload: Prisma.InputJsonValue;
@@ -184,6 +285,29 @@ export type PublishUserCommerceSyncEventInput = {
   availableAt?: Date;
 };
 
+export type PublishMessageEventInput = {
+  conversationId: number;
+  messageId: number;
+  senderId: number;
+  type: string;
+  availableAt?: Date;
+};
+
+export type PublishRecommendationEventInput = {
+  userId: number;
+  productId?: number;
+  eventType: RecommendationEventType;
+  action: RecommendationBehaviorAction;
+  occurredAt?: Date;
+  availableAt?: Date;
+};
+
+export type PublishGovernanceEventInput = GovernanceOutboxPayload & {
+  aggregateType: OutboxAggregateType;
+  aggregateId: number;
+  availableAt?: Date;
+};
+
 export type OutboxTransactionClient = Pick<Prisma.TransactionClient, 'outboxEvent'>;
 
 export type SearchOutboxEventRecord = {
@@ -218,6 +342,54 @@ export type CommerceSyncOutboxEventRecord = {
   processedAt: Date | null;
 };
 
+export type MessageOutboxEventRecord = {
+  id: number;
+  topic: string;
+  eventType: MessageEventType;
+  aggregateType: OutboxAggregateType;
+  aggregateId: number;
+  payload: MessageOutboxPayload;
+  status: OutboxEventStatus;
+  availableAt: Date;
+  retryCount: number;
+  lastError: string | null;
+  processingStartedAt: Date | null;
+  createdAt: Date;
+  processedAt: Date | null;
+};
+
+export type RecommendationOutboxEventRecord = {
+  id: number;
+  topic: string;
+  eventType: RecommendationEventType;
+  aggregateType: OutboxAggregateType;
+  aggregateId: number;
+  payload: RecommendationOutboxPayload;
+  status: OutboxEventStatus;
+  availableAt: Date;
+  retryCount: number;
+  lastError: string | null;
+  processingStartedAt: Date | null;
+  createdAt: Date;
+  processedAt: Date | null;
+};
+
+export type GovernanceOutboxEventRecord = {
+  id: number;
+  topic: string;
+  eventType: GovernanceEventType;
+  aggregateType: OutboxAggregateType;
+  aggregateId: number;
+  payload: GovernanceOutboxPayload;
+  status: OutboxEventStatus;
+  availableAt: Date;
+  retryCount: number;
+  lastError: string | null;
+  processingStartedAt: Date | null;
+  createdAt: Date;
+  processedAt: Date | null;
+};
+
 export function nextSearchRetryAt(retryCount: number, now = new Date()) {
   const config = getSearchOutboxConsumerConfig();
   const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
@@ -226,6 +398,24 @@ export function nextSearchRetryAt(retryCount: number, now = new Date()) {
 
 export function nextCommerceRetryAt(retryCount: number, now = new Date()) {
   const config = getCommerceOutboxConsumerConfig();
+  const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
+  return new Date(now.getTime() + delay);
+}
+
+export function nextMessageRetryAt(retryCount: number, now = new Date()) {
+  const config = getMessageOutboxConsumerConfig();
+  const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
+  return new Date(now.getTime() + delay);
+}
+
+export function nextRecommendationRetryAt(retryCount: number, now = new Date()) {
+  const config = getRecommendationOutboxConsumerConfig();
+  const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
+  return new Date(now.getTime() + delay);
+}
+
+export function nextGovernanceRetryAt(retryCount: number, now = new Date()) {
+  const config = getGovernanceOutboxConsumerConfig();
   const delay = config.retryDelaysMs[Math.min(retryCount, config.retryDelaysMs.length - 1)];
   return new Date(now.getTime() + delay);
 }

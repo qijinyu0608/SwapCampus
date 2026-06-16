@@ -592,6 +592,11 @@
   gap: 18px;
 }
 
+.order-detail-hero-card,
+.order-detail-panel {
+  box-shadow: none;
+}
+
 .order-detail-hero-card .ant-card-body,
 .order-detail-panel .ant-card-body {
   padding: 20px;

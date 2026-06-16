@@ -1,0 +1,109 @@
+@startuml
+title SwapCampus 软件架构图（运行视图）
+
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam ArrowColor #4B5563
+skinparam packageBorderColor #6B7280
+skinparam componentBorderColor #6B7280
+skinparam databaseBorderColor #6B7280
+skinparam rectangleBorderColor #6B7280
+skinparam noteBorderColor #9CA3AF
+skinparam noteBackgroundColor #FFFFFF
+
+top to bottom direction
+
+actor "终端用户" as User
+actor "管理员" as Admin
+
+rectangle "访问层" as AccessLayer {
+  component "Frontend\nReact 18 + Vite + Ant Design\nNginx 静态托管静态资源" as Frontend
+}
+
+rectangle "单体应用层" as MonolithLayer {
+  component "Backend 入口层\nNestJS 单体进程\n路由 / 鉴权 / 参数校验\nREST API / Socket.IO / 调用领域服务" as EntryLayer
+
+  rectangle "业务领域服务层" as DomainLayer {
+    component "Auth\n认证" as ModAuth
+    component "Products\n商品" as ModProducts
+    component "Orders\n订单" as ModOrders
+    component "Messages\n消息" as ModMessages
+    component "Campus Services\n校园服务" as ModCampus
+    component "Favorites\n收藏" as ModFavorites
+    component "Reports\n举报" as ModReports
+    component "Users\n用户" as ModUsers
+    component "Admin\n后台治理" as ModAdmin
+    component "Credit Center\n信用中心" as ModCredit
+    component "Outbox Service\n站内事件" as ModOutbox
+    component "Media\n媒体" as ModMedia
+  }
+
+  rectangle "异步处理层（独立进程）" as AsyncLayer {
+    component "Search Indexer Worker\n搜索索引处理" as SearchWorker
+    component "Commerce Sync Worker\n电商同步处理" as CommerceWorker
+    SearchWorker -[hidden]right-> CommerceWorker
+  }
+
+  EntryLayer -[hidden]down-> DomainLayer
+  DomainLayer -[hidden]down-> AsyncLayer
+}
+
+rectangle "基础设施层" as InfraLayer {
+  package "同步依赖（由 Backend 入口层 / 领域服务直接访问）" as SyncInfra {
+    database "MySQL 8\n业务主数据库\nPrisma + Outbox" as MySQL
+    component "SuperTokens Core\n认证与 Session" as STCore
+    folder "MinIO\n图片 / 媒体对象存储" as MinIO
+    cloud "DeepSeek\n可选智能内容审核" as DeepSeek
+    MySQL -[hidden]right-> STCore
+    STCore -[hidden]right-> MinIO
+    MinIO -[hidden]right-> DeepSeek
+  }
+
+  package "认证持久层" as AuthStore {
+    database "PostgreSQL 16\nSuperTokens 认证库" as STDB
+  }
+
+  package "异步目标服务（由 Worker 独立更新）" as AsyncTargets {
+    collections "Meilisearch\n商品搜索索引" as Meili
+    component "Vendure\n外部电商能力\nAdmin API / SQLite" as Vendure
+    Meili -[hidden]right-> Vendure
+  }
+
+  SyncInfra -[hidden]down-> AuthStore
+  AuthStore -[hidden]right-> AsyncTargets
+}
+
+User -[#2563EB]-> Frontend : 用户访问
+Admin -[#2563EB]-> Frontend : 后台访问
+Frontend -[#0F766E]-> EntryLayer : 同步请求 / 实时通信
+EntryLayer -[#0F766E]-> DomainLayer : 入口层分发到领域服务
+
+EntryLayer -[#15803D]-> MySQL : 业务数据读写
+EntryLayer -[#15803D]-> STCore : 认证 / Session
+EntryLayer -[#15803D]-> MinIO : 媒体文件上传 / 读取
+EntryLayer -[#15803D,dashed]-> DeepSeek : 智能审核（可选）
+STCore -[#B45309]-> STDB : 认证数据持久化
+
+ModOutbox -[#7C3AED,dashed]-> SearchWorker : search.index 主题事件
+ModOutbox -[#7C3AED,dashed]-> CommerceWorker : commerce.sync 主题事件
+SearchWorker -[#7C3AED,dashed]-> Meili : 搜索索引更新
+CommerceWorker -[#7C3AED,dashed]-> Vendure : 商品 / 用户 / 订单同步
+
+note bottom of DomainLayer
+领域服务层承载业务规则、状态流转
+并在需要时写入 Outbox 事件
+end note
+
+legend bottom
+  |= 连线类型 |= 含义 |
+  |<#2563EB>| 用户访问 / 管理访问 |
+  |<#0F766E>| 同步调用链路 |
+  |<#15803D>| 后端访问基础设施 |
+  |<#7C3AED>| Outbox 异步链路 |
+  |<#B45309>| 认证持久化 |
+endlegend
+
+@enduml

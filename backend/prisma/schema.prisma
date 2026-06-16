@@ -50,6 +50,9 @@ enum OutboxAggregateType {
   PRODUCT
   USER
   ORDER
+  CONVERSATION
+  REPORT
+  CAMPUS_SERVICE
 }
 
 enum OrderStatus {
@@ -211,6 +214,8 @@ model User {
   campusServiceOffers         CampusServiceOrder[] @relation("CampusServiceProvider")
   reviews                     Review[]             @relation("ReviewReviewer")
   initiatedConversations      Conversation[]       @relation("ConversationInitiator")
+  conversationReadCursors     ConversationReadCursor[]
+  recommendationProfile       RecommendationProfile?
   sentMessages                Message[]
   reportsFiled                Report[]             @relation("ReportReporter")
   reportsTargeted             Report[]             @relation("ReportTargetUser")
@@ -483,6 +488,7 @@ model Conversation {
   campusServiceOrder  CampusServiceOrder? @relation(fields: [campusServiceOrderId], references: [id])
   initiator           User?              @relation("ConversationInitiator", fields: [initiatorId], references: [id])
   messages            Message[]
+  readCursors         ConversationReadCursor[]
 
   @@index([orderId, updatedAt])
   @@index([productId, updatedAt])
@@ -564,6 +570,34 @@ model OutboxEvent {
   @@index([topic, status, availableAt])
   @@index([aggregateType, aggregateId, createdAt])
   @@index([status, processingStartedAt])
+}
+
+model ConversationReadCursor {
+  conversationId   Int
+  userId           Int
+  lastReadMessageId Int?
+  lastReadAt       DateTime            @default(now())
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  conversation     Conversation        @relation(fields: [conversationId], references: [id])
+  user             User                @relation(fields: [userId], references: [id])
+
+  @@id([conversationId, userId])
+  @@index([userId, updatedAt])
+}
+
+model RecommendationProfile {
+  userId          Int      @id
+  viewCount       Int      @default(0)
+  contactCount    Int      @default(0)
+  favoriteCount   Int      @default(0)
+  orderCount      Int      @default(0)
+  lastBehaviorAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([updatedAt])
 }
 
 model UserBehavior {

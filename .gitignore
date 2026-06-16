@@ -19,3 +19,7 @@ minio-data
 meilisearch-data
 supertokens-pg-data
 vendure-data
+swapcampus-env-bundle.tar.gz
+scripts/__pycache__/
+docs/generated-docx/*.docx
+.docs-py/

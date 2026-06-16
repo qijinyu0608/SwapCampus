@@ -1362,16 +1362,16 @@ export class UsersService {
           }, tx);
         }
 
-        await tx.auditLog.create({
-          data: {
-            actorId: adminUser.id,
-            actorName: `管理员#${adminUser.id}`,
-            action: 'BAN_USER',
-            targetType: 'USER',
-            targetId: userId,
-            detail: payload.reason?.trim() || '账号封禁处理'
-          }
-        });
+        await this.outboxService.publishGovernanceEvent({
+          actorId: adminUser.id,
+          actorName: `管理员#${adminUser.id}`,
+          action: 'BAN_USER',
+          targetType: 'USER',
+          targetId: userId,
+          detail: payload.reason?.trim() || '账号封禁处理',
+          aggregateType: 'USER' as any,
+          aggregateId: userId
+        }, tx);
 
         return {
           id: updated.id,
@@ -1380,16 +1380,16 @@ export class UsersService {
         };
       }
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: `管理员#${adminUser.id}`,
-          action: 'UNBAN_USER',
-          targetType: 'USER',
-          targetId: userId,
-          detail: payload.reason?.trim() || '账号恢复使用'
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: `管理员#${adminUser.id}`,
+        action: 'UNBAN_USER',
+        targetType: 'USER',
+        targetId: userId,
+        detail: payload.reason?.trim() || '账号恢复使用',
+        aggregateType: 'USER' as any,
+        aggregateId: userId
+      }, tx);
 
       await this.outboxService.publishSellerSearchEvent({
         sellerId: userId,
@@ -1433,16 +1433,16 @@ export class UsersService {
         data
       });
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: `管理员#${adminUser.id}`,
-          action: nextStatus === VerificationStatus.APPROVED ? 'APPROVE_VERIFICATION' : 'REJECT_VERIFICATION',
-          targetType: 'USER',
-          targetId: userId,
-          detail: payload.reason?.trim() || (nextStatus === VerificationStatus.APPROVED ? '注册审核通过' : '注册审核驳回')
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: `管理员#${adminUser.id}`,
+        action: nextStatus === VerificationStatus.APPROVED ? 'APPROVE_VERIFICATION' : 'REJECT_VERIFICATION',
+        targetType: 'USER',
+        targetId: userId,
+        detail: payload.reason?.trim() || (nextStatus === VerificationStatus.APPROVED ? '注册审核通过' : '注册审核驳回'),
+        aggregateType: 'USER' as any,
+        aggregateId: userId
+      }, tx);
 
       await this.outboxService.publishSellerSearchEvent({
         sellerId: userId,

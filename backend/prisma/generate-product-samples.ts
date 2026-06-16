@@ -1,19 +1,7 @@
 import { PrismaClient, ProductStatus } from '@prisma/client';
+import { getLocalProductImage } from './product-image-pool';
 
 const prisma = new PrismaClient();
-
-const PRODUCT_IMAGES = [
-  '/images/products/archive/badminton.jpg',
-  '/images/products/archive/books-1.jpg',
-  '/images/products/archive/books-2.jpg',
-  '/images/products/archive/clothing-rack.jpg',
-  '/images/products/archive/fan.jpg',
-  '/images/products/archive/keyboard.jpg',
-  '/images/products/archive/lamp.jpg',
-  '/images/products/archive/plush.jpg',
-  '/images/products/archive/powerbank.png',
-  '/images/products/archive/storage-shelf.jpg'
-];
 
 const SAMPLE_CATALOG = [
   { title: '高数教材 A 版', category: '教材资料', condition: '九成', price: 18, tags: ['教材', '高数'], description: '少量笔记，期末复习可直接使用。' },
@@ -74,7 +62,7 @@ async function main() {
       continue;
     }
 
-    const imageUrl = PRODUCT_IMAGES[index % PRODUCT_IMAGES.length];
+    const imageUrl = getLocalProductImage(index);
 
     await prisma.product.create({
       data: {

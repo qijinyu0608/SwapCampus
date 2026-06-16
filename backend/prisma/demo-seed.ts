@@ -329,6 +329,39 @@ const DEMO_USERS: DemoUserSeed[] = [
     creditScore: 77,
     verificationStatus: VerificationStatus.APPROVED,
     accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user10@swapcampus.local',
+    password: 'user10',
+    displayName: '医同学',
+    studentId: '20260010',
+    college: '园艺园林学院',
+    role: UserRole.USER,
+    creditScore: 83,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user11@swapcampus.local',
+    password: 'user11',
+    displayName: '药同学',
+    studentId: '20260011',
+    college: '药学院',
+    role: UserRole.USER,
+    creditScore: 71,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user12@swapcampus.local',
+    password: 'user12',
+    displayName: '动同学',
+    studentId: '20260012',
+    college: '动物科技学院',
+    role: UserRole.USER,
+    creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
   }
 ];
 
@@ -804,7 +837,7 @@ const CAMPUS_SERVICE_BLUEPRINTS: CampusServiceTemplate[] = [
   },
   {
     title: '宿舍临时帮忙',
-    category: CampusServiceCategory.OTHER,
+    category: CampusServiceCategory.HELP,
     intent: CampusServiceIntent.REQUEST,
     pattern: CampusServicePattern.ONE_TIME,
     priceMode: CampusServicePriceMode.FREE,
@@ -900,7 +933,7 @@ export function buildDemoSeedPlan(now = new Date()): DemoSeedPlan {
         trustNote: variant.trustNote ?? template.trustNote,
         tags: uniqueStrings([template.tags, variant.tags ?? []].flat()),
         imageUrl: template.imageUrl,
-        ownerIndex: 1 + ((index + variantIndex) % 8),
+        ownerIndex: 1 + (((index * 2) + variantIndex) % 12),
         status: variant.status ?? template.status
       };
     });

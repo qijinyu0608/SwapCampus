@@ -15,6 +15,12 @@ describe('MessagesService', () => {
     } as any;
   }
 
+  function createOutbox() {
+    return {
+      publishMessageEvent: jest.fn().mockResolvedValue(undefined)
+    } as any;
+  }
+
   beforeEach(() => {
     resetProductModerationCacheForTests();
   });
@@ -45,8 +51,9 @@ describe('MessagesService', () => {
         create: jest.fn()
       }
     } as any;
+    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
 
-    const service = new MessagesService(prisma, createGateway());
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
     const result = await service.createConversation(
       { productId: 301 },
       {
@@ -94,8 +101,9 @@ describe('MessagesService', () => {
         create: jest.fn()
       }
     } as any;
+    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
 
-    const service = new MessagesService(prisma, createGateway());
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
 
     await expect(service.createConversation(
       { productId: 301, initialMessage: '可以代写作业吗' },
@@ -144,7 +152,8 @@ describe('MessagesService', () => {
       }
     } as any;
 
-    const service = new MessagesService(prisma, createGateway());
+    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
 
     await expect(service.sendMessage(
       88,
@@ -189,7 +198,7 @@ describe('MessagesService', () => {
       }
     } as any;
 
-    const service = new MessagesService(prisma, createGateway());
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
     await service.listConversations({
       id: 9,
       studentId: '2026000009',
@@ -288,7 +297,7 @@ describe('MessagesService', () => {
       }
     } as any;
 
-    const service = new MessagesService(prisma, createGateway());
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
     const [result] = await service.listConversations({
       id: 11,
       studentId: '2026000011',
@@ -423,7 +432,7 @@ describe('MessagesService', () => {
       }
     } as any;
 
-    const service = new MessagesService(prisma, createGateway());
+    const service = new MessagesService(prisma, createOutbox(), createGateway());
     const [result] = await service.listConversations({
       id: 33,
       studentId: '2026000033',

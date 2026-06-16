@@ -87,6 +87,29 @@ function formatDateTimeLabel(date: Date | string | null | undefined) {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
+function getOrderActionState(params: {
+  order: {
+    buyerId: number;
+    sellerId: number;
+    status: OrderStatus;
+  };
+  currentUserId: number;
+  reviews?: Array<{ reviewerId: number }> | null;
+  hasConversation?: boolean;
+}) {
+  const { order, currentUserId, reviews, hasConversation = false } = params;
+  const isBuyer = order.buyerId === currentUserId;
+  const isParticipant = isBuyer || order.sellerId === currentUserId;
+  const hasReviewed = reviews?.some((review) => review.reviewerId === currentUserId) ?? false;
+
+  return {
+    canComplete: isBuyer && (order.status === OrderStatus.PENDING || order.status === OrderStatus.IN_PROGRESS),
+    canReview: isParticipant && (order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED) && !hasReviewed,
+    canAppeal: isParticipant && order.status !== OrderStatus.CANCELED,
+    canOpenConversation: hasConversation
+  };
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -224,7 +247,7 @@ export class OrdersService {
             select: { id: true }
           });
 
-      await tx.message.create({
+      const createdMessage = await tx.message.create({
         data: {
           conversationId: conversation.id,
           senderId: buyerUser.id,
@@ -247,6 +270,14 @@ export class OrdersService {
           }))
         }
       });
+      if (createdMessage?.id) {
+        await this.outboxService.publishMessageEvent({
+          conversationId: conversation.id,
+          messageId: createdMessage.id,
+          senderId: buyerUser.id,
+          type: MessageType.ORDER_EVENT
+        }, tx);
+      }
 
       return order;
     });
@@ -573,12 +604,7 @@ export class OrdersService {
         createdAt: appeal.createdAt,
         updatedAt: appeal.updatedAt
       })),
-      actionState: {
-        canComplete: order.buyerId === authUser.id && order.status !== OrderStatus.CANCELED && order.status !== OrderStatus.COMPLETED,
-        canReview: order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED,
-        canAppeal: order.status !== OrderStatus.CANCELED,
-        canOpenConversation: Boolean(order.conversations[0]?.id)
-      }
+      actionState
     };
   }
 
@@ -631,15 +657,15 @@ export class OrdersService {
       }
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: authUser.id,
-        actorName: `用户#${authUser.id}`,
-        action: 'CREATE_ORDER_APPEAL',
-        targetType: 'ORDER_APPEAL',
-        targetId: appeal.id,
-        detail: `${payload.issueType.trim()}：${payload.reason.trim()}`
-      }
+    await this.outboxService.publishGovernanceEvent({
+      actorId: authUser.id,
+      actorName: `用户#${authUser.id}`,
+      action: 'CREATE_ORDER_APPEAL',
+      targetType: 'ORDER_APPEAL',
+      targetId: appeal.id,
+      detail: `${payload.issueType.trim()}：${payload.reason.trim()}`,
+      aggregateType: 'ORDER' as any,
+      aggregateId: orderId
     });
 
     return {
@@ -1030,8 +1056,8 @@ export class OrdersService {
       sellerVerified: seller?.verificationStatus === VerificationStatus.APPROVED,
       autoConfirmAt: order.autoConfirmAt ?? null,
       autoConfirmCountdownSeconds: this.getAutoConfirmCountdownSeconds(order.autoConfirmAt ?? null, order.status),
-      canBuyerComplete: isBuyer && order.status !== OrderStatus.CANCELED && order.status !== OrderStatus.COMPLETED,
-      canReview: order.status === OrderStatus.WAITING_REVIEW || order.status === OrderStatus.COMPLETED
+      canBuyerComplete: actionState.canComplete,
+      canReview: actionState.canReview
     };
   }
 
@@ -1148,7 +1174,7 @@ export class OrdersService {
       return;
     }
 
-    await tx.message.create({
+    const message = await tx.message.create({
       data: {
         conversationId: conversation.id,
         senderId,
@@ -1156,6 +1182,15 @@ export class OrdersService {
         type
       }
     });
+
+    if (message?.id) {
+      await this.outboxService.publishMessageEvent({
+        conversationId: conversation.id,
+        messageId: message.id,
+        senderId,
+        type
+      }, tx);
+    }
 
     await tx.conversation.update({
       where: { id: conversation.id },

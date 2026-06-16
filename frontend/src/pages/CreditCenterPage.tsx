@@ -219,24 +219,6 @@ function getMissionStatusLabel(item: CreditMissionItem) {
   return '进行中';
 }
 
-function getMissionSupportText(item: CreditMissionItem) {
-  if (item.code === 'DAILY_SIGNIN') {
-    return item.completed
-      ? '签到积分已自动发放，无需额外领取。'
-      : '前往签到日历完成今日签到，积分会自动到账。';
-  }
-
-  if (item.claimed) {
-    return '本轮任务奖励已到账。';
-  }
-
-  if (item.completed) {
-    return '条件已满足，点击按钮即可领取积分。';
-  }
-
-  return `当前进度 ${getMissionProgressLabel(item)}，完成后可领取 ${item.rewardPoints} 积分。`;
-}
-
 function getRewardAvailabilityLabel(item: CreditRewardItem) {
   if (item.redeemed) {
     return '已激活';
@@ -525,7 +507,6 @@ export function CreditCenterPage() {
                             >
                               {getMissionActionLabel(item)}
                             </Button>
-                            <span className="credit-center-task-action-hint">{getMissionSupportText(item)}</span>
                           </div>
                         </div>
                       ))}

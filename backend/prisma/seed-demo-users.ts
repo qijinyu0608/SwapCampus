@@ -102,6 +102,50 @@ const DEMO_ACCOUNTS = [
     creditScore: 81,
     verificationStatus: VerificationStatus.APPROVED,
     accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user09@swapcampus.local',
+    password: 'user09',
+    displayName: '法同学',
+    studentId: '20260009',
+    college: '法学院',
+    role: UserRole.USER,
+    creditScore: 77,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user10@swapcampus.local',
+    password: 'user10',
+    displayName: '医同学',
+    studentId: '20260010',
+    college: '园艺园林学院',
+    role: UserRole.USER,
+    creditScore: 83,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user11@swapcampus.local',
+    password: 'user11',
+    displayName: '药同学',
+    studentId: '20260011',
+    college: '药学院',
+    role: UserRole.USER,
+    creditScore: 71,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user12@swapcampus.local',
+    password: 'user12',
+    displayName: '动同学',
+    studentId: '20260012',
+    college: '动物科技学院',
+    role: UserRole.USER,
+    creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
   }
 ] as const;
 

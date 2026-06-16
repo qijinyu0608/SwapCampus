@@ -451,7 +451,7 @@ export function CampusServicesPage() {
           creditOptions={CREDIT_FILTER_OPTIONS}
           activeCredits={activeCreditFilters}
           onCreditToggle={(key) => toggleCreditFilter(key as ServiceCreditFilter)}
-          trailingContent={(
+          leadingContent={(
             <div className="result-filter-segment" role="tablist" aria-label="服务方向">
               <button
                 type="button"

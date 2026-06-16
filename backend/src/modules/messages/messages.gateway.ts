@@ -9,9 +9,10 @@ import {
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import Session from 'supertokens-node/recipe/session';
-import { UserRole } from '@prisma/client';
+import { MessageType, UserRole } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import {
   collectConversationParticipantIds,
   messageConversationAccessInclude,
@@ -125,6 +126,35 @@ export class MessagesGateway implements OnGatewayConnection {
       .emit('message:new', event);
   }
 
+  async emitMessageById(conversationId: number, messageId: number) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        sender: {
+          select: {
+            displayName: true,
+            avatarUrl: true,
+            avatarFrame: true
+          }
+        }
+      }
+    });
+
+    if (!message) {
+      return;
+    }
+
+    const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([
+      hasAvatarFrameRewardUnlocked(this.prisma, message.senderId),
+      hasTrustedBadgeRewardUnlocked(this.prisma, message.senderId)
+    ]);
+
+    this.emitNewMessage({
+      conversationId,
+      message: this.mapRealtimeMessage(message, { avatarFrameUnlocked, trustedBadgeUnlocked })
+    });
+  }
+
   private extractAccessToken(client: Socket) {
     const authHeader = client.handshake.auth?.authorization;
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
@@ -141,6 +171,118 @@ export class MessagesGateway implements OnGatewayConnection {
 
   private getConversationRoom(conversationId: number) {
     return `conversation:${conversationId}`;
+  }
+
+  private getMessagePreview(type: MessageType, content: string) {
+    if (type === MessageType.IMAGE) {
+      return '[图片]';
+    }
+
+    if (type === MessageType.VIDEO) {
+      return '[视频]';
+    }
+
+    if (type === MessageType.ORDER_EVENT) {
+      return '[订单动态]';
+    }
+
+    return content;
+  }
+
+  private parseAttachment(type: MessageType, content: string) {
+    if (type !== MessageType.IMAGE && type !== MessageType.VIDEO) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      if (
+        typeof parsed.objectKey !== 'string'
+        || typeof parsed.url !== 'string'
+        || typeof parsed.mimeType !== 'string'
+        || typeof parsed.size !== 'number'
+      ) {
+        return null;
+      }
+
+      return {
+        kind: type === MessageType.IMAGE ? 'image' : 'video',
+        objectKey: parsed.objectKey,
+        url: parsed.url,
+        mimeType: parsed.mimeType,
+        size: parsed.size,
+        width: typeof parsed.width === 'number' ? parsed.width : undefined,
+        height: typeof parsed.height === 'number' ? parsed.height : undefined,
+        originalName: typeof parsed.originalName === 'string' ? parsed.originalName : undefined
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private parseOrderEvent(type: MessageType, content: string) {
+    if (type !== MessageType.ORDER_EVENT) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      if (
+        parsed.kind !== 'product-order-event'
+        || typeof parsed.orderId !== 'number'
+        || typeof parsed.productId !== 'number'
+        || typeof parsed.title !== 'string'
+        || typeof parsed.summary !== 'string'
+      ) {
+        return null;
+      }
+
+      return {
+        kind: 'product-order-event' as const,
+        event: typeof parsed.event === 'string' ? parsed.event : 'CREATED',
+        title: parsed.title,
+        summary: parsed.summary,
+        orderId: parsed.orderId,
+        productId: parsed.productId,
+        orderCode: typeof parsed.orderCode === 'string' ? parsed.orderCode : '',
+        actionLabel: typeof parsed.actionLabel === 'string' || parsed.actionLabel === null ? parsed.actionLabel : null,
+        actionTarget: typeof parsed.actionTarget === 'string' || parsed.actionTarget === null ? parsed.actionTarget : null,
+        badge: typeof parsed.badge === 'string' || parsed.badge === null ? parsed.badge : null,
+        meta: Array.isArray(parsed.meta)
+          ? parsed.meta.filter((item): item is { label: string; value: string } => Boolean(item) && typeof item === 'object' && typeof (item as any).label === 'string' && typeof (item as any).value === 'string')
+          : []
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private mapRealtimeMessage(message: {
+    id: number;
+    senderId: number;
+    content: string;
+    type: MessageType;
+    createdAt: Date;
+    sender: {
+      displayName: string;
+      avatarUrl: string | null;
+      avatarFrame: string | null;
+    };
+  }, options: { avatarFrameUnlocked: boolean; trustedBadgeUnlocked: boolean }) {
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      senderName: message.sender.displayName,
+      senderAvatarUrl: message.sender.avatarUrl ?? null,
+      senderAvatarFrame: options.avatarFrameUnlocked ? (message.sender.avatarFrame ?? null) : null,
+      senderTrustedBadgeUnlocked: options.trustedBadgeUnlocked,
+      content: message.type === MessageType.TEXT || message.type === MessageType.EMOJI ? message.content : '',
+      type: message.type,
+      attachment: this.parseAttachment(message.type, message.content),
+      orderEvent: this.parseOrderEvent(message.type, message.content),
+      previewText: this.getMessagePreview(message.type, message.content),
+      createdAt: message.createdAt
+    };
   }
 
   private async getConversationAccessContext(conversationId: number) {

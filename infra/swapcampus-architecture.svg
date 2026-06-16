@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1680" viewBox="0 0 1800 1680">
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .group { fill: #ffffff; stroke: #9ca3af; stroke-width: 2.5; rx: 16; ry: 16; }
+      .subgroup { fill: #fafafa; stroke: #d1d5db; stroke-width: 1.8; rx: 14; ry: 14; }
+      .box { fill: #f8fafc; stroke: #6b7280; stroke-width: 2; rx: 10; ry: 10; }
+      .title { font: 700 28px Arial, sans-serif; fill: #111827; }
+      .subtitle { font: 700 20px Arial, sans-serif; fill: #111827; }
+      .text { font: 600 16px Arial, sans-serif; fill: #111827; }
+      .small { font: 14px Arial, sans-serif; fill: #374151; }
+      .legend { font: 15px Arial, sans-serif; fill: #1f2937; }
+      .line-user { stroke: #2563eb; stroke-width: 3; fill: none; }
+      .line-api { stroke: #0f766e; stroke-width: 3; fill: none; }
+      .line-data { stroke: #15803d; stroke-width: 3; fill: none; }
+      .line-async { stroke: #7c3aed; stroke-width: 3; fill: none; stroke-dasharray: 10 6; }
+      .line-store { stroke: #b45309; stroke-width: 3; fill: none; }
+      .bus-data { stroke: #15803d; stroke-width: 2.5; fill: none; }
+      .optional { stroke-dasharray: 6 5; }
+    </style>
+    <marker id="arrow-user" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-api" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#0f766e"/>
+    </marker>
+    <marker id="arrow-data" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#15803d"/>
+    </marker>
+    <marker id="arrow-async" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-store" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <polygon points="0,0 10,4 0,8" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1680"/>
+  <text class="title" x="60" y="50">SwapCampus 软件架构图（运行视图）</text>
+
+  <!-- Users -->
+  <rect class="box" x="520" y="90" width="200" height="64"/>
+  <text class="text" x="620" y="129" text-anchor="middle">终端用户</text>
+
+  <rect class="box" x="1080" y="90" width="200" height="64"/>
+  <text class="text" x="1180" y="129" text-anchor="middle">管理员</text>
+
+  <!-- Access layer -->
+  <rect class="group" x="260" y="190" width="1280" height="150"/>
+  <text class="subtitle" x="310" y="230">访问层</text>
+  <rect class="box" x="530" y="235" width="740" height="78"/>
+  <text class="text" x="900" y="269" text-anchor="middle">Frontend</text>
+  <text class="small" x="900" y="294" text-anchor="middle">React 18 + Vite + Ant Design + Nginx 静态托管静态资源</text>
+
+  <!-- Monolith application layer -->
+  <rect class="group" x="250" y="380" width="1300" height="740"/>
+  <text class="subtitle" x="300" y="420">单体应用层</text>
+
+  <rect class="box" x="520" y="440" width="760" height="112"/>
+  <text class="text" x="900" y="468" text-anchor="middle">Backend 入口层</text>
+  <text class="small" x="900" y="492" text-anchor="middle">NestJS 单体进程</text>
+  <text class="small" x="900" y="514" text-anchor="middle">路由 / 鉴权 / 参数校验</text>
+  <text class="small" x="900" y="536" text-anchor="middle">REST API / Socket.IO / 调用领域服务</text>
+
+  <rect class="group" x="370" y="570" width="1060" height="320"/>
+  <text class="subtitle" x="420" y="610">业务领域服务层</text>
+  <text class="small" x="420" y="634">与入口层同属 NestJS 单体内部，承载业务规则、状态流转与 Outbox 写入</text>
+
+  <rect class="box" x="400" y="660" width="210" height="58"/>
+  <text class="text" x="505" y="686" text-anchor="middle">Auth</text>
+  <text class="small" x="505" y="707" text-anchor="middle">认证</text>
+
+  <rect class="box" x="640" y="660" width="210" height="58"/>
+  <text class="text" x="745" y="686" text-anchor="middle">Products</text>
+  <text class="small" x="745" y="707" text-anchor="middle">商品</text>
+
+  <rect class="box" x="880" y="660" width="210" height="58"/>
+  <text class="text" x="985" y="686" text-anchor="middle">Orders</text>
+  <text class="small" x="985" y="707" text-anchor="middle">订单</text>
+
+  <rect class="box" x="1120" y="660" width="210" height="58"/>
+  <text class="text" x="1225" y="686" text-anchor="middle">Messages</text>
+  <text class="small" x="1225" y="707" text-anchor="middle">消息</text>
+
+  <rect class="box" x="400" y="740" width="210" height="58"/>
+  <text class="text" x="505" y="766" text-anchor="middle">Campus Services</text>
+  <text class="small" x="505" y="787" text-anchor="middle">校园服务</text>
+
+  <rect class="box" x="640" y="740" width="210" height="58"/>
+  <text class="text" x="745" y="766" text-anchor="middle">Favorites</text>
+  <text class="small" x="745" y="787" text-anchor="middle">收藏</text>
+
+  <rect class="box" x="880" y="740" width="210" height="58"/>
+  <text class="text" x="985" y="766" text-anchor="middle">Reports</text>
+  <text class="small" x="985" y="787" text-anchor="middle">举报</text>
+
+  <rect class="box" x="1120" y="740" width="210" height="58"/>
+  <text class="text" x="1225" y="766" text-anchor="middle">Users</text>
+  <text class="small" x="1225" y="787" text-anchor="middle">用户</text>
+
+  <rect class="box" x="400" y="820" width="210" height="58"/>
+  <text class="text" x="505" y="846" text-anchor="middle">Admin</text>
+  <text class="small" x="505" y="867" text-anchor="middle">后台治理</text>
+
+  <rect class="box" x="640" y="820" width="210" height="58"/>
+  <text class="text" x="745" y="846" text-anchor="middle">Credit Center</text>
+  <text class="small" x="745" y="867" text-anchor="middle">信用中心</text>
+
+  <rect class="box" x="880" y="820" width="210" height="58"/>
+  <text class="text" x="985" y="846" text-anchor="middle">Outbox Service</text>
+  <text class="small" x="985" y="867" text-anchor="middle">站内事件</text>
+
+  <rect class="box" x="1120" y="820" width="210" height="58"/>
+  <text class="text" x="1225" y="846" text-anchor="middle">Media</text>
+  <text class="small" x="1225" y="867" text-anchor="middle">媒体</text>
+
+  <rect class="group" x="500" y="930" width="800" height="170"/>
+  <text class="subtitle" x="550" y="970">异步处理层</text>
+  <text class="small" x="550" y="994">独立进程，消费 Outbox 主题事件</text>
+  <text class="small" x="550" y="1016">独立于用户主请求链路运行</text>
+
+  <rect class="box" x="650" y="1010" width="220" height="60"/>
+  <text class="text" x="760" y="1035" text-anchor="middle">Search Indexer Worker</text>
+  <text class="small" x="760" y="1057" text-anchor="middle">搜索索引处理</text>
+
+  <rect class="box" x="930" y="1010" width="220" height="60"/>
+  <text class="text" x="1040" y="1035" text-anchor="middle">Commerce Sync Worker</text>
+  <text class="small" x="1040" y="1057" text-anchor="middle">电商同步处理</text>
+
+  <!-- Infrastructure layer -->
+  <rect class="group" x="250" y="1150" width="1300" height="420"/>
+  <text class="subtitle" x="300" y="1190">基础设施层</text>
+
+  <rect class="subgroup" x="300" y="1210" width="1200" height="140"/>
+  <text class="small" x="350" y="1242">同步依赖（由 Backend 入口层 / 领域服务直接访问）</text>
+
+  <rect class="box" x="330" y="1255" width="220" height="90"/>
+  <text class="text" x="440" y="1290" text-anchor="middle">MySQL 8</text>
+  <text class="small" x="440" y="1315" text-anchor="middle">业务主数据库 + Prisma + Outbox</text>
+
+  <rect class="box" x="590" y="1255" width="220" height="90"/>
+  <text class="text" x="700" y="1290" text-anchor="middle">SuperTokens Core</text>
+  <text class="small" x="700" y="1315" text-anchor="middle">认证与 Session</text>
+
+  <rect class="box" x="850" y="1255" width="220" height="90"/>
+  <text class="text" x="960" y="1290" text-anchor="middle">MinIO</text>
+  <text class="small" x="960" y="1315" text-anchor="middle">图片 / 媒体对象存储</text>
+
+  <rect class="box" x="1110" y="1255" width="220" height="90"/>
+  <text class="text" x="1220" y="1290" text-anchor="middle">DeepSeek</text>
+  <text class="small" x="1220" y="1315" text-anchor="middle">可选智能内容审核</text>
+
+  <rect class="subgroup" x="560" y="1380" width="300" height="150"/>
+  <text class="small" x="610" y="1412">认证持久层</text>
+
+  <rect class="box" x="600" y="1430" width="220" height="90"/>
+  <text class="text" x="710" y="1465" text-anchor="middle">PostgreSQL 16</text>
+  <text class="small" x="710" y="1490" text-anchor="middle">SuperTokens 认证库</text>
+
+  <rect class="subgroup" x="900" y="1380" width="450" height="150"/>
+  <text class="small" x="950" y="1412">异步目标服务（由 Worker 独立更新）</text>
+
+  <rect class="box" x="940" y="1430" width="220" height="90"/>
+  <text class="text" x="1050" y="1465" text-anchor="middle">Meilisearch</text>
+  <text class="small" x="1050" y="1490" text-anchor="middle">商品搜索索引</text>
+
+  <rect class="box" x="1180" y="1430" width="220" height="90"/>
+  <text class="text" x="1290" y="1465" text-anchor="middle">Vendure</text>
+  <text class="small" x="1290" y="1490" text-anchor="middle">外部电商能力 / Admin API</text>
+
+  <!-- User / Admin access -->
+  <path class="line-user" d="M620 154 L620 235" marker-end="url(#arrow-user)"/>
+  <text class="small" x="632" y="205">用户访问</text>
+
+  <path class="line-user" d="M1180 154 L1180 235" marker-end="url(#arrow-user)"/>
+  <text class="small" x="1192" y="205">后台访问</text>
+
+  <!-- Main sync flow -->
+  <path class="line-api" d="M900 313 L900 440" marker-end="url(#arrow-api)"/>
+  <text class="small" x="916" y="380">同步请求 / 实时通信</text>
+
+  <path class="line-api" d="M900 552 L900 570" marker-end="url(#arrow-api)"/>
+  <text class="small" x="918" y="556">入口层分发到领域服务</text>
+
+  <!-- Backend to sync infra -->
+  <path class="line-data" d="M1280 486 L1360 486 L1360 1235 L1220 1235" marker-end="url(#arrow-data)"/>
+  <path class="bus-data" d="M440 1235 L1220 1235"/>
+  <path class="line-data" d="M440 1235 L440 1255" marker-end="url(#arrow-data)"/>
+  <path class="line-data" d="M700 1235 L700 1255" marker-end="url(#arrow-data)"/>
+  <path class="line-data" d="M960 1235 L960 1255" marker-end="url(#arrow-data)"/>
+  <path class="line-data optional" d="M1220 1235 L1220 1255" marker-end="url(#arrow-data)"/>
+
+  <text class="small" x="452" y="1216">业务数据读写</text>
+  <text class="small" x="712" y="1216">认证 / Session</text>
+  <text class="small" x="972" y="1216">媒体文件上传 / 读取</text>
+  <text class="small" x="1132" y="1216">智能审核（可选）</text>
+
+  <!-- Outbox to workers -->
+  <path class="line-async" d="M985 878 L985 950 L760 950 L760 1010" marker-end="url(#arrow-async)"/>
+  <text class="small" x="790" y="940">search.index 主题事件</text>
+
+  <path class="line-async" d="M985 878 L985 970 L1040 970 L1040 1010" marker-end="url(#arrow-async)"/>
+  <text class="small" x="1002" y="960">commerce.sync 主题事件</text>
+
+  <!-- Workers to async infra -->
+  <path class="line-async" d="M760 1070 L760 1390 L1050 1390 L1050 1430" marker-end="url(#arrow-async)"/>
+  <text class="small" x="842" y="1378">搜索索引更新</text>
+
+  <path class="line-async" d="M1040 1070 L1040 1390 L1290 1390 L1290 1430" marker-end="url(#arrow-async)"/>
+  <text class="small" x="1110" y="1378">商品 / 用户 / 订单同步</text>
+
+  <!-- Auth persistence -->
+  <path class="line-store" d="M700 1345 L700 1430" marker-end="url(#arrow-store)"/>
+  <text class="small" x="712" y="1398">认证数据持久化</text>
+
+  <!-- Legend -->
+  <rect class="group" x="250" y="1600" width="1300" height="60"/>
+  <text class="subtitle" x="300" y="1637">连线说明</text>
+  <path class="line-user" d="M470 1630 L530 1630" marker-end="url(#arrow-user)"/>
+  <text class="legend" x="545" y="1635">用户 / 管理访问</text>
+  <path class="line-api" d="M720 1630 L780 1630" marker-end="url(#arrow-api)"/>
+  <text class="legend" x="795" y="1635">同步调用链路</text>
+  <path class="line-data" d="M970 1630 L1030 1630" marker-end="url(#arrow-data)"/>
+  <text class="legend" x="1045" y="1635">后端访问基础设施</text>
+  <path class="line-async" d="M1260 1630 L1320 1630" marker-end="url(#arrow-async)"/>
+  <text class="legend" x="1335" y="1635">Outbox 异步链路</text>
+</svg>

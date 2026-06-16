@@ -1,20 +1,8 @@
 import { AccountStatus, PrismaClient, ProductStatus, UserRole, VerificationStatus } from '@prisma/client';
 import { syncSuperTokensUser } from './supertokens-sync';
+import { getLocalProductImage } from './product-image-pool';
 
 const prisma = new PrismaClient();
-
-const PRODUCT_IMAGES = [
-  '/images/products/archive/badminton.jpg',
-  '/images/products/archive/books-1.jpg',
-  '/images/products/archive/books-2.jpg',
-  '/images/products/archive/clothing-rack.jpg',
-  '/images/products/archive/fan.jpg',
-  '/images/products/archive/keyboard.jpg',
-  '/images/products/archive/lamp.jpg',
-  '/images/products/archive/plush.jpg',
-  '/images/products/archive/powerbank.png',
-  '/images/products/archive/storage-shelf.jpg'
-];
 
 const DEMO_ACCOUNTS = [
   {
@@ -115,6 +103,50 @@ const DEMO_ACCOUNTS = [
     creditScore: 81,
     verificationStatus: VerificationStatus.APPROVED,
     accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user09@swapcampus.local',
+    password: 'user09',
+    displayName: '法同学',
+    studentId: '20260009',
+    college: '法学院',
+    role: UserRole.USER,
+    creditScore: 77,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user10@swapcampus.local',
+    password: 'user10',
+    displayName: '医同学',
+    studentId: '20260010',
+    college: '园艺园林学院',
+    role: UserRole.USER,
+    creditScore: 83,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user11@swapcampus.local',
+    password: 'user11',
+    displayName: '药同学',
+    studentId: '20260011',
+    college: '药学院',
+    role: UserRole.USER,
+    creditScore: 71,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user12@swapcampus.local',
+    password: 'user12',
+    displayName: '动同学',
+    studentId: '20260012',
+    college: '动物科技学院',
+    role: UserRole.USER,
+    creditScore: 76,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
   }
 ] as const;
 
@@ -160,7 +192,7 @@ async function createDemoProducts(sellerIds: number[], totalCount = 48) {
     const base = SAMPLE_CATALOG[index % SAMPLE_CATALOG.length];
     const sellerId = sellerIds[index % sellerIds.length];
     const title = `${base.title} #${String(index + 1).padStart(3, '0')}`;
-    const imageUrl = PRODUCT_IMAGES[index % PRODUCT_IMAGES.length];
+    const imageUrl = getLocalProductImage(index);
 
     await prisma.product.create({
       data: {

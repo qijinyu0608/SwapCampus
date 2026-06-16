@@ -3,13 +3,19 @@ import { OutboxAggregateType, OutboxEventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   COMMERCE_SYNC_OUTBOX_TOPIC,
+  GOVERNANCE_OUTBOX_TOPIC,
+  MESSAGE_OUTBOX_TOPIC,
   OutboxTransactionClient,
   PublishOutboxEventInput,
+  PublishGovernanceEventInput,
+  PublishMessageEventInput,
   PublishOrderCommerceSyncEventInput,
   PublishProductCommerceSyncEventInput,
   PublishProductSearchEventInput,
+  PublishRecommendationEventInput,
   PublishSellerSearchEventInput,
   PublishUserCommerceSyncEventInput,
+  RECOMMENDATION_OUTBOX_TOPIC,
   SEARCH_INDEX_OUTBOX_TOPIC
 } from './outbox.types';
 
@@ -118,6 +124,56 @@ export class OutboxService {
       aggregateId: input.userId,
       payload: {
         userId: input.userId
+      } satisfies Prisma.InputJsonObject,
+      availableAt: input.availableAt
+    }, tx);
+  }
+
+  async publishMessageEvent(input: PublishMessageEventInput, tx?: OutboxTransactionClient) {
+    return this.publishEvent({
+      topic: MESSAGE_OUTBOX_TOPIC,
+      eventType: 'MessageSent',
+      aggregateType: OutboxAggregateType.CONVERSATION,
+      aggregateId: input.conversationId,
+      payload: {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        senderId: input.senderId,
+        type: input.type
+      } satisfies Prisma.InputJsonObject,
+      availableAt: input.availableAt
+    }, tx);
+  }
+
+  async publishRecommendationEvent(input: PublishRecommendationEventInput, tx?: OutboxTransactionClient) {
+    return this.publishEvent({
+      topic: RECOMMENDATION_OUTBOX_TOPIC,
+      eventType: input.eventType,
+      aggregateType: OutboxAggregateType.USER,
+      aggregateId: input.userId,
+      payload: {
+        userId: input.userId,
+        productId: input.productId,
+        action: input.action,
+        occurredAt: (input.occurredAt ?? new Date()).toISOString()
+      } satisfies Prisma.InputJsonObject,
+      availableAt: input.availableAt
+    }, tx);
+  }
+
+  async publishGovernanceEvent(input: PublishGovernanceEventInput, tx?: OutboxTransactionClient) {
+    return this.publishEvent({
+      topic: GOVERNANCE_OUTBOX_TOPIC,
+      eventType: 'AuditLogRequested',
+      aggregateType: input.aggregateType,
+      aggregateId: input.aggregateId,
+      payload: {
+        actorId: input.actorId,
+        actorName: input.actorName,
+        action: input.action,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        detail: input.detail
       } satisfies Prisma.InputJsonObject,
       availableAt: input.availableAt
     }, tx);

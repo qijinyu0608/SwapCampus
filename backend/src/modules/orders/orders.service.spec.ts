@@ -289,7 +289,7 @@ describe('OrdersService', () => {
     });
     prisma.productImage.findMany.mockResolvedValue([]);
 
-    const { service } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
 
     await expect(service.createOrder({
       productId: 18
@@ -314,9 +314,8 @@ describe('OrdersService', () => {
       reason: '对方迟到且未提前说明',
       expectedAction: '取消订单'
     });
-    prisma.auditLog.create.mockResolvedValue(undefined);
 
-    const { service } = createService(prisma);
+    const { service, outboxService } = createService(prisma);
     const result = await service.createAppeal(96, {
       issueType: ' 未按约定交付 ',
       reason: ' 对方迟到且未提前说明 ',
@@ -334,13 +333,15 @@ describe('OrdersService', () => {
         status: 'OPEN'
       }
     });
-    expect(prisma.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        actorId: 11,
-        action: 'CREATE_ORDER_APPEAL',
-        targetType: 'ORDER_APPEAL',
-        targetId: 501
-      })
+    expect(outboxService.publishGovernanceEvent).toHaveBeenCalledWith({
+      actorId: 11,
+      actorName: '用户#11',
+      action: 'CREATE_ORDER_APPEAL',
+      targetType: 'ORDER_APPEAL',
+      targetId: 501,
+      detail: '未按约定交付：对方迟到且未提前说明',
+      aggregateType: 'ORDER',
+      aggregateId: 96
     });
     expect(result).toEqual({
       id: 501,

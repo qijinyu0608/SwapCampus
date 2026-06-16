@@ -3,6 +3,7 @@ import { Prisma, ProductStatus, VerificationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { OutboxService } from '../outbox/outbox.service';
 import { normalizeProductConditionValue } from '../products/product-conditions';
 
 type FavoriteProductCard = {
@@ -41,7 +42,9 @@ function normalizeTags(tags: Prisma.JsonValue | null) {
 export class FavoritesService {
   constructor(
     @Inject(PrismaService)
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService
   ) {}
 
   private async buildFavoriteProductCards(products: Array<{
@@ -175,18 +178,29 @@ export class FavoritesService {
 
     this.ensureCanFavoriteProduct(product, authUser.id);
 
-    const favorite = await this.prisma.favorite.upsert({
-      where: {
-        userId_productId: {
+    const favorite = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.favorite.upsert({
+        where: {
+          userId_productId: {
+            userId: authUser.id,
+            productId
+          }
+        },
+        update: {},
+        create: {
           userId: authUser.id,
           productId
         }
-      },
-      update: {},
-      create: {
+      });
+
+      await this.outboxService.publishRecommendationEvent({
         userId: authUser.id,
-        productId
-      }
+        productId,
+        eventType: 'FavoriteChanged',
+        action: 'FAVORITE'
+      }, tx as any);
+
+      return created;
     });
 
     const favoriteCount = await this.prisma.favorite.count({
@@ -204,11 +218,20 @@ export class FavoritesService {
   async removeFavorite(productId: number, currentUser: AuthenticatedUser) {
     const authUser = requireAuthenticatedUser(currentUser);
 
-    await this.prisma.favorite.deleteMany({
-      where: {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.favorite.deleteMany({
+        where: {
+          userId: authUser.id,
+          productId
+        }
+      });
+
+      await this.outboxService.publishRecommendationEvent({
         userId: authUser.id,
-        productId
-      }
+        productId,
+        eventType: 'FavoriteChanged',
+        action: 'UNFAVORITE'
+      }, tx as any);
     });
 
     const favoriteCount = await this.prisma.favorite.count({

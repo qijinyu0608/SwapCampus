@@ -11,7 +11,9 @@ import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { CreditBadge, SectionCard } from '../components/ui';
 import { useAuthState } from '../services/auth-state';
 import {
+  type CampusServiceListItem,
   fetchProducts,
+  fetchCampusServiceListings,
   fetchUserReceivedReviews,
   fetchUserTrustSummary,
   getApiErrorMessage,
@@ -22,7 +24,7 @@ import {
 import { hasTradingAccess, isGuestUser } from '../services/session';
 import { executeToggleFollow } from '../utils/followActions';
 import { getListingStatusPresentation } from '../utils/listingStatus';
-import { getProductImage } from '../utils/productCover';
+import { getProductImage, resolvePrimaryProductImage } from '../utils/productCover';
 import { ensureTradingAccessOrNotify } from '../utils/tradingAccess';
 import {
   getUserPresentation
@@ -35,11 +37,12 @@ export function PublicUserPage() {
   const userId = Number(id);
   const [user, setUser] = useState<UserTrustSummary | null>(null);
   const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [campusServices, setCampusServices] = useState<CampusServiceListItem[]>([]);
   const [reviews, setReviews] = useState<UserReceivedReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [followPending, setFollowPending] = useState(false);
-  const [activeTab, setActiveTab] = useState<'items' | 'reviews'>('items');
+  const [activeTab, setActiveTab] = useState<'items' | 'service-requests' | 'service-offers' | 'reviews'>('items');
 
   useEffect(() => {
     async function loadUserHome() {
@@ -51,13 +54,15 @@ export function PublicUserPage() {
 
       setLoading(true);
       try {
-        const [summary, productList, reviewList] = await Promise.all([
+        const [summary, productList, campusServiceList, reviewList] = await Promise.all([
           fetchUserTrustSummary(userId),
           fetchProducts({ sellerId: userId, status: 'ON_SALE', page: 1, pageSize: 60 }),
+          fetchCampusServiceListings({ ownerId: userId, status: 'OPEN', page: 1, pageSize: 60, sort: 'newest' }),
           fetchUserReceivedReviews(userId)
         ]);
         setUser(summary);
         setProducts(productList.items);
+        setCampusServices(campusServiceList.items);
         setReviews(reviewList.items);
         setError('');
       } catch (err) {
@@ -73,6 +78,14 @@ export function PublicUserPage() {
   const publishedProducts = useMemo(
     () => products.filter((item) => item.sellerId === userId && item.status === 'ON_SALE'),
     [products, userId]
+  );
+  const publishedServiceRequests = useMemo(
+    () => campusServices.filter((item) => item.publisher.id === userId && item.intent === 'REQUEST'),
+    [campusServices, userId]
+  );
+  const publishedServiceOffers = useMemo(
+    () => campusServices.filter((item) => item.publisher.id === userId && item.intent === 'OFFER'),
+    [campusServices, userId]
   );
 
   function ensureTradingAccess(actionLabel: string) {
@@ -130,7 +143,6 @@ export function PublicUserPage() {
     user.averageRating === null ? '暂无评分' : `评分 ${user.averageRating.toFixed(1)}`
   ];
   const userPresentation = getUserPresentation(user);
-  const reviewSummaryText = user.averageRating === null ? '暂无用户评价' : `综合评分 ${user.averageRating.toFixed(1)}`;
 
   function renderReviewList() {
     if (!reviews.length) {
@@ -150,6 +162,34 @@ export function PublicUserPage() {
           />
         ))}
       </div>
+    );
+  }
+
+  function renderCampusServiceGrid(
+    items: CampusServiceListItem[],
+    emptyTitle: string
+  ) {
+    return (
+      <ProductGrid
+        items={items}
+        className="fish-feed-grid service-task-grid"
+        emptyState={<EmptyState title={emptyTitle} />}
+        renderItem={(item) => (
+          <ProductSummaryCard
+            key={item.id}
+            item={item}
+            imageSrc={resolvePrimaryProductImage({
+              title: item.title,
+              category: item.categoryLabel,
+              price: item.reward,
+              imageUrl: item.imageUrl
+            }, item.id)}
+            className="profile-fish-card service-task-card"
+            priceValue={item.rewardLabel}
+            onOpen={() => navigate(`/campus-services/${item.id}`)}
+          />
+        )}
+      />
     );
   }
 
@@ -205,7 +245,6 @@ export function PublicUserPage() {
               label: `在售商品 ${publishedProducts.length}`,
               children: (
                 <>
-                  <SectionHeader title="正在出售" description={`${publishedProducts.length} 件校内闲置`} className="is-prominent is-spacious" />
                   <ProductGrid
                     items={publishedProducts}
                     className="fish-feed-grid"
@@ -228,11 +267,30 @@ export function PublicUserPage() {
               )
             },
             {
+              key: 'service-requests',
+              label: `发布的需求 ${publishedServiceRequests.length}`,
+              children: (
+                <>
+                  <SectionHeader title="正在找人帮忙" description={`${publishedServiceRequests.length} 条公开需求`} className="is-prominent is-spacious" />
+                  {renderCampusServiceGrid(publishedServiceRequests, '这个同学暂时没有公开需求')}
+                </>
+              )
+            },
+            {
+              key: 'service-offers',
+              label: `发布的服务 ${publishedServiceOffers.length}`,
+              children: (
+                <>
+                  <SectionHeader title="正在提供服务" description={`${publishedServiceOffers.length} 条公开服务`} className="is-prominent is-spacious" />
+                  {renderCampusServiceGrid(publishedServiceOffers, '这个同学暂时没有公开服务')}
+                </>
+              )
+            },
+            {
               key: 'reviews',
               label: `收到的评价 ${reviews.length}`,
               children: (
                 <>
-                  <SectionHeader title="收到的评价" description={reviewSummaryText} className="is-prominent is-spacious" />
                   {renderReviewList()}
                 </>
               )

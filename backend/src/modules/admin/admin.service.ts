@@ -331,16 +331,16 @@ export class AdminService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: this.getActorName(adminUser),
-          action: normalized === ProductStatus.OFFLINE ? 'OFFLINE_PRODUCT' : 'RESTORE_PRODUCT',
-          targetType: 'PRODUCT',
-          targetId: productId,
-          detail: this.getDetail(payload.reason, `商品状态改为 ${normalized}`)
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: this.getActorName(adminUser),
+        action: normalized === ProductStatus.OFFLINE ? 'OFFLINE_PRODUCT' : 'RESTORE_PRODUCT',
+        targetType: 'PRODUCT',
+        targetId: productId,
+        detail: this.getDetail(payload.reason, `商品状态改为 ${normalized}`),
+        aggregateType: 'PRODUCT' as any,
+        aggregateId: productId
+      }, tx);
 
       await this.outboxService.publishProductSearchEvent({
         productId,
@@ -413,16 +413,16 @@ export class AdminService {
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await this.cancelOrderAsAdmin(tx, orderId);
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: this.getActorName(adminUser),
-          action: 'UPDATE_ORDER_STATUS',
-          targetType: 'ORDER',
-          targetId: orderId,
-          detail: this.getDetail(payload.reason, `订单状态改为 ${payload.status}`)
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: this.getActorName(adminUser),
+        action: 'UPDATE_ORDER_STATUS',
+        targetType: 'ORDER',
+        targetId: orderId,
+        detail: this.getDetail(payload.reason, `订单状态改为 ${payload.status}`),
+        aggregateType: 'ORDER' as any,
+        aggregateId: orderId
+      }, tx);
 
       if (updated.productStatusChanged) {
         await this.outboxService.publishProductSearchEvent({
@@ -607,16 +607,16 @@ export class AdminService {
         }
       });
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: this.getActorName(adminUser),
-          action: payload.nextStatus,
-          targetType: 'ORDER_APPEAL',
-          targetId: appealId,
-          detail: this.getDetail(payload.resolutionNote, `订单申诉处理：${payload.nextStatus}`)
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: this.getActorName(adminUser),
+        action: payload.nextStatus,
+        targetType: 'ORDER_APPEAL',
+        targetId: appealId,
+        detail: this.getDetail(payload.resolutionNote, `订单申诉处理：${payload.nextStatus}`),
+        aggregateType: 'ORDER' as any,
+        aggregateId: appeal.orderId
+      }, tx);
 
       for (const productId of Array.from(affectedProductIds)) {
         await this.outboxService.publishProductSearchEvent({
@@ -821,16 +821,16 @@ export class AdminService {
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: this.getActorName(adminUser),
-          action: 'UPDATE_CAMPUS_SERVICE_STATUS',
-          targetType: 'CAMPUS_SERVICE',
-          targetId: listingId,
-          detail: this.getDetail(payload.reason, `校园服务${actionLabelMap[payload.action]}`)
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: this.getActorName(adminUser),
+        action: 'UPDATE_CAMPUS_SERVICE_STATUS',
+        targetType: 'CAMPUS_SERVICE',
+        targetId: listingId,
+        detail: this.getDetail(payload.reason, `校园服务${actionLabelMap[payload.action]}`),
+        aggregateType: 'CAMPUS_SERVICE' as any,
+        aggregateId: listingId
+      }, tx);
 
       return {
         id: listingId,

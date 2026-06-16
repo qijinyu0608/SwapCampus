@@ -1078,6 +1078,8 @@
 .result-filter-leading {
   display: flex;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -1126,8 +1128,16 @@
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
+}
+
+.result-filter-leading-extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .result-filter-segment {
@@ -1611,31 +1621,23 @@
   color: var(--danger);
 }
 
-.service-detail-capacity-signals {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-
-.service-detail-capacity-item {
+.service-detail-capacity-status {
   display: grid;
   gap: 6px;
-  padding: 12px;
+  min-height: 78px;
+  align-content: center;
   justify-items: center;
   text-align: center;
-  border-radius: 0;
-  background: transparent;
 }
 
-.service-detail-capacity-item span {
+.service-detail-capacity-status span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.service-detail-capacity-item strong {
+.service-detail-capacity-status strong {
   color: var(--ink);
-  font-size: 20px;
+  font-size: 28px;
   line-height: 1;
 }
 

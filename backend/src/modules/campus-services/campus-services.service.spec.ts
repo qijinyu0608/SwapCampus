@@ -1085,6 +1085,97 @@ describe('CampusServicesService', () => {
     });
   });
 
+  it('should preserve OTHER category when llm review is disabled and selected category is OTHER', async () => {
+    const createdListing = createListing({
+      id: 109,
+      ownerId: 11,
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE,
+      category: CampusServiceCategory.OTHER,
+      title: '毕业资料整理提醒',
+      description: '按学院和时间整理毕业材料准备提醒',
+      amount: 6,
+      priceMode: CampusServicePriceMode.FIXED,
+      locationMode: CampusServiceLocationMode.ONLINE,
+      locationNote: '线上交付',
+      autoConfirm: false,
+      maxTotalOrders: 2,
+      maxConcurrentOrders: 1
+    });
+    const prisma = {
+      campusServiceListing: {
+        create: jest.fn().mockResolvedValue(createdListing)
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 11,
+          accountStatus: AccountStatus.ACTIVE
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 11,
+            displayName: 'QJinyu',
+            creditScore: 88,
+            verificationStatus: VerificationStatus.APPROVED,
+            accountStatus: AccountStatus.ACTIVE
+          }
+        ])
+      },
+      campusServiceOrder: {
+        findMany: jest.fn().mockResolvedValue([])
+      },
+      conversation: {
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as any;
+
+    const service = new CampusServicesService(prisma, outboxService, {
+      reviewCampusService: jest.fn().mockResolvedValue({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        status: 'disabled',
+        decision: 'APPROVED',
+        shouldBlock: false,
+        selectedCategory: CampusServiceCategory.OTHER,
+        reason: '未配置 DeepSeek API，已跳过 LLM 审查',
+        issues: []
+      })
+    } as any);
+
+    const result = await service.createCampusService({
+      intent: CampusServiceIntent.OFFER,
+      pattern: CampusServicePattern.REUSABLE,
+      title: ' 毕业资料整理提醒 ',
+      category: CampusServiceCategory.OTHER,
+      description: ' 按学院和时间整理毕业材料准备提醒 ',
+      priceMode: CampusServicePriceMode.FIXED,
+      amount: 6,
+      reward: 6,
+      locationMode: CampusServiceLocationMode.ONLINE,
+      locationNote: ' 线上交付 ',
+      estimatedMinutes: 30,
+      validFromAt: '2026-06-16T08:00:00.000Z',
+      validUntilAt: '2026-06-16T10:00:00.000Z',
+      imageUrls: ['https://cdn.example.com/other-cover.jpg']
+    }, authUser);
+
+    expect(prisma.campusServiceListing.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ownerId: 11,
+        category: CampusServiceCategory.OTHER,
+        title: '毕业资料整理提醒',
+        description: '按学院和时间整理毕业材料准备提醒',
+        priceMode: CampusServicePriceMode.FIXED,
+        amount: 6
+      })
+    });
+    expect(result.id).toBe(109);
+    expect(result.review).toMatchObject({
+      status: 'disabled',
+      selectedCategory: CampusServiceCategory.OTHER
+    });
+  });
+
   it('should update campus service listing fields for publisher', async () => {
     const listing = createListing({
       id: 89,

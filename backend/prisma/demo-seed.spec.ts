@@ -1,4 +1,5 @@
 import {
+  CampusServiceCategory,
   CampusServiceIntent,
   CampusServiceListingStatus,
   CampusServiceLocationMode,
@@ -13,7 +14,7 @@ describe('demo seed plan', () => {
   it('should build a substantial demo dataset with products and campus services', () => {
     const plan = buildDemoSeedPlan(new Date('2026-06-14T08:00:00.000Z'));
 
-    expect(plan.users.length).toBeGreaterThanOrEqual(10);
+    expect(plan.users.length).toBeGreaterThanOrEqual(13);
     expect(plan.products.length).toBeGreaterThanOrEqual(28);
     expect(plan.campusServices.length).toBeGreaterThanOrEqual(18);
     expect(plan.productOrders.length).toBeGreaterThanOrEqual(6);
@@ -49,6 +50,8 @@ describe('demo seed plan', () => {
     const intents = new Set(plan.campusServices.map((item) => item.intent));
     const locationModes = new Set(plan.campusServices.map((item) => item.locationMode));
     const statuses = new Set(plan.campusServices.map((item) => item.status));
+    const categories = new Set(plan.campusServices.map((item) => item.category));
+    const ownerIndexes = new Set(plan.campusServices.map((item) => item.ownerIndex));
 
     expect(intents).toEqual(new Set([CampusServiceIntent.REQUEST, CampusServiceIntent.OFFER]));
     expect(locationModes.has(CampusServiceLocationMode.ONLINE)).toBe(true);
@@ -57,6 +60,8 @@ describe('demo seed plan', () => {
     expect(statuses.has(CampusServiceListingStatus.OPEN)).toBe(true);
     expect(statuses.has(CampusServiceListingStatus.BUSY)).toBe(true);
     expect(statuses.has(CampusServiceListingStatus.PAUSED)).toBe(true);
+    expect(categories.has(CampusServiceCategory.HELP)).toBe(true);
+    expect(ownerIndexes).toEqual(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
   });
 
   it('should include product order states suitable for order, review, and message pages', () => {

@@ -120,15 +120,19 @@ export class ReportsService {
       }
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: reporterUser.id,
-        actorName: `用户#${reporterUser.id}`,
-        action: 'CREATE_REPORT',
-        targetType: payload.productId ? 'PRODUCT' : payload.campusServiceListingId ? 'CAMPUS_SERVICE' : 'USER',
-        targetId: payload.productId ?? payload.campusServiceListingId ?? payload.targetUserId!,
-        detail: payload.reason
-      }
+    await this.outboxService.publishGovernanceEvent({
+      actorId: reporterUser.id,
+      actorName: `用户#${reporterUser.id}`,
+      action: 'CREATE_REPORT',
+      targetType: payload.productId ? 'PRODUCT' : payload.campusServiceListingId ? 'CAMPUS_SERVICE' : 'USER',
+      targetId: payload.productId ?? payload.campusServiceListingId ?? payload.targetUserId!,
+      detail: payload.reason,
+      aggregateType: payload.productId
+        ? 'PRODUCT' as any
+        : payload.campusServiceListingId
+          ? 'CAMPUS_SERVICE' as any
+          : 'USER' as any,
+      aggregateId: payload.productId ?? payload.campusServiceListingId ?? payload.targetUserId!
     });
 
     return {
@@ -410,16 +414,22 @@ export class ReportsService {
         }
       });
 
-      await tx.auditLog.create({
-        data: {
-          actorId: adminUser.id,
-          actorName: `管理员#${adminUser.id}`,
-          action: payload.nextStatus,
-          targetType: report.productId ? 'REPORT_PRODUCT' : report.campusServiceListingId ? 'REPORT_CAMPUS_SERVICE' : 'REPORT_USER',
-          targetId: report.productId ?? report.campusServiceListingId ?? reportTargetUserId ?? report.id,
-          detail: payload.resolutionNote?.trim() || `举报处理结果：${payload.nextStatus}（${penaltyLevel === 'SEVERE' ? '严重违规' : '普通违规'}）`
-        }
-      });
+      await this.outboxService.publishGovernanceEvent({
+        actorId: adminUser.id,
+        actorName: `管理员#${adminUser.id}`,
+        action: payload.nextStatus,
+        targetType: report.productId ? 'REPORT_PRODUCT' : report.campusServiceListingId ? 'REPORT_CAMPUS_SERVICE' : 'REPORT_USER',
+        targetId: report.productId ?? report.campusServiceListingId ?? reportTargetUserId ?? report.id,
+        detail: payload.resolutionNote?.trim() || `举报处理结果：${payload.nextStatus}（${penaltyLevel === 'SEVERE' ? '严重违规' : '普通违规'}）`,
+        aggregateType: report.productId
+          ? 'PRODUCT' as any
+          : report.campusServiceListingId
+            ? 'CAMPUS_SERVICE' as any
+            : reportTargetUserId
+              ? 'USER' as any
+              : 'REPORT' as any,
+        aggregateId: report.productId ?? report.campusServiceListingId ?? reportTargetUserId ?? report.id
+      }, tx);
 
       return {
         id: updated.id,

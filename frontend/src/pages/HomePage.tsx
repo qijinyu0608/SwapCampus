@@ -4,18 +4,15 @@ import {
   BookOutlined,
   CarOutlined,
   LeftOutlined,
-  CommentOutlined,
   CreditCardOutlined,
   EditOutlined,
   HeartOutlined,
   HomeOutlined,
-  InboxOutlined,
   LaptopOutlined,
   PlayCircleOutlined,
   RightOutlined,
   SearchOutlined,
-  SkinOutlined,
-  SendOutlined
+  SkinOutlined
 } from '@ant-design/icons';
 import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
@@ -28,8 +25,10 @@ import {
   type ProductCategoryHomeGroupIcon
 } from '../constants/productCategories';
 import {
+  fetchCampusServiceOrders,
   fetchHomeRecommendations,
   fetchOrders,
+  type CampusServiceOrderListItem,
   getApiErrorMessage,
   OrderItem,
   ProductSummary
@@ -40,7 +39,7 @@ import { useCurrentUserProfileBundle } from '../services/user-profile';
 import { UserNameWithBadge } from '../components/user/UserNameWithBadge';
 import { type AvatarFrameKey, UserAvatar } from '../components/user/UserAvatar';
 import { getListingStatusPresentation } from '../utils/listingStatus';
-import { getProductImage } from '../utils/productCover';
+import { getProductImage, resolvePrimaryProductImage } from '../utils/productCover';
 
 const shortcutGroups = PRODUCT_CATEGORY_HOME_GROUPS;
 const categoryIcons: Record<ProductCategoryHomeGroupIcon, ReactNode> = {
@@ -106,6 +105,92 @@ const sellerOrderStatusLabelMap: Record<string, string> = {
 };
 
 type UserOrderScope = 'buying' | 'selling';
+type UserPanelMode = 'product' | 'service';
+type ServiceParticipationScope = 'provider' | 'booking';
+
+type HomeOrderPanelItem = {
+  kind: 'product' | 'service';
+  id: number;
+  title: string;
+  imageSrc: string;
+  statusLabel: string;
+  scopeLabel: string;
+  counterpartLabel: string;
+  panelMode: UserPanelMode;
+  section: 'orders';
+  orderScope: 'buying' | 'selling' | 'provider' | 'booking';
+  priority: number;
+  createdAt: string;
+};
+
+function getProductOrderPriority(status: string) {
+  if (status === 'WAITING_REVIEW') {
+    return 0;
+  }
+
+  if (status === 'IN_PROGRESS') {
+    return 1;
+  }
+
+  if (status === 'PENDING') {
+    return 2;
+  }
+
+  if (status === 'COMPLETED') {
+    return 3;
+  }
+
+  if (status === 'CANCELED') {
+    return 4;
+  }
+
+  return 5;
+}
+
+function getServiceOrderPriority(status: CampusServiceOrderListItem['orderStatus']) {
+  if (status === 'WAITING_COMPLETE_CONFIRM') {
+    return 0;
+  }
+
+  if (status === 'CONFIRMED') {
+    return 1;
+  }
+
+  if (status === 'PENDING_CONFIRMATION') {
+    return 2;
+  }
+
+  if (status === 'COMPLETED') {
+    return 3;
+  }
+
+  if (status === 'CANCELED') {
+    return 4;
+  }
+
+  if (status === 'REJECTED') {
+    return 5;
+  }
+
+  if (status === 'EXPIRED') {
+    return 6;
+  }
+
+  return 7;
+}
+
+function parseSortTime(value: string) {
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function comparePanelItems(a: HomeOrderPanelItem, b: HomeOrderPanelItem) {
+  if (a.priority !== b.priority) {
+    return a.priority - b.priority;
+  }
+
+  return parseSortTime(b.createdAt) - parseSortTime(a.createdAt);
+}
 
 const visibleShortcutGroups = shortcutGroups;
 const campaignCount = homeCampaigns.length;
@@ -120,7 +205,9 @@ export function HomePage() {
   const [favoriteVersion, setFavoriteVersion] = useState(0);
   const [activeCampaignIndex, setActiveCampaignIndex] = useState(0);
   const [userOrders, setUserOrders] = useState<OrderItem[]>([]);
+  const [campusServiceOrders, setCampusServiceOrders] = useState<CampusServiceOrderListItem[]>([]);
   const [userOrderScope, setUserOrderScope] = useState<UserOrderScope>('buying');
+  const [userOrderScopeTouched, setUserOrderScopeTouched] = useState(false);
   const [searchError, setSearchError] = useState('');
   const { presentation: userPresentation } = useCurrentUserProfileBundle(
     currentUser && currentUser.role !== 'GUEST' ? currentUser : null
@@ -157,15 +244,28 @@ export function HomePage() {
   useEffect(() => {
     if (!currentUser || currentUser.role === 'GUEST') {
       setUserOrders([]);
+      setCampusServiceOrders([]);
       return;
     }
 
-    fetchOrders({
-      page: 1,
-      pageSize: 12
-    })
-      .then((result) => setUserOrders(result.items))
-      .catch(() => setUserOrders([]));
+    Promise.all([
+      fetchOrders({
+        page: 1,
+        pageSize: 12
+      }),
+      fetchCampusServiceOrders({
+        page: 1,
+        pageSize: 12
+      })
+    ])
+      .then(([orderResult, serviceOrderResult]) => {
+        setUserOrders(orderResult.items);
+        setCampusServiceOrders(serviceOrderResult.items);
+      })
+      .catch(() => {
+        setUserOrders([]);
+        setCampusServiceOrders([]);
+      });
   }, [currentUser, favoriteVersion]);
 
   function submitSearch(keyword: string) {
@@ -236,18 +336,109 @@ export function HomePage() {
     () => currentUser ? userOrders.filter((item) => item.sellerId === currentUser.id) : [],
     [currentUser, userOrders]
   );
-  const userTickerItems = useMemo(() => {
-    const source = buyingOrders.length ? buyingOrders : userOrders;
-    return source.slice(0, 6).map((order) => ({
-      id: order.id,
-      title: order.productTitle,
-      status: orderStatusLabelMap[order.status] ?? order.status,
-      location: order.meetupLocation || '校内面交进行中'
-    }));
-  }, [buyingOrders, userOrders]);
+  const providerServiceOrders = useMemo(
+    () => campusServiceOrders.filter((item) => item.role === 'PROVIDER'),
+    [campusServiceOrders]
+  );
+  const bookingServiceOrders = useMemo(
+    () => campusServiceOrders.filter((item) => item.role === 'REQUESTER'),
+    [campusServiceOrders]
+  );
+  const userPanelMode = useMemo<UserPanelMode>(() => {
+    if (providerServiceOrders.length || bookingServiceOrders.length) {
+      const serviceTopPriority = Math.min(
+        ...[...providerServiceOrders, ...bookingServiceOrders].map((item) => getServiceOrderPriority(item.orderStatus))
+      );
+      const productTopPriority = Math.min(
+        ...[...buyingOrders, ...sellingOrders].map((item) => getProductOrderPriority(item.status))
+      );
+
+      if (
+        Number.isFinite(serviceTopPriority)
+        && (!Number.isFinite(productTopPriority) || serviceTopPriority <= productTopPriority)
+      ) {
+        return 'service';
+      }
+    }
+
+    return 'product';
+  }, [bookingServiceOrders, buyingOrders, providerServiceOrders, sellingOrders]);
+  const currentScopeTabs = useMemo(() => {
+    if (userPanelMode === 'service') {
+      return [
+        { key: 'buying' as const, label: '我预约的服务', count: bookingServiceOrders.length },
+        { key: 'selling' as const, label: '我接的单', count: providerServiceOrders.length }
+      ];
+    }
+
+    return [
+      { key: 'buying' as const, label: '我买到的', count: buyingOrders.length },
+      { key: 'selling' as const, label: '我卖出的', count: sellingOrders.length }
+    ];
+  }, [bookingServiceOrders.length, buyingOrders.length, providerServiceOrders.length, sellingOrders.length, userPanelMode]);
+  useEffect(() => {
+    setUserOrderScopeTouched(false);
+  }, [currentUser?.id, userPanelMode]);
+
+  useEffect(() => {
+    if (userOrderScopeTouched) {
+      return;
+    }
+
+    if (userPanelMode === 'service') {
+      if (bookingServiceOrders.length === 0 && providerServiceOrders.length > 0 && userOrderScope !== 'selling') {
+        setUserOrderScope('selling');
+        return;
+      }
+
+      if (providerServiceOrders.length === 0 && bookingServiceOrders.length > 0 && userOrderScope !== 'buying') {
+        setUserOrderScope('buying');
+      }
+
+      return;
+    }
+
+    if (buyingOrders.length === 0 && sellingOrders.length > 0 && userOrderScope !== 'selling') {
+      setUserOrderScope('selling');
+      return;
+    }
+
+    if (sellingOrders.length === 0 && buyingOrders.length > 0 && userOrderScope !== 'buying') {
+      setUserOrderScope('buying');
+    }
+  }, [
+    bookingServiceOrders.length,
+    buyingOrders.length,
+    providerServiceOrders.length,
+    sellingOrders.length,
+    userOrderScope,
+    userOrderScopeTouched,
+    userPanelMode
+  ]);
   const activeUserOrders = userOrderScope === 'buying' ? buyingOrders : sellingOrders;
   const activeOrderStatusLabels = userOrderScope === 'buying' ? orderStatusLabelMap : sellerOrderStatusLabelMap;
   const userPanelStats = useMemo(() => {
+    if (userPanelMode === 'service') {
+      const activeServiceOrders = userOrderScope === 'buying' ? bookingServiceOrders : providerServiceOrders;
+      const pendingLabel = userOrderScope === 'buying' ? '待确认' : '待接单';
+      const progressLabel = userOrderScope === 'buying' ? '进行中' : '待完工';
+
+      return [
+        {
+          key: 'service-pending',
+          label: pendingLabel,
+          value: activeServiceOrders.filter((item) => item.orderStatus === 'PENDING_CONFIRMATION').length
+        },
+        {
+          key: 'service-progress',
+          label: progressLabel,
+          value: activeServiceOrders.filter((item) => (
+            item.orderStatus === 'CONFIRMED' || item.orderStatus === 'WAITING_COMPLETE_CONFIRM'
+          )).length
+        }
+      ];
+    }
+
     if (userOrderScope === 'selling') {
       return [
         { key: 'seller-pending', label: '待确认', value: sellingOrders.filter((item) => item.status === 'PENDING').length },
@@ -259,26 +450,92 @@ export function HomePage() {
       { key: 'buying-receive', label: '待收货', value: buyingOrders.filter((item) => item.status === 'IN_PROGRESS').length },
       { key: 'buying-review', label: '待评价', value: buyingOrders.filter((item) => item.status === 'WAITING_REVIEW').length }
     ];
-  }, [buyingOrders, sellingOrders, userOrderScope]);
-  const featuredOrder = useMemo(() => {
-    return activeUserOrders[0] ?? null;
-  }, [activeUserOrders]);
+  }, [bookingServiceOrders, buyingOrders, providerServiceOrders, sellingOrders, userOrderScope, userPanelMode]);
+  const activeServiceOrders = useMemo(
+    () => userOrderScope === 'buying' ? bookingServiceOrders : providerServiceOrders,
+    [bookingServiceOrders, providerServiceOrders, userOrderScope]
+  );
   const userOrderScopeMeta = useMemo(() => ({
-    buying: {
-      label: '我买到的',
-      count: buyingOrders.length,
-      emptyTitle: '暂无买到的',
-      emptyDesc: undefined,
-      stateScope: 'buying'
-    },
-    selling: {
-      label: '我卖出的',
-      count: sellingOrders.length,
-      emptyTitle: '暂无卖出的',
-      emptyDesc: undefined,
-      stateScope: 'selling'
+    buying: userPanelMode === 'service'
+      ? {
+          label: '我预约的服务',
+          count: bookingServiceOrders.length,
+          emptyTitle: '暂无预约服务',
+          emptyDesc: '当前没有和校园服务相关的预约记录。',
+          stateScope: 'booking' as const
+        }
+      : {
+          label: '我买到的',
+          count: buyingOrders.length,
+          emptyTitle: '暂无买到的',
+          emptyDesc: '当前没有商品买入订单。',
+          stateScope: 'buying' as const
+        },
+    selling: userPanelMode === 'service'
+      ? {
+          label: '我接的单',
+          count: providerServiceOrders.length,
+          emptyTitle: '暂无接单记录',
+          emptyDesc: '当前没有校园服务接单记录。',
+          stateScope: 'provider' as const
+        }
+      : {
+          label: '我卖出的',
+          count: sellingOrders.length,
+          emptyTitle: '暂无卖出的',
+          emptyDesc: '当前没有商品卖出订单。',
+          stateScope: 'selling' as const
+        }
+  }), [bookingServiceOrders.length, buyingOrders.length, providerServiceOrders.length, sellingOrders.length, userPanelMode]);
+  const featuredOrder = useMemo<HomeOrderPanelItem | null>(() => {
+    if (userPanelMode === 'service') {
+      const scopeLabel = userOrderScope === 'buying' ? '我预约的服务' : '我接的单';
+      const scopeKey: ServiceParticipationScope = userOrderScope === 'buying' ? 'booking' : 'provider';
+      const serviceItems = activeServiceOrders
+        .map((item) => ({
+          kind: 'service' as const,
+          id: item.id,
+          title: item.title,
+          imageSrc: resolvePrimaryProductImage({
+            title: item.title,
+            category: item.categoryLabel,
+            price: item.reward,
+            imageUrl: item.imageUrl
+          }, item.id),
+          statusLabel: item.orderStatusLabel,
+          scopeLabel,
+          counterpartLabel: `对方 ${item.counterpart.displayName}`,
+          panelMode: 'service' as const,
+          section: 'orders' as const,
+          orderScope: scopeKey,
+          priority: getServiceOrderPriority(item.orderStatus),
+          createdAt: item.createdAt
+        }))
+        .sort(comparePanelItems);
+
+      return serviceItems[0] ?? null;
     }
-  }), [buyingOrders.length, sellingOrders.length]);
+
+    const productItems = activeUserOrders
+      .map((item) => ({
+        kind: 'product' as const,
+        id: item.id,
+        title: item.productTitle,
+        imageSrc: item.productImageUrl || '/images/products/demo-square.png',
+        statusLabel: activeOrderStatusLabels[item.status] ?? item.status,
+        scopeLabel: userOrderScopeMeta[userOrderScope].label,
+        counterpartLabel: item.meetupLocation
+          || (userOrderScope === 'buying' ? `卖家 ${item.sellerName}` : `买家 ${item.buyerName}`),
+        panelMode: 'product' as const,
+        section: 'orders' as const,
+        orderScope: userOrderScope,
+        priority: getProductOrderPriority(item.status),
+        createdAt: item.createdAt
+      }))
+      .sort(comparePanelItems);
+
+    return productItems[0] ?? null;
+  }, [activeOrderStatusLabels, activeServiceOrders, activeUserOrders, userOrderScope, userOrderScopeMeta, userPanelMode]);
   const guestGreeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour >= 11 && hour < 14) {
@@ -503,18 +760,21 @@ export function HomePage() {
                         </div>
                       </div>
 
-                      <div className="fish-home-user-order-tabs" role="tablist" aria-label="交易栏目">
-                        {(['buying', 'selling'] as const).map((scope) => (
+                        <div className="fish-home-user-order-tabs" role="tablist" aria-label="交易栏目">
+                        {currentScopeTabs.map((tab) => (
                           <button
-                            key={scope}
+                            key={tab.key}
                             type="button"
                             role="tab"
-                            aria-selected={userOrderScope === scope}
-                            className={userOrderScope === scope ? 'active' : undefined}
-                            onClick={() => setUserOrderScope(scope)}
+                            aria-selected={userOrderScope === tab.key}
+                            className={userOrderScope === tab.key ? 'active' : undefined}
+                            onClick={() => {
+                              setUserOrderScopeTouched(true);
+                              setUserOrderScope(tab.key);
+                            }}
                           >
-                            <span>{userOrderScopeMeta[scope].label}</span>
-                            <strong>{userOrderScopeMeta[scope].count}</strong>
+                            <span>{tab.label}</span>
+                            <strong>{tab.count}</strong>
                           </button>
                         ))}
                       </div>
@@ -536,8 +796,8 @@ export function HomePage() {
                         className="fish-home-user-order-card"
                         onClick={() => navigate('/profile', {
                           state: {
-                            section: 'orders',
-                            orderScope: userOrderScopeMeta[userOrderScope].stateScope
+                            section: featuredOrder?.section ?? 'orders',
+                            orderScope: featuredOrder?.orderScope ?? userOrderScopeMeta[userOrderScope].stateScope
                           }
                         })}
                       >
@@ -545,26 +805,21 @@ export function HomePage() {
                           <>
                             <img
                               className="fish-home-user-order-image"
-                              src={featuredOrder.productImageUrl || '/images/products/demo-square.png'}
-                              alt={featuredOrder.productTitle}
+                              src={featuredOrder.imageSrc}
+                              alt={featuredOrder.title}
                             />
                             <div className="fish-home-user-order-copy">
                               <div className="fish-home-user-panel-head">
-                                <strong>{activeOrderStatusLabels[featuredOrder.status] ?? featuredOrder.status}</strong>
-                                <span>{userOrderScopeMeta[userOrderScope].label}</span>
+                                <strong>{featuredOrder.statusLabel}</strong>
                               </div>
-                              <h3>{featuredOrder.productTitle}</h3>
-                              <p>
-                                {featuredOrder.meetupLocation
-                                  || (userOrderScope === 'buying' ? `卖家 ${featuredOrder.sellerName}` : `买家 ${featuredOrder.buyerName}`)}
-                              </p>
+                              <h3>{featuredOrder.title}</h3>
+                              <p>{featuredOrder.counterpartLabel}</p>
                             </div>
                           </>
                         ) : (
                           <div className="fish-home-user-order-empty">
                             <div className="fish-home-user-panel-head">
                               <strong>{userOrderScopeMeta[userOrderScope].emptyTitle}</strong>
-                              <span>{userOrderScopeMeta[userOrderScope].label}</span>
                             </div>
                             <p>{userOrderScopeMeta[userOrderScope].emptyDesc}</p>
                           </div>

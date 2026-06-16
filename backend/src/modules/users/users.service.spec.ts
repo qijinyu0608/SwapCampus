@@ -45,6 +45,7 @@ describe('UsersService admin status updates', () => {
     } as any;
 
     const outboxService = {
+      publishGovernanceEvent: jest.fn().mockResolvedValue(undefined),
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductSearchEvent: jest.fn().mockResolvedValue(undefined),
       publishProductCommerceSyncEvent: jest.fn().mockResolvedValue(undefined)
@@ -71,6 +72,7 @@ describe('UsersService admin status updates', () => {
     } as any;
 
     const outboxService = {
+      publishGovernanceEvent: jest.fn().mockResolvedValue(undefined),
       publishSellerSearchEvent: jest.fn().mockResolvedValue(undefined)
     } as any;
 
@@ -136,16 +138,16 @@ describe('UsersService admin status updates', () => {
       reason: '封禁测试'
     }, adminUser);
 
-    expect(tx.auditLog.create).toHaveBeenCalledWith({
-      data: {
-        actorId: adminUser.id,
-        actorName: `管理员#${adminUser.id}`,
-        action: 'BAN_USER',
-        targetType: 'USER',
-        targetId: 18,
-        detail: '封禁测试'
-      }
-    });
+    expect(outboxService.publishGovernanceEvent).toHaveBeenCalledWith({
+      actorId: adminUser.id,
+      actorName: `管理员#${adminUser.id}`,
+      action: 'BAN_USER',
+      targetType: 'USER',
+      targetId: 18,
+      detail: '封禁测试',
+      aggregateType: 'USER',
+      aggregateId: 18
+    }, tx);
     expect(tx.product.updateMany).toHaveBeenCalledWith({
       where: {
         id: { in: [201] }

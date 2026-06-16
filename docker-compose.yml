@@ -225,5 +225,7 @@ services:
     restart: unless-stopped
     ports:
       - "5178:80"
+    volumes:
+      - ./frontend/public/images:/usr/share/nginx/html/images:ro
     depends_on:
       - backend

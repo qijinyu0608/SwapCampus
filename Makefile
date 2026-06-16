@@ -1,4 +1,4 @@
-.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-search-indexer restart-commerce-sync restart-auth status health down logs backend-test frontend-build prisma-generate backfill-search-outbox screenshots
+.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-search-indexer restart-commerce-sync restart-auth status health down logs backend-test frontend-build prisma-generate backfill-search-outbox screenshots http-integration e2e docs-docx
 
 install:
 	cd backend && npm install
@@ -60,3 +60,13 @@ backfill-search-outbox:
 
 screenshots:
 	node infra/generate-screenshots.mjs
+
+http-integration:
+	node scripts/test-http-integration.mjs
+
+e2e:
+	node scripts/e2e-playwright.mjs
+
+docs-docx:
+	python3 -m pip install --target .docs-py -r requirements-docs.txt
+	PYTHONPATH=.docs-py python3 scripts/generate_course_docx.py

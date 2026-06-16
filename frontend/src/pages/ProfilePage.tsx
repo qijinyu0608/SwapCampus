@@ -98,6 +98,22 @@ type RouteState = {
   orderScope?: unknown;
 };
 
+export function resolveProfileOrdersSection(orderScope: unknown) {
+  if (orderScope === 'selling') {
+    return 'orders-selling' as const;
+  }
+
+  if (orderScope === 'provider') {
+    return 'campus-services-provider' as const;
+  }
+
+  if (orderScope === 'booking') {
+    return 'campus-services-booking' as const;
+  }
+
+  return 'orders-buying' as const;
+}
+
 const PRESET_AVATAR_URLS = new Set<string>(AVATAR_OPTIONS.map((item) => item.src));
 const AVATAR_FRAME_KEYS = new Set<AvatarFrameKey | 'none'>(['none', ...AVATAR_FRAMES.map((item) => item.key)]);
 
@@ -289,7 +305,7 @@ export function ProfilePage() {
       return 'profile';
     }
     if (routeState?.section === 'orders') {
-      return routeState.orderScope === 'selling' ? 'orders-selling' : 'orders-buying';
+      return resolveProfileOrdersSection(routeState.orderScope);
     }
     return 'items';
   });
@@ -960,7 +976,7 @@ export function ProfilePage() {
     }
 
     if (routeState?.section === 'orders') {
-      setActiveSection(routeState.orderScope === 'selling' ? 'orders-selling' : 'orders-buying');
+      setActiveSection(resolveProfileOrdersSection(routeState.orderScope));
       return;
     }
   }, [routeState]);

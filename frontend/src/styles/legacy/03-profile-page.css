@@ -1631,6 +1631,7 @@
 .credit-center-task-copy,
 .credit-center-reward-copy {
   display: grid;
+  flex: 1 1 0;
   gap: 6px;
   min-width: 0;
 }

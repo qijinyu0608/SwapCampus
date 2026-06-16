@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { hasAvatarFrameRewardUnlocked, hasTrustedBadgeRewardUnlocked } from '../credit-center/credit-center.utils';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { requireAuthenticatedUser } from '../auth/auth.utils';
+import { OutboxService } from '../outbox/outbox.service';
 import { SearchService } from '../search/search.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -55,6 +56,8 @@ export class MessagesService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(OutboxService)
+    private readonly outboxService: OutboxService,
     @Inject(MessagesGateway)
     private readonly messagesGateway: MessagesGateway
   ) {}
@@ -631,27 +634,38 @@ export class MessagesService {
       };
     }
 
-    const conversation = await this.prisma.conversation.create({
-      data: {
-        productId: dto.productId,
-        initiatorId: buyerUser.id
-      }
-    });
-
-    if (initialMessage) {
-      await this.prisma.message.create({
+    const conversation = await this.prisma.$transaction(async (tx) => {
+      const createdConversation = await tx.conversation.create({
         data: {
-          conversationId: conversation.id,
-          senderId: buyerUser.id,
-          content: initialMessage,
-          type: MessageType.TEXT
+          productId: dto.productId,
+          initiatorId: buyerUser.id
         }
       });
-    }
 
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() }
+      if (initialMessage) {
+        const message = await tx.message.create({
+          data: {
+            conversationId: createdConversation.id,
+            senderId: buyerUser.id,
+            content: initialMessage,
+            type: MessageType.TEXT
+          }
+        });
+
+        await this.outboxService.publishMessageEvent({
+          conversationId: createdConversation.id,
+          messageId: message.id,
+          senderId: buyerUser.id,
+          type: MessageType.TEXT
+        }, tx as any);
+      }
+
+      await tx.conversation.update({
+        where: { id: createdConversation.id },
+        data: { updatedAt: new Date() }
+      });
+
+      return createdConversation;
     });
 
     return {
@@ -754,18 +768,29 @@ export class MessagesService {
       this.ensureMessageContentAllowed(normalized.content);
     }
 
-    const message = await this.prisma.message.create({
-      data: {
-        conversationId,
-        senderId: authUser.id,
-        content: normalized.content,
-        type: normalized.type
-      }
-    });
+    const message = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.message.create({
+        data: {
+          conversationId,
+          senderId: authUser.id,
+          content: normalized.content,
+          type: normalized.type
+        }
+      });
 
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { updatedAt: new Date() }
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() }
+      });
+
+      await this.outboxService.publishMessageEvent({
+        conversationId,
+        messageId: created.id,
+        senderId: authUser.id,
+        type: normalized.type
+      }, tx as any);
+
+      return created;
     });
 
     const [avatarFrameUnlocked, trustedBadgeUnlocked] = await Promise.all([

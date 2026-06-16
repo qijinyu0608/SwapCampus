@@ -12,19 +12,21 @@ SwapCampus 是一个面向课程设计交付的校园闲置交易系统，围绕
 
 认证链路已经接入 `SuperTokens`，支持邮箱或学号登录、普通用户注册和封禁账号拦截。商品部分覆盖首页流、搜索、分类、详情、发布和后台审核；详情页可以展示图片、卖家信息、交易参考和同类推荐，也保留了举报入口与行为信号。订单链路支持创建、状态流转、取消、完成、评价和申诉，订单建立后会自动关联会话，保证交易留痕。
 
-消息模块已支持会话列表、消息明细和文本发送，并接入 `Socket.IO` 做演示级实时追加。校园服务子模块围绕跑腿、代办、拼单和临时帮忙展开，已具备发布、接单、完成和消息联动能力。后台侧则覆盖商品审核、举报处理、用户封禁与解封等治理动作，同时保留操作留痕。商品与校园服务在发布前会先经过本地规则校验，再按配置决定是否进入 `DeepSeek` 二次审核。
+消息模块已支持会话列表、消息明细和文本发送，并接入 `Socket.IO` 做演示级实时追加；消息发送同时会写入 `message.lifecycle` 事件，为后续未读数、在线状态和推送通知预留统一入口。校园服务子模块围绕跑腿、代办、拼单和临时帮忙展开，已具备发布、接单、完成和消息联动能力。后台侧则覆盖商品审核、举报处理、用户封禁与解封等治理动作，同时把审计留痕收口到 `governance.audit` 事件。商品浏览、联系、收藏等用户行为也已开始通过 `recommendation.behavior` 事件沉淀到推荐画像。商品与校园服务在发布前会先经过本地规则校验，再按配置决定是否进入 `DeepSeek` 二次审核。
 
 仓库同时提供 `docker-compose.yml`、前后端 Dockerfile、Makefile 和基础 CI，便于本地复现和交付检查。
 
+课程设计文档的 `docx` 产物也已经接入 GitHub Actions：工作流会执行后端测试、前端构建，并自动生成 `docs/generated-docx/` 下的 `D-01` 到 `D-09` 文档后上传为 artifact。
+
 ## 当前边界
 
-消息能力目前仍以演示级实时推送为主，尚未补齐已读回执、在线状态和断线补偿。登录用户的收藏已经落库，游客侧仍保留本地临时想要。认证链路虽然已统一到 `SuperTokens session`，但 refresh 和 rotation 等会话治理还可以继续完善。MinIO、媒体上传和商品多图链路已经落地，生产化媒体治理仍有提升空间。自动化验证目前以后端 Jest 和前端构建为主，前端交互级测试还不够完整。
+消息能力目前仍以演示级实时推送为主，虽然已补上 `ConversationReadCursor` 和消息事件外发入口，但完整未读数、在线状态和断线补偿还未全部接入。登录用户的收藏已经落库，游客侧仍保留本地临时想要。认证链路虽然已统一到 `SuperTokens session`，但 refresh 和 rotation 等会话治理还可以继续完善。MinIO、媒体上传和商品多图链路已经落地，生产化媒体治理仍有提升空间。自动化验证目前以后端 Jest 和前端构建为主，前端交互级测试还不够完整。
 
 ## 技术栈与架构现状
 
 前端采用 React 18、TypeScript、Vite 和 Ant Design。后端采用 NestJS、TypeScript 和 Prisma。数据库使用 MySQL 8，对象存储使用 MinIO，实时通信通过 Socket.IO 完成，部署则通过 Docker Compose 和 Nginx 静态托管前端。
 
-架构层面保留了前后端分离、单体后端按领域模块拆分、Prisma 统一数据访问、文档与代码同仓维护以及事件驱动能力预留等约束。
+架构层面保留了前后端分离、单体后端按领域模块拆分、Prisma 统一数据访问、文档与代码同仓维护以及事件驱动能力预留等约束。除搜索和电商同步外，消息、推荐、治理三块也已经先在单体内收口为 Outbox 事件和本地 consumer，为后续切 MQ 或独立服务准备契约和处理边界。
 
 ## 文档与规范入口
 
@@ -38,6 +40,8 @@ SwapCampus 是一个面向课程设计交付的校园闲置交易系统，围绕
   - 当前有效课程文档与专题分析索引
 - `docs/archive/`
   - 历史过程材料、课程表单、已归档专题，不作为当前基线直接维护
+- `docs/generated-docx/`
+  - 课程设计 `docx` 生成结果与产物说明
 
 ## 当前项目结构
 ```text
@@ -155,6 +159,7 @@ make start
 - `make start` 和 `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
 - 搜索索引消费默认由独立 `search-indexer` 负责，`backend` 默认不直接消费 `search.index` 主题事件
 - 商品与订单的电商同步默认由独立 `commerce-sync` 负责，`backend` 默认不直接消费 `commerce.sync` 主题事件
+- 消息、推荐和治理目前仍在 `backend` 进程内消费各自的 Outbox 主题，已经完成事件化，但暂未独立拆出 MQ worker 或微服务
 
 ### 访问地址
 - Frontend：`http://127.0.0.1:5178`
@@ -208,6 +213,22 @@ make down
 make logs
 make backend-test
 make frontend-build
+make docs-docx
+```
+
+### GitHub Actions
+
+仓库当前使用 `.github/workflows/ci.yml` 统一执行三类校验与产物生成：
+
+- `backend-test`：安装 `backend` 依赖并执行 `npm test`
+- `frontend-build`：安装 `frontend` 依赖并执行 `npm run build`
+- `course-docx`：安装 `requirements-docs.txt` 中的 Python 依赖，执行 `python3 scripts/generate_course_docx.py`，并上传 `course-docx` artifact
+
+如果需要在本地重跑课程文档生成流程，可执行：
+
+```bash
+python3 -m pip install --target .docs-py -r requirements-docs.txt
+make docs-docx
 ```
 
 ### API 与环境变量单独配置
