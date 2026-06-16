@@ -12,7 +12,7 @@ SwapCampus 是一个面向课程设计交付的校园闲置交易系统，围绕
 
 认证链路已经接入 `SuperTokens`，支持邮箱或学号登录、普通用户注册和封禁账号拦截。商品部分覆盖首页流、搜索、分类、详情、发布和后台审核；详情页可以展示图片、卖家信息、交易参考和同类推荐，也保留了举报入口与行为信号。订单链路支持创建、状态流转、取消、完成、评价和申诉，订单建立后会自动关联会话，保证交易留痕。
 
-消息模块已支持会话列表、消息明细和文本发送，并接入 `Socket.IO` 做演示级实时追加；消息发送同时会写入 `message.lifecycle` 事件，为后续未读数、在线状态和推送通知预留统一入口。校园服务子模块围绕跑腿、代办、拼单和临时帮忙展开，已具备发布、接单、完成和消息联动能力。后台侧则覆盖商品审核、举报处理、用户封禁与解封等治理动作，同时把审计留痕收口到 `governance.audit` 事件。商品浏览、联系、收藏等用户行为也已开始通过 `recommendation.behavior` 事件沉淀到推荐画像。商品与校园服务在发布前会先经过本地规则校验，再按配置决定是否进入 `DeepSeek` 二次审核。
+消息模块已支持会话列表、消息明细和文本发送，并接入 `Socket.IO` 做演示级实时追加；消息发送同时会写入 `message.lifecycle` 事件，为后续未读数、在线状态和推送通知预留统一入口。校园服务子模块围绕跑腿、代办、拼单和临时帮忙展开，已具备发布、接单、完成和消息联动能力。后台侧则覆盖商品审核、举报处理、用户封禁与解封等治理动作，同时把审计留痕收口到 `governance.audit` 事件，并由独立 `governance-worker` 消费。商品浏览、联系、收藏等用户行为也已开始通过 `recommendation.behavior` 事件沉淀到推荐画像。商品与校园服务在发布前会先经过本地规则校验，再按配置决定是否进入 `DeepSeek` 二次审核。
 
 仓库同时提供 `docker-compose.yml`、前后端 Dockerfile、Makefile 和基础 CI，便于本地复现和交付检查。
 
@@ -26,7 +26,7 @@ SwapCampus 是一个面向课程设计交付的校园闲置交易系统，围绕
 
 前端采用 React 18、TypeScript、Vite 和 Ant Design。后端采用 NestJS、TypeScript 和 Prisma。数据库使用 MySQL 8，对象存储使用 MinIO，实时通信通过 Socket.IO 完成，部署则通过 Docker Compose 和 Nginx 静态托管前端。
 
-架构层面保留了前后端分离、单体后端按领域模块拆分、Prisma 统一数据访问、文档与代码同仓维护以及事件驱动能力预留等约束。除搜索和电商同步外，消息、推荐、治理三块也已经先在单体内收口为 Outbox 事件和本地 consumer，为后续切 MQ 或独立服务准备契约和处理边界。
+架构层面保留了前后端分离、单体后端按领域模块拆分、Prisma 统一数据访问、文档与代码同仓维护以及事件驱动能力预留等约束。除搜索和电商同步外，消息和推荐先在单体内收口为 Outbox 事件和本地 consumer，治理已经进一步拆成独立 worker，为后续切 MQ 或继续拆服务准备契约和处理边界。
 
 ## 文档与规范入口
 
@@ -151,7 +151,7 @@ make start
 - `db-init` 只负责建表与基础初始化，不再自动写入商品、服务、用户演示数据
 - 如需显式清库重置，执行 `make init-reset`
 - 日常开发重启 `backend` 和 `frontend` 不会重复触发数据库 reset 和 seed
-- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`vendure`、`backend`、`search-indexer`、`commerce-sync`、`frontend`
+- 默认运行态服务是 `mysql`、`minio`、`meilisearch`、`supertokens-db`、`supertokens`、`vendure`、`backend`、`search-indexer`、`commerce-sync`、`governance-worker`、`frontend`
 - 前端生产镜像使用 `nginx` 托管静态资源
 - 默认认证 Core 使用容器内自托管 `http://supertokens:3567`
 - SuperTokens 通过独立 PostgreSQL 容器持久化认证数据，容器重启后账号不会丢失
@@ -159,7 +159,7 @@ make start
 - `make start` 和 `make restart-auth` 会自动清理历史遗留容器 `swapcampus-supertokens-local`，避免占用 `3567` 端口
 - 搜索索引消费默认由独立 `search-indexer` 负责，`backend` 默认不直接消费 `search.index` 主题事件
 - 商品与订单的电商同步默认由独立 `commerce-sync` 负责，`backend` 默认不直接消费 `commerce.sync` 主题事件
-- 消息、推荐和治理目前仍在 `backend` 进程内消费各自的 Outbox 主题，已经完成事件化，但暂未独立拆出 MQ worker 或微服务
+- 消息和推荐仍在 `backend` 进程内消费各自的 Outbox 主题，已经完成事件化；治理审计已拆出独立的 `governance-worker`
 
 ### 访问地址
 - Frontend：`http://127.0.0.1:5178`
@@ -192,6 +192,7 @@ cd backend && npm run db:reset-and-seed-demo
 docker compose ps
 docker compose logs backend --tail=50
 docker compose logs search-indexer --tail=50
+docker compose logs governance-worker --tail=50
 curl http://127.0.0.1:3001/api/health
 ```
 
@@ -206,6 +207,7 @@ make restart-auth
 make restart-backend
 make restart-search-indexer
 make restart-commerce-sync
+make restart-governance-worker
 make backfill-search-outbox
 make status
 make health
@@ -238,9 +240,9 @@ make docs-docx
 最常用的独立配置项：
 
 - 后端运行时：`API_DOMAIN`、`WEBSITE_DOMAIN`
-- 后端内置 worker 开关：`BACKEND_SEARCH_INDEX_OUTBOX_ENABLED`、`BACKEND_SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`BACKEND_COMMERCE_SYNC_ENABLED`
-- 独立 worker 开关：`SEARCH_INDEX_OUTBOX_ENABLED`、`SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`COMMERCE_SYNC_ENABLED`
-- 轮询参数：`SEARCH_INDEX_OUTBOX_POLL_MS`、`SEARCH_INDEX_OUTBOX_BATCH_SIZE`、`SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS`、`SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS`
+- 后端内置 worker 开关：`BACKEND_SEARCH_INDEX_OUTBOX_ENABLED`、`BACKEND_SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`BACKEND_COMMERCE_SYNC_ENABLED`、`BACKEND_MESSAGE_OUTBOX_ENABLED`、`BACKEND_RECOMMENDATION_OUTBOX_ENABLED`、`BACKEND_GOVERNANCE_OUTBOX_ENABLED`
+- 独立 worker 开关：`SEARCH_INDEX_OUTBOX_ENABLED`、`SEARCH_INDEXER_INITIALIZE_ON_STARTUP`、`COMMERCE_SYNC_ENABLED`、`GOVERNANCE_OUTBOX_ENABLED`
+- 轮询参数：`SEARCH_INDEX_OUTBOX_POLL_MS`、`SEARCH_INDEX_OUTBOX_BATCH_SIZE`、`SEARCH_INDEX_OUTBOX_PROCESSING_TIMEOUT_MS`、`SEARCH_INDEX_OUTBOX_RETRY_DELAYS_MS`、`MESSAGE_OUTBOX_POLL_MS`、`MESSAGE_OUTBOX_BATCH_SIZE`、`MESSAGE_OUTBOX_PROCESSING_TIMEOUT_MS`、`MESSAGE_OUTBOX_RETRY_DELAYS_MS`、`RECOMMENDATION_OUTBOX_POLL_MS`、`RECOMMENDATION_OUTBOX_BATCH_SIZE`、`RECOMMENDATION_OUTBOX_PROCESSING_TIMEOUT_MS`、`RECOMMENDATION_OUTBOX_RETRY_DELAYS_MS`、`GOVERNANCE_OUTBOX_POLL_MS`、`GOVERNANCE_OUTBOX_BATCH_SIZE`、`GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS`、`GOVERNANCE_OUTBOX_RETRY_DELAYS_MS`
 - 前端构建时：`VITE_API_BASE_URL`、`VITE_API_DOMAIN`、`VITE_SOCKET_URL`、`VITE_WEBSITE_DOMAIN`
 - 外部密钥：`SUPERTOKENS_API_KEY`、`VENDURE_ADMIN_TOKEN`、`DEEPSEEK_API_KEY`
 

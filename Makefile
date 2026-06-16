@@ -1,4 +1,4 @@
-.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-search-indexer restart-commerce-sync restart-auth status health down logs backend-test frontend-build prisma-generate backfill-search-outbox screenshots http-integration e2e docs-docx
+.PHONY: install init init-reset up start auth-clean-legacy restart-backend restart-search-indexer restart-commerce-sync restart-governance-worker restart-auth status health down logs backend-test frontend-build prisma-generate backfill-search-outbox screenshots http-integration e2e docs-docx
 
 install:
 	cd backend && npm install
@@ -13,7 +13,7 @@ init-reset:
 up: init start
 
 start: auth-clean-legacy
-	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend search-indexer commerce-sync frontend
+	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend search-indexer commerce-sync governance-worker frontend
 
 auth-clean-legacy:
 	-docker rm -f swapcampus-supertokens-local
@@ -26,6 +26,9 @@ restart-search-indexer:
 
 restart-commerce-sync:
 	docker compose restart commerce-sync
+
+restart-governance-worker:
+	docker compose restart governance-worker
 
 restart-auth: auth-clean-legacy
 	docker compose up -d supertokens

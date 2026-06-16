@@ -10,6 +10,8 @@
     "start:search-indexer:dev": "SEARCH_INDEX_OUTBOX_ENABLED=true SEARCH_INDEXER_INITIALIZE_ON_STARTUP=true tsx watch src/search-indexer.main.ts",
     "start:commerce-sync": "COMMERCE_SYNC_ENABLED=true node dist/src/commerce-sync.main.js",
     "start:commerce-sync:dev": "COMMERCE_SYNC_ENABLED=true tsx watch src/commerce-sync.main.ts",
+    "start:governance-worker": "GOVERNANCE_OUTBOX_ENABLED=true node dist/src/governance-worker.main.js",
+    "start:governance-worker:dev": "GOVERNANCE_OUTBOX_ENABLED=true tsx watch src/governance-worker.main.ts",
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage",
     "prisma:generate": "PRISMA_CLIENT_ENGINE_TYPE=binary prisma generate",
