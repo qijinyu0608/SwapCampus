@@ -1,10 +1,10 @@
 import 'reflect-metadata';
+import { GovernanceOutboxPublisher } from '../governance/governance-outbox.publisher';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesGateway } from '../messages/messages.gateway';
 import { SearchService } from '../search/search.service';
 import { VendureService } from '../vendure/vendure.service';
 import { CommerceSyncOutboxConsumer } from './commerce-sync-outbox.consumer';
-import { GovernanceOutboxConsumer } from './governance-outbox.consumer';
 import { MessageOutboxConsumer } from './message-outbox.consumer';
 import { OutboxModule } from './outbox.module';
 import { OutboxService } from './outbox.service';
@@ -24,7 +24,7 @@ describe('OutboxModule', () => {
       SearchIndexOutboxConsumer,
       MessageOutboxConsumer,
       RecommendationOutboxConsumer,
-      GovernanceOutboxConsumer
+      GovernanceOutboxPublisher
     ]));
     expect(providers).not.toContain(VendureService);
     expect(providers).not.toContain(CommerceSyncOutboxConsumer);
@@ -36,7 +36,7 @@ describe('OutboxModule', () => {
       SearchIndexOutboxConsumer,
       MessageOutboxConsumer,
       RecommendationOutboxConsumer,
-      GovernanceOutboxConsumer
+      GovernanceOutboxPublisher
     ]));
     expect(exports).not.toContain(CommerceSyncOutboxConsumer);
   });

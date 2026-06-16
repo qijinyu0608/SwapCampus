@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { GovernanceOutboxConsumer } from './modules/outbox/governance-outbox.consumer';
+import { GovernanceMqConsumer } from './modules/governance/governance-mq.consumer';
 import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   providers: [
     PrismaService,
-    GovernanceOutboxConsumer
+    GovernanceMqConsumer
   ],
-  exports: [PrismaService, GovernanceOutboxConsumer]
+  exports: [PrismaService, GovernanceMqConsumer]
 })
 export class GovernanceWorkerModule {}

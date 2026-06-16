@@ -13,7 +13,7 @@ init-reset:
 up: init start
 
 start: auth-clean-legacy
-	docker compose up -d --build mysql minio meilisearch supertokens-db supertokens vendure backend search-indexer commerce-sync governance-worker frontend
+	docker compose up -d --build mysql minio meilisearch rabbitmq supertokens-db supertokens vendure backend search-indexer commerce-sync governance-worker frontend
 
 auth-clean-legacy:
 	-docker rm -f swapcampus-supertokens-local

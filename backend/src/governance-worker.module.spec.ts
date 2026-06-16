@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { GovernanceOutboxConsumer } from './modules/outbox/governance-outbox.consumer';
+import { GovernanceMqConsumer } from './modules/governance/governance-mq.consumer';
 import { PrismaService } from './prisma/prisma.service';
 import { GovernanceWorkerModule } from './governance-worker.module';
 
@@ -9,7 +9,7 @@ describe('GovernanceWorkerModule', () => {
 
     expect(providers).toEqual(expect.arrayContaining([
       PrismaService,
-      GovernanceOutboxConsumer
+      GovernanceMqConsumer
     ]));
   });
 });

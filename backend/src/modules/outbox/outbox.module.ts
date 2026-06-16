@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
+import { GovernanceOutboxPublisher } from '../governance/governance-outbox.publisher';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesGateway } from '../messages/messages.gateway';
 import { SearchService } from '../search/search.service';
-import { GovernanceOutboxConsumer } from './governance-outbox.consumer';
 import { MessageOutboxConsumer } from './message-outbox.consumer';
 import { OutboxService } from './outbox.service';
 import { RecommendationOutboxConsumer } from './recommendation-outbox.consumer';
@@ -17,7 +17,7 @@ import { SearchIndexOutboxConsumer } from './search-index-outbox.consumer';
     SearchIndexOutboxConsumer,
     MessageOutboxConsumer,
     RecommendationOutboxConsumer,
-    GovernanceOutboxConsumer
+    GovernanceOutboxPublisher
   ],
   exports: [
     PrismaService,
@@ -27,7 +27,7 @@ import { SearchIndexOutboxConsumer } from './search-index-outbox.consumer';
     SearchIndexOutboxConsumer,
     MessageOutboxConsumer,
     RecommendationOutboxConsumer,
-    GovernanceOutboxConsumer
+    GovernanceOutboxPublisher
   ]
 })
 export class OutboxModule {}

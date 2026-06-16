@@ -47,6 +47,18 @@ services:
       timeout: 5s
       retries: 12
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   supertokens-db:
     image: docker.m.daocloud.io/library/postgres:16-alpine
     restart: unless-stopped
@@ -152,6 +164,12 @@ services:
       GOVERNANCE_OUTBOX_BATCH_SIZE: ${GOVERNANCE_OUTBOX_BATCH_SIZE:-20}
       GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS: ${GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS:-60000}
       GOVERNANCE_OUTBOX_RETRY_DELAYS_MS: ${GOVERNANCE_OUTBOX_RETRY_DELAYS_MS:-3000,10000,30000,120000}
+      GOVERNANCE_MQ_ENABLED: ${GOVERNANCE_MQ_ENABLED:-true}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+      GOVERNANCE_MQ_EXCHANGE: ${GOVERNANCE_MQ_EXCHANGE:-swapcampus.governance}
+      GOVERNANCE_MQ_QUEUE: ${GOVERNANCE_MQ_QUEUE:-swapcampus.governance.audit}
+      GOVERNANCE_MQ_ROUTING_KEY: ${GOVERNANCE_MQ_ROUTING_KEY:-governance.audit}
+      GOVERNANCE_MQ_PREFETCH: ${GOVERNANCE_MQ_PREFETCH:-20}
     ports:
       - "3001:3000"
     depends_on:
@@ -161,6 +179,8 @@ services:
         condition: service_started
       meilisearch:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
       supertokens:
         condition: service_healthy
       vendure:
@@ -225,8 +245,16 @@ services:
       GOVERNANCE_OUTBOX_BATCH_SIZE: ${GOVERNANCE_OUTBOX_BATCH_SIZE:-20}
       GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS: ${GOVERNANCE_OUTBOX_PROCESSING_TIMEOUT_MS:-60000}
       GOVERNANCE_OUTBOX_RETRY_DELAYS_MS: ${GOVERNANCE_OUTBOX_RETRY_DELAYS_MS:-3000,10000,30000,120000}
+      GOVERNANCE_MQ_ENABLED: ${GOVERNANCE_MQ_ENABLED:-true}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+      GOVERNANCE_MQ_EXCHANGE: ${GOVERNANCE_MQ_EXCHANGE:-swapcampus.governance}
+      GOVERNANCE_MQ_QUEUE: ${GOVERNANCE_MQ_QUEUE:-swapcampus.governance.audit}
+      GOVERNANCE_MQ_ROUTING_KEY: ${GOVERNANCE_MQ_ROUTING_KEY:-governance.audit}
+      GOVERNANCE_MQ_PREFETCH: ${GOVERNANCE_MQ_PREFETCH:-20}
     depends_on:
       mysql:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   db-init:
