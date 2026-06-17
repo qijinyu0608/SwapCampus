@@ -1,6 +1,6 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { AccountStatus, Prisma, UserRole, VerificationStatus } from '@prisma/client';
-import { convertToRecipeUserId, listUsersByAccountInfo } from 'supertokens-node';
+import { convertToRecipeUserId, getUser, listUsersByAccountInfo } from 'supertokens-node';
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import UserRoles from 'supertokens-node/recipe/userroles';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -102,6 +102,23 @@ function normalizeStudentCardPhotoUrl(studentCardPhotoUrl?: string | null) {
   return next || null;
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function superTokensUserMatchesEmail(user: Awaited<ReturnType<typeof getUser>> | undefined, email: string) {
+  if (!user) {
+    return false;
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (user.emails.some((value) => normalizeEmail(value) === normalizedEmail)) {
+    return true;
+  }
+
+  return user.loginMethods.some((loginMethod) => normalizeEmail(loginMethod.email ?? '') === normalizedEmail);
+}
+
 @Injectable()
 export class AuthSyncService {
   private roleMutationsUnavailable = false;
@@ -151,6 +168,13 @@ export class AuthSyncService {
     let supertokensUserId = existingSuperTokensUserId?.trim() || null;
 
     if (supertokensUserId) {
+      const linkedUser = await getUser(supertokensUserId);
+      if (!superTokensUserMatchesEmail(linkedUser, email)) {
+        supertokensUserId = null;
+      }
+    }
+
+    if (supertokensUserId) {
       const result = await EmailPassword.updateEmailOrPassword({
         recipeUserId: convertToRecipeUserId(supertokensUserId),
         email,
@@ -158,7 +182,7 @@ export class AuthSyncService {
         userContext: {}
       });
 
-      if (result.status !== 'UNKNOWN_USER_ID_ERROR') {
+      if (result.status === 'OK') {
         return supertokensUserId;
       }
 
@@ -265,7 +289,7 @@ export class AuthSyncService {
   }
 
   async syncUserProfile(input: AuthProfileInput) {
-    const email = input.email.trim().toLowerCase();
+    const email = normalizeEmail(input.email);
     const displayName = normalizeDisplayName(input.displayName);
     const role = input.role ?? UserRole.USER;
     const verificationStatus = input.verificationStatus ?? VerificationStatus.PENDING;

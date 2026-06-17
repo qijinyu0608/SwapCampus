@@ -1544,9 +1544,9 @@ export async function updateUserProfile(
     displayName: string;
     email: string;
     realName: string;
-    college: string;
+    college?: string;
     graduationYear: number;
-    phone: string;
+    phone?: string;
     avatarUrl?: string | null;
     avatarFrame?: string | null;
   }

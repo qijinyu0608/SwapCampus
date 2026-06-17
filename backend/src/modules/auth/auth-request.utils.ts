@@ -12,9 +12,14 @@ export async function resolveOptionalAuthUser(
   response?: SessionResponse
 ): Promise<AuthenticatedUser | undefined> {
   const headers = (request as { headers?: Record<string, string | string[] | undefined> }).headers ?? {};
+  const fallbackUser = await resolveDevFallbackUser(prisma, headers[DEV_AUTH_HEADER]);
 
   if (request.user) {
     return request.user;
+  }
+
+  if (fallbackUser) {
+    return fallbackUser;
   }
 
   let session = request.session;
@@ -43,6 +48,5 @@ export async function resolveOptionalAuthUser(
     };
   }
 
-  const fallbackUser = await resolveDevFallbackUser(prisma, headers[DEV_AUTH_HEADER]);
   return fallbackUser ?? undefined;
 }

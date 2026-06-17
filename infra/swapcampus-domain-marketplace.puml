@@ -1,5 +1,5 @@
 @startuml
-title SwapCampus Core Subgraph: Marketplace
+title SwapCampus 核心实体子图：商品交易
 
 skinparam shadowing false
 skinparam backgroundColor white
@@ -17,38 +17,43 @@ skinparam nodesep 80
 hide methods
 top to bottom direction
 
-class "User" as User {
-  +id
-  +name
-  +credit
+package "商品发布" {
+  class "用户" as User {
+    +用户ID
+    +昵称
+    +信用分
+  }
+
+  class "商品" as Product {
+    +商品ID
+    +标题
+    +价格
+    +状态
+  }
+
+  class "商品图片" as ProductImage {
+    +图片ID
+    +图片地址
+  }
 }
 
-class "Product" as Product {
-  +id
-  +title
-  +price
-  +status
-}
+package "交易履约" {
+  class "订单" as Order {
+    +订单ID
+    +状态
+    +交易地点
+  }
 
-class "Product Image" as ProductImage {
-  +image
-}
+  class "评价" as Review {
+    +评价ID
+    +评分
+  }
 
-class "Order" as Order {
-  +id
-  +status
-  +location
-}
-
-class "Review" as Review {
-  +id
-  +rating
-}
-
-class "Appeal" as Appeal {
-  +id
-  +reason
-  +status
+  class "申诉" as Appeal {
+    +申诉ID
+    +原因
+    +状态
+  }
 }
 
 User -[hidden]down- Product
@@ -57,26 +62,23 @@ Order -[hidden]down- Review
 Review -[hidden]down- Appeal
 Product -[hidden]right- ProductImage
 
-User "1" -down- "0..*" Product : publishes
-Product "1" -down- "0..*" Order : creates
-User "1" -[norank]right- "0..*" Order : buyer / seller
-Product "1" -right- "1..*" ProductImage : has
-Order "1" -down- "0..*" Review : produces
-Order "1" -down- "0..*" Appeal : produces
+User "1" -down- "0..*" Product : 发布
+Product "1" -down- "0..*" Order : 生成订单
+User "1" -[norank]right- "0..*" Order : 买家 / 卖家
+Product "1" -right- "1..*" ProductImage : 包含
+Order "1" -down- "0..*" Review : 产生评价
+Order "1" -down- "0..*" Appeal : 发起申诉
 
 note bottom of User
-Favorites and other
-supporting entities
-are omitted here.
+收藏、行为记录等
+辅助实体在本图省略。
 end note
 
 note right of Order
-An order connects
-the product and users.
-The same user can act
-as buyer or seller.
-Reviews and appeals
-are attached to orders.
+订单连接商品与用户。
+同一用户既可能是买家，
+也可能是卖家。
+评价与申诉都围绕订单展开。
 end note
 
 @enduml

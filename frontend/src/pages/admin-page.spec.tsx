@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminPage } from './AdminPage';
 
@@ -45,7 +45,7 @@ vi.mock('antd', async () => {
             </button>
           ))}
         </div>
-        <div>{current?.children ?? null}</div>
+        <div key={currentKey}>{current?.children ?? null}</div>
       </div>
     );
   }
@@ -84,7 +84,7 @@ vi.mock('antd', async () => {
 
 vi.mock('@ant-design/pro-components', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
-  const { useEffect, useState } = React;
+  const { useEffect, useRef, useState } = React;
 
   function MockPageContainer({ title, extraContent, children }: any) {
     return (
@@ -113,7 +113,7 @@ vi.mock('@ant-design/pro-components', async () => {
             </button>
           ))}
         </div>
-        <div>{current?.children ?? null}</div>
+        <div key={currentKey}>{current?.children ?? null}</div>
       </div>
     );
   }
@@ -142,22 +142,25 @@ vi.mock('@ant-design/pro-components', async () => {
 
   function MockProTable({ request, columns = [], rowKey = 'id', actionRef, pagination }: any) {
     const [rows, setRows] = useState<any[]>([]);
+    const requestRef = useRef(request);
     const current = typeof pagination?.current === 'number' ? pagination.current : 1;
     const pageSize = typeof pagination?.pageSize === 'number' ? pagination.pageSize : 8;
 
+    requestRef.current = request;
+
     async function load(params = { current, pageSize }) {
-      if (!request) {
+      if (!requestRef.current) {
         return;
       }
 
-      const response = await request(params, {}, {});
+      const response = await requestRef.current(params, {}, {});
       setRows(Array.isArray(response?.data) ? response.data : []);
       return response;
     }
 
     useEffect(() => {
       void load();
-    }, [request, current, pageSize]);
+    }, [current, pageSize]);
 
     useEffect(() => {
       if (actionRef) {
@@ -165,7 +168,7 @@ vi.mock('@ant-design/pro-components', async () => {
           reload: () => load()
         };
       }
-    }, [actionRef, request, current, pageSize]);
+    }, [actionRef, current, pageSize]);
 
     const visibleColumns = columns.filter((column: any) => !column.hideInTable);
 
@@ -440,6 +443,10 @@ const moderationUsers = [
 ];
 
 describe('AdminPage', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -535,7 +542,7 @@ describe('AdminPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('运营总览')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '运营中心' })).toBeInTheDocument();
     await waitFor(() => {
       expect(mocks.fetchAdminOverview).toHaveBeenCalledTimes(1);
       expect(mocks.fetchReports).toHaveBeenCalledTimes(1);
@@ -546,9 +553,9 @@ describe('AdminPage', () => {
     await user.click(within(row).getByRole('button', { name: '查看资料' }));
 
     expect(await screen.findByText('注册资料')).toBeInTheDocument();
-    expect(screen.getByText('pending@swapcampus.local')).toBeInTheDocument();
+    expect(screen.getAllByText('pending@swapcampus.local').length).toBeGreaterThan(0);
 
-    await user.click(within(row).getByRole('button', { name: '通过' }));
+    await user.click(within(row).getByRole('button', { name: /通\s*过/ }));
 
     await waitFor(() => {
       expect(mocks.updateUserVerificationStatus).toHaveBeenCalledWith(1001, {
@@ -568,7 +575,7 @@ describe('AdminPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('运营总览')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '运营中心' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '举报处理' }));
     const reportRow = await screen.findByTestId('row-301');
@@ -597,6 +604,51 @@ describe('AdminPage', () => {
     });
   });
 
+  it('refreshes report rows immediately after a governance action', async () => {
+    const user = userEvent.setup();
+    const mutableReports = [
+      {
+        ...reports[0]
+      }
+    ];
+
+    mocks.fetchReports.mockImplementation(async () => mutableReports);
+    mocks.resolveReport.mockImplementation(async () => {
+      mutableReports[0] = {
+        ...mutableReports[0],
+        status: 'OFFLINE_PRODUCT',
+        resolutionNote: '已核查处理'
+      };
+      return {};
+    });
+
+    render(
+      <MemoryRouter>
+        <AdminPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('heading', { name: '运营中心' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '举报处理' }));
+    const reportRow = await screen.findByTestId('row-301');
+    await user.click(within(reportRow).getByRole('button', { name: '下架商品' }));
+
+    await waitFor(() => {
+      expect(mocks.resolveReport).toHaveBeenCalledWith(301, {
+        resolutionNote: '已核查处理',
+        penaltyLevel: 'NORMAL',
+        nextStatus: 'OFFLINE_PRODUCT'
+      });
+    });
+
+    await waitFor(() => {
+      const updatedRow = screen.getByTestId('row-301');
+      expect(within(updatedRow).getByText('商品下架')).toBeInTheDocument();
+      expect(within(updatedRow).getByText('已完成')).toBeInTheDocument();
+    });
+  });
+
   it('reviews campus services, bans risky users and supports dashboard refresh', async () => {
     const user = userEvent.setup();
 
@@ -606,7 +658,7 @@ describe('AdminPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('运营总览')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '运营中心' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '发布审核' }));
     await user.click(screen.getByRole('button', { name: '服务 (2)' }));
@@ -616,7 +668,7 @@ describe('AdminPage', () => {
     expect(await screen.findByText('服务资料')).toBeInTheDocument();
     expect(screen.getByText('社团活动展板和登记表需要顺路送到学院办事窗口。')).toBeInTheDocument();
 
-    await user.click(within(serviceRow).getByRole('button', { name: '取消' }));
+    await user.click(within(serviceRow).getByRole('button', { name: /取\s*消/ }));
 
     await waitFor(() => {
       expect(mocks.updateAdminCampusServiceStatus).toHaveBeenCalledWith(701, {
@@ -628,7 +680,7 @@ describe('AdminPage', () => {
 
     await user.click(screen.getByRole('button', { name: '用户管理' }));
     const userRow = await screen.findByTestId('row-1002');
-    await user.click(within(userRow).getByRole('button', { name: '封禁' }));
+    await user.click(within(userRow).getByRole('button', { name: /封\s*禁/ }));
 
     await waitFor(() => {
       expect(mocks.updateUserBanStatus).toHaveBeenCalledWith(1002, {
@@ -638,7 +690,7 @@ describe('AdminPage', () => {
       expect(mocks.messageSuccess).toHaveBeenCalledWith('用户已封禁');
     });
 
-    await user.click(screen.getByRole('button', { name: '刷新全部' }));
+    await user.click(screen.getByRole('button', { name: /刷新全部/ }));
 
     await waitFor(() => {
       expect(mocks.fetchAdminOverview).toHaveBeenCalledTimes(4);

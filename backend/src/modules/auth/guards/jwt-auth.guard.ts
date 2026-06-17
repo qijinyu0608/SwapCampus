@@ -17,6 +17,12 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<SessionRequest & RequestWithAuthenticatedUser>();
     const response = context.switchToHttp().getResponse();
+    const fallbackUser = await resolveDevFallbackUser(this.prisma, request.headers[DEV_AUTH_HEADER]);
+
+    if (fallbackUser) {
+      request.user = fallbackUser;
+      return true;
+    }
 
     let session;
     try {
@@ -29,13 +35,7 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     if (!session) {
-      const fallbackUser = await resolveDevFallbackUser(this.prisma, request.headers[DEV_AUTH_HEADER]);
-      if (!fallbackUser) {
-        throw new UnauthorizedException('请先登录');
-      }
-
-      request.user = fallbackUser;
-      return true;
+      throw new UnauthorizedException('请先登录');
     }
 
     request.session = session;

@@ -327,12 +327,6 @@ export class AuthService {
   }
 
   async logout(request: SessionRequest, response: SessionResponse) {
-    if (isDevAuthFallbackEnabled()) {
-      return {
-        message: '已退出登录'
-      };
-    }
-
     const session = await Session.getSession(request, response, {
       sessionRequired: false
     });

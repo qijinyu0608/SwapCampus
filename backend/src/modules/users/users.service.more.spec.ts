@@ -382,4 +382,86 @@ describe('UsersService additional coverage', () => {
     expect(outboxService.publishSellerSearchEvent).toHaveBeenCalled();
     expect(outboxService.publishGovernanceEvent).toHaveBeenCalled();
   });
+
+  it('allows keeping an 8-digit student id and no avatar frame when saving profile', async () => {
+    const { service, tx } = createService();
+    jest.spyOn(EmailPassword, 'updateEmailOrPassword').mockResolvedValue({
+      status: 'OK'
+    } as any);
+    tx.user.findUnique.mockResolvedValue({
+      id: 11,
+      supertokensUserId: 'st-11',
+      studentId: '20260001',
+      displayName: '用户A',
+      email: 'user@example.com',
+      avatarUrl: null,
+      avatarFrame: null,
+      role: UserRole.USER,
+      creditScore: 92,
+      verificationStatus: VerificationStatus.APPROVED,
+      accountStatus: AccountStatus.ACTIVE,
+      verification: { realName: '用户A', college: '信息学院', graduationYear: 2028, phone: '13800138000' }
+    });
+    tx.creditRedeemOrder.findFirst.mockResolvedValue(null);
+    tx.user.update.mockResolvedValue({
+      id: 11,
+      studentId: '20260001',
+      displayName: '用户A',
+      email: 'user@example.com',
+      avatarUrl: null,
+      avatarFrame: null,
+      role: UserRole.USER,
+      creditScore: 92,
+      verificationStatus: VerificationStatus.APPROVED,
+      accountStatus: AccountStatus.ACTIVE,
+      verification: { realName: '用户A', college: '信息学院', graduationYear: 2028, phone: '13800138000' }
+    });
+
+    const updated = await service.updateProfile(11, {
+      displayName: '用户A',
+      studentId: '20260001',
+      email: 'user@example.com',
+      realName: '用户A',
+      college: '信息学院',
+      graduationYear: 2028,
+      phone: '13800138000',
+      avatarFrame: 'none'
+    }, currentUser);
+
+    expect(updated.studentId).toBe('20260001');
+    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        studentId: '20260001',
+        avatarFrame: null
+      })
+    }));
+  });
+
+  it('rejects only truly invalid student id lengths during profile update', async () => {
+    const { service, tx } = createService();
+    tx.user.findUnique.mockResolvedValue({
+      id: 11,
+      supertokensUserId: 'st-11',
+      studentId: '20260001',
+      displayName: '用户A',
+      email: 'user@example.com',
+      avatarUrl: null,
+      avatarFrame: null,
+      role: UserRole.USER,
+      creditScore: 92,
+      verificationStatus: VerificationStatus.APPROVED,
+      accountStatus: AccountStatus.ACTIVE,
+      verification: { realName: '用户A', college: '信息学院', graduationYear: 2028, phone: '13800138000' }
+    });
+
+    await expect(service.updateProfile(11, {
+      displayName: '用户A',
+      studentId: '2026000',
+      email: 'user@example.com',
+      realName: '用户A',
+      college: '信息学院',
+      graduationYear: 2028,
+      phone: '13800138000'
+    }, currentUser)).rejects.toThrow('学号必须为 8 到 9 位数字');
+  });
 });

@@ -1,5 +1,5 @@
 import { AccountStatus, UserRole, VerificationStatus } from '@prisma/client';
-import SuperTokens, { convertToRecipeUserId, listUsersByAccountInfo } from 'supertokens-node';
+import SuperTokens, { convertToRecipeUserId, getUser, listUsersByAccountInfo } from 'supertokens-node';
 import EmailPassword from 'supertokens-node/recipe/emailpassword';
 import UserRoles from 'supertokens-node/recipe/userroles';
 import type { PrismaClient } from '@prisma/client';
@@ -25,6 +25,23 @@ let roleMutationsUnavailable = false;
 
 function isPlaceholderUserId(value?: string | null) {
   return !value || value.startsWith('seed-') || value.startsWith('local-');
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function superTokensUserMatchesEmail(user: Awaited<ReturnType<typeof getUser>> | undefined, email: string) {
+  if (!user) {
+    return false;
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (user.emails.some((value) => normalizeEmail(value) === normalizedEmail)) {
+    return true;
+  }
+
+  return user.loginMethods.some((loginMethod) => normalizeEmail(loginMethod.email ?? '') === normalizedEmail);
 }
 
 function normalizeRole(role: UserRole) {
@@ -73,31 +90,43 @@ export async function ensureSuperTokensRoles() {
 export async function syncSuperTokensUser(prisma: PrismaClient, input: SyncSuperTokensUserInput) {
   ensureSuperTokensInit();
 
-  const email = input.email.trim().toLowerCase();
+  const email = normalizeEmail(input.email);
   const existing = await prisma.user.findUnique({
     where: { email }
   });
 
   let supertokensUserId = isPlaceholderUserId(existing?.supertokensUserId) ? null : existing?.supertokensUserId ?? null;
 
-  if (!supertokensUserId) {
-    try {
-      const signUpResult = await EmailPassword.signUp(DEFAULT_TENANT_ID, email, input.password);
-      if (signUpResult.status === 'OK') {
-        supertokensUserId = signUpResult.user.id;
-      } else if (signUpResult.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
-        const userByEmail = await listUsersByAccountInfo(DEFAULT_TENANT_ID, {
-          email
+  async function createOrReuseSuperTokensUser() {
+    const signUpResult = await EmailPassword.signUp(DEFAULT_TENANT_ID, email, input.password);
+    if (signUpResult.status === 'OK') {
+      return signUpResult.user.id;
+    }
+
+    if (signUpResult.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
+      const userByEmail = await listUsersByAccountInfo(DEFAULT_TENANT_ID, {
+        email
+      });
+      const matchedUserId = userByEmail[0]?.id ?? null;
+      if (matchedUserId) {
+        await EmailPassword.updateEmailOrPassword({
+          recipeUserId: convertToRecipeUserId(matchedUserId),
+          email,
+          password: input.password,
+          userContext: {}
         });
-        supertokensUserId = userByEmail[0]?.id ?? null;
-        if (supertokensUserId) {
-          await EmailPassword.updateEmailOrPassword({
-            recipeUserId: convertToRecipeUserId(supertokensUserId),
-            email,
-            password: input.password,
-            userContext: {}
-          });
-        }
+      }
+      return matchedUserId;
+    }
+
+    return null;
+  }
+
+  if (supertokensUserId) {
+    try {
+      const linkedUser = await getUser(supertokensUserId);
+      if (!superTokensUserMatchesEmail(linkedUser, email)) {
+        supertokensUserId = null;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -105,7 +134,9 @@ export async function syncSuperTokensUser(prisma: PrismaClient, input: SyncSuper
         throw error;
       }
     }
-  } else {
+  }
+
+  if (supertokensUserId) {
     try {
       const result = await EmailPassword.updateEmailOrPassword({
         recipeUserId: convertToRecipeUserId(supertokensUserId),
@@ -114,26 +145,20 @@ export async function syncSuperTokensUser(prisma: PrismaClient, input: SyncSuper
         userContext: {}
       });
 
-      if (result.status === 'UNKNOWN_USER_ID_ERROR') {
+      if (result.status !== 'OK') {
         supertokensUserId = null;
-        const signUpResult = await EmailPassword.signUp(DEFAULT_TENANT_ID, email, input.password);
-        if (signUpResult.status === 'OK') {
-          supertokensUserId = signUpResult.user.id;
-        } else if (signUpResult.status === 'EMAIL_ALREADY_EXISTS_ERROR') {
-          const userByEmail = await listUsersByAccountInfo(DEFAULT_TENANT_ID, {
-            email
-          });
-          supertokensUserId = userByEmail[0]?.id ?? null;
-          if (supertokensUserId) {
-            await EmailPassword.updateEmailOrPassword({
-              recipeUserId: convertToRecipeUserId(supertokensUserId),
-              email,
-              password: input.password,
-              userContext: {}
-            });
-          }
-        }
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('No SuperTokens core available to query')) {
+        throw error;
+      }
+    }
+  }
+
+  if (!supertokensUserId) {
+    try {
+      supertokensUserId = await createOrReuseSuperTokensUser();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes('No SuperTokens core available to query')) {

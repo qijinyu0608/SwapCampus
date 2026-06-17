@@ -13,7 +13,7 @@ import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordi
 import { CSS } from '@dnd-kit/utilities';
 import { PlusOutlined } from '@ant-design/icons';
 import { Button, message as antMessage } from 'antd';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { ImageCropUploadModal } from '../image-upload';
 import { SectionHeader } from '../layout';
 
@@ -202,7 +202,6 @@ export function PublishImageManager({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [activeImageKey, setActiveImageKey] = useState<string | null>(null);
   const [dragOverlaySize, setDragOverlaySize] = useState<DragOverlaySize | null>(null);
-  const itemsRef = useRef<PublishImageItem[]>([]);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -213,18 +212,6 @@ export function PublishImageManager({
       coordinateGetter: sortableKeyboardCoordinates
     })
   );
-
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-
-  useEffect(() => () => {
-    itemsRef.current.forEach((item) => {
-      if (item.previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(item.previewUrl);
-      }
-    });
-  }, []);
 
   async function handleImageConfirm(file: File, previewUrl: string) {
     if (items.length >= maxImages) {

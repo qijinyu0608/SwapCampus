@@ -19,6 +19,39 @@ describe('resolveOptionalAuthUser', () => {
     await expect(resolveOptionalAuthUser(prisma, { user: { id: 7 } } as any)).resolves.toEqual({ id: 7 });
   });
 
+  it('prefers the dev auth fallback user over the session payload when the header is present', async () => {
+    process.env.ENABLE_DEV_AUTH_FALLBACK = 'true';
+    (Session.getSession as jest.Mock).mockResolvedValue({
+      getAccessTokenPayload: () => ({
+        userId: 2,
+        studentId: '202600002',
+        displayName: 'Alice',
+        email: 'alice@example.com',
+        role: UserRole.USER
+      }),
+      getUserId: () => 'supertokens-user'
+    });
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 94,
+          studentId: 'admin',
+          displayName: 'ADMIN',
+          email: 'admin@swapcampus.local',
+          avatarUrl: null,
+          role: UserRole.ADMIN,
+          accountStatus: 'ACTIVE'
+        })
+      }
+    } as any;
+
+    await expect(resolveOptionalAuthUser(prisma, { headers: { 'x-dev-auth-user-id': '94' } } as any, {} as any)).resolves.toEqual(expect.objectContaining({
+      id: 94,
+      role: UserRole.ADMIN,
+      authSource: 'dev-fallback'
+    }));
+  });
+
   it('resolves session payload when available', async () => {
     (Session.getSession as jest.Mock).mockResolvedValue({
       getAccessTokenPayload: () => ({

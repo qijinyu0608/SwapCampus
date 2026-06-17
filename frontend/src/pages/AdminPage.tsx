@@ -1,13 +1,12 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Image, Modal, Space, Tabs, Tag, message } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   PageContainer,
   ProCard,
   ProDescriptions,
   ProTable,
   StatisticCard,
-  type ActionType,
   type ProColumns
 } from '@ant-design/pro-components';
 import { BJFU_COLLEGES } from '../constants/colleges';
@@ -212,7 +211,7 @@ export function AdminPage() {
   const [servicePreview, setServicePreview] = useState<AdminCampusServicePreview | null>(null);
   const [productPreviewLoading, setProductPreviewLoading] = useState(false);
   const [servicePreviewLoading, setServicePreviewLoading] = useState(false);
-  const userActionRef = useRef<ActionType>();
+  const [tableRefreshToken, setTableRefreshToken] = useState(0);
   const resolutionNote = '已核查处理';
 
   const productStatusValueEnum = useMemo(
@@ -313,7 +312,7 @@ export function AdminPage() {
 
   async function refreshDashboard() {
     await Promise.all([loadOverview(), loadCollections()]);
-    await userActionRef.current?.reload();
+    setTableRefreshToken((current) => current + 1);
   }
 
   useEffect(() => {
@@ -340,8 +339,8 @@ export function AdminPage() {
 
     try {
       await updateAdminProductStatus(productId, status, { reason: resolutionNote });
-      message.success(status === 'ON_SALE' ? '商品已恢复展示' : '商品已下架');
       await refreshDashboard();
+      message.success(status === 'ON_SALE' ? '商品已恢复展示' : '商品已下架');
     } catch (error) {
       message.error(getApiErrorMessage(error, '操作失败，请稍后重试。'));
     }
@@ -361,8 +360,8 @@ export function AdminPage() {
         status,
         reason: resolutionNote
       });
-      message.success('订单状态已更新');
       await refreshDashboard();
+      message.success('订单状态已更新');
     } catch (error) {
       message.error(getApiErrorMessage(error, '订单状态更新失败，请稍后重试'));
     }
@@ -379,8 +378,8 @@ export function AdminPage() {
         action,
         reason: resolutionNote
       });
-      message.success('校园服务状态已更新');
       await refreshDashboard();
+      message.success('校园服务状态已更新');
     } catch (error) {
       message.error(getApiErrorMessage(error, '校园服务状态更新失败，请稍后重试'));
     }
@@ -402,8 +401,8 @@ export function AdminPage() {
         penaltyLevel,
         nextStatus
       });
-      message.success('举报已处理');
       await refreshDashboard();
+      message.success('举报已处理');
     } catch (error) {
       message.error(getApiErrorMessage(error, '处理失败，请稍后重试'));
     }
@@ -425,8 +424,8 @@ export function AdminPage() {
         penaltyLevel,
         resolutionNote
       });
-      message.success('申诉已处理');
       await refreshDashboard();
+      message.success('申诉已处理');
     } catch (error) {
       message.error(getApiErrorMessage(error, '处理失败，请稍后重试'));
     }
@@ -443,9 +442,8 @@ export function AdminPage() {
         banned,
         reason: resolutionNote
       });
-      message.success(banned ? '用户已封禁' : '用户已恢复');
       await refreshDashboard();
-      await userActionRef.current?.reload();
+      message.success(banned ? '用户已封禁' : '用户已恢复');
     } catch (error) {
       message.error(getApiErrorMessage(error, '用户状态更新失败，请稍后重试'));
     }
@@ -462,8 +460,8 @@ export function AdminPage() {
         status,
         reason: resolutionNote
       });
-      message.success(status === 'APPROVED' ? '审核已通过，信用分已设为 50' : '审核已驳回');
       await refreshDashboard();
+      message.success(status === 'APPROVED' ? '审核已通过，信用分已设为 50' : '审核已驳回');
     } catch (error) {
       message.error(getApiErrorMessage(error, '审核操作失败，请稍后重试'));
     }
@@ -1608,6 +1606,7 @@ export function AdminPage() {
                 label: '注册审核',
                 children: (
                   <ProTable<ModerationUserItem>
+                    key={`registrations-${tableRefreshToken}`}
                     rowKey="id"
                     options={false}
                     toolbar={{
@@ -1638,6 +1637,7 @@ export function AdminPage() {
                         label: `商品 (${overview.recentProducts.length})`,
                         children: (
                           <ProTable<ProductTableRow, ProductFilters>
+                            key={`products-${tableRefreshToken}`}
                             rowKey="id"
                             options={false}
                             toolbar={{
@@ -1660,6 +1660,7 @@ export function AdminPage() {
                         label: `服务 (${campusServices.length})`,
                         children: (
                           <ProTable<AdminCampusServiceItem, ServiceFilters>
+                            key={`services-${tableRefreshToken}`}
                             rowKey="id"
                             options={false}
                             toolbar={{
@@ -1686,6 +1687,7 @@ export function AdminPage() {
                 label: '举报处理',
                 children: (
                   <ProTable<ReportItem, ReportFilters>
+                    key={`reports-${tableRefreshToken}`}
                     rowKey="id"
                     options={false}
                     toolbar={{
@@ -1746,7 +1748,7 @@ export function AdminPage() {
                             />
 
                             <ProTable<ModerationUserItem>
-                              actionRef={userActionRef}
+                              key={`users-${tableRefreshToken}`}
                               rowKey="id"
                               options={false}
                               toolbar={{
@@ -1803,6 +1805,7 @@ export function AdminPage() {
                         label: `订单 (${orders.length})`,
                         children: (
                           <ProTable<AdminOrderItem, OrderFilters>
+                            key={`orders-${tableRefreshToken}`}
                             rowKey="id"
                             options={false}
                             toolbar={{
@@ -1825,6 +1828,7 @@ export function AdminPage() {
                         label: `日志 (${logs.length})`,
                         children: (
                           <ProTable<AuditLogItem, LogFilters>
+                            key={`logs-${tableRefreshToken}`}
                             rowKey="id"
                             options={false}
                             toolbar={{
@@ -1851,6 +1855,7 @@ export function AdminPage() {
                 label: '申诉处理',
                 children: (
                   <ProTable<OrderAppealItem, AppealFilters>
+                    key={`appeals-${tableRefreshToken}`}
                     rowKey="id"
                     options={false}
                     toolbar={{

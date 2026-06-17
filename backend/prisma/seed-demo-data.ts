@@ -477,6 +477,72 @@ const DEMO_ACCOUNTS = [
     creditScore: 77,
     verificationStatus: VerificationStatus.APPROVED,
     accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user43@swapcampus.local',
+    password: 'user43',
+    displayName: '环同学二',
+    studentId: '20260043',
+    college: '环境科学与工程学院',
+    role: UserRole.USER,
+    creditScore: 83,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user44@swapcampus.local',
+    password: 'user44',
+    displayName: '设同学',
+    studentId: '20260044',
+    college: '艺术设计学院',
+    role: UserRole.USER,
+    creditScore: 86,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user45@swapcampus.local',
+    password: 'user45',
+    displayName: '马同学二',
+    studentId: '20260045',
+    college: '马克思主义学院',
+    role: UserRole.USER,
+    creditScore: 68,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user46@swapcampus.local',
+    password: 'user46',
+    displayName: '草同学二',
+    studentId: '20260046',
+    college: '草业与草原学院',
+    role: UserRole.USER,
+    creditScore: 74,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user47@swapcampus.local',
+    password: 'user47',
+    displayName: '林同学二',
+    studentId: '20260047',
+    college: '林学院',
+    role: UserRole.USER,
+    creditScore: 81,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
+  },
+  {
+    email: 'user48@swapcampus.local',
+    password: 'user48',
+    displayName: '外同学二',
+    studentId: '20260048',
+    college: '外语学院',
+    role: UserRole.USER,
+    creditScore: 79,
+    verificationStatus: VerificationStatus.APPROVED,
+    accountStatus: AccountStatus.ACTIVE
   }
 ] as const;
 

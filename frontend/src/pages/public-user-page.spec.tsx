@@ -1227,6 +1227,184 @@ describe('PublicUserPage', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/campus-services/602');
   });
 
+  it('renders a seventh public publisher with errand requests and skill offers', async () => {
+    const user = userEvent.setup();
+    mockedUserId = '132';
+    mocks.fetchUserTrustSummary.mockResolvedValueOnce({
+      id: 132,
+      displayName: '环同学二',
+      avatarUrl: null,
+      avatarFrame: null,
+      trustedBadgeUnlocked: true,
+      creditScore: 83,
+      creditLevel: '优秀',
+      verificationStatus: 'APPROVED',
+      accountStatus: 'ACTIVE',
+      college: '环境科学与工程学院',
+      completedOrders: 3,
+      followerCount: 1,
+      isFollowing: false,
+      averageRating: 4.8
+    });
+    mocks.fetchProducts.mockResolvedValueOnce({
+      items: [],
+      pagination: { page: 1, pageSize: 60, total: 0, totalPages: 0 }
+    });
+    mocks.fetchCampusServiceListings.mockResolvedValueOnce({
+      items: [
+        {
+          id: 701,
+          title: '环工学院实验耗材代拿',
+          description: '实验课前需要把已预约的小件耗材从材料点带到实验楼大厅',
+          price: 6,
+          reward: 6,
+          rewardLabel: '¥6',
+          category: 'ERRAND',
+          categoryLabel: '跑腿服务',
+          intent: 'REQUEST',
+          pattern: 'ONE_TIME',
+          serviceType: { key: 'ERRAND', label: '跑腿服务' },
+          imageUrl: '/service-errand.png',
+          route: { from: '实验耗材领取点', to: '实验楼大厅', label: '实验耗材领取点 -> 实验楼大厅' },
+          deadlineLabel: '今天 16:30',
+          estimatedMinutes: 20,
+          urgency: 'TODAY',
+          urgencyLabel: '今天',
+          fulfillmentMode: 'DROP_OFF',
+          fulfillmentModeLabel: '送达',
+          schedule: {
+            deadlineLabel: '今天 16:30',
+            estimatedMinutes: 20,
+            urgency: 'TODAY',
+            urgencyLabel: '今天',
+            summary: '实验课前送达'
+          },
+          status: 'OPEN',
+          statusLabel: '进行中',
+          tags: ['耗材'],
+          summaryTags: ['实验', '代拿'],
+          participantSummary: { publisherLabel: '发布者', participantLabel: null },
+          viewerContext: { isLoggedIn: true, isPublisher: false, isParticipant: false },
+          actionState: {
+            isPublisher: false,
+            isParticipant: false,
+            canAccept: false,
+            canPause: false,
+            canReopen: false,
+            canEnd: false,
+            canCancel: false,
+            canConfirm: false,
+            canComplete: false,
+            canReject: false
+          },
+          actionLabels: {},
+          latestOrderId: null,
+          actionOrderId: null,
+          activeOrderCount: 0,
+          pendingOrderCount: 0,
+          waitingCompleteOrderCount: 0,
+          endedOrderCount: 0,
+          totalOrderCount: 0,
+          createdAt: '2026-06-16T15:00:00.000Z',
+          updatedAt: '2026-06-16T15:00:00.000Z',
+          conversationId: null,
+          publisher: { id: 132, displayName: '环同学二', college: '环境科学与工程学院', averageRating: 4.8, completedOrders: 3, creditScore: 83, verificationStatus: 'APPROVED', accountStatus: 'ACTIVE' },
+          participant: null
+        },
+        {
+          id: 702,
+          title: '环工学院作品集封面微调',
+          description: '今晚可帮忙做作品集封面、目录页和统一字体层级微调',
+          price: 22,
+          reward: 22,
+          rewardLabel: '¥22',
+          category: 'SKILL',
+          categoryLabel: '技能服务',
+          intent: 'OFFER',
+          pattern: 'REUSABLE',
+          serviceType: { key: 'SKILL', label: '技能服务' },
+          imageUrl: '/service-skill.png',
+          route: { from: '线上', to: '线上', label: '线上沟通后交付' },
+          deadlineLabel: '今晚 22:30',
+          estimatedMinutes: 45,
+          urgency: 'NORMAL',
+          urgencyLabel: '普通',
+          fulfillmentMode: 'FLEXIBLE',
+          fulfillmentModeLabel: '灵活交付',
+          schedule: {
+            deadlineLabel: '今晚 22:30',
+            estimatedMinutes: 45,
+            urgency: 'NORMAL',
+            urgencyLabel: '普通',
+            summary: '今晚可交付一版'
+          },
+          status: 'OPEN',
+          statusLabel: '进行中',
+          tags: ['作品集'],
+          summaryTags: ['封面', '排版'],
+          participantSummary: { publisherLabel: '发布者', participantLabel: null },
+          viewerContext: { isLoggedIn: true, isPublisher: false, isParticipant: false },
+          actionState: {
+            isPublisher: false,
+            isParticipant: false,
+            canAccept: false,
+            canPause: false,
+            canReopen: false,
+            canEnd: false,
+            canCancel: false,
+            canConfirm: false,
+            canComplete: false,
+            canReject: false
+          },
+          actionLabels: {},
+          latestOrderId: null,
+          actionOrderId: null,
+          activeOrderCount: 0,
+          pendingOrderCount: 0,
+          waitingCompleteOrderCount: 0,
+          endedOrderCount: 0,
+          totalOrderCount: 0,
+          createdAt: '2026-06-16T15:10:00.000Z',
+          updatedAt: '2026-06-16T15:10:00.000Z',
+          conversationId: null,
+          publisher: { id: 132, displayName: '环同学二', college: '环境科学与工程学院', averageRating: 4.8, completedOrders: 3, creditScore: 83, verificationStatus: 'APPROVED', accountStatus: 'ACTIVE' },
+          participant: null
+        }
+      ],
+      pagination: { page: 1, pageSize: 60, total: 2, totalPages: 1 }
+    });
+    mocks.fetchUserReceivedReviews.mockResolvedValueOnce({
+      items: [],
+      summary: { total: 0, averageRating: 4.8 }
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicUserPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(mocks.fetchCampusServiceListings).toHaveBeenCalledWith({
+        ownerId: 132,
+        status: 'OPEN',
+        page: 1,
+        pageSize: 60,
+        sort: 'newest'
+      });
+    });
+
+    await user.click(await screen.findByRole('tab', { name: '发布的需求 1' }));
+    expect(screen.getByText('环工学院实验耗材代拿')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /环工学院实验耗材代拿/ }));
+    expect(mocks.navigate).toHaveBeenCalledWith('/campus-services/701');
+
+    await user.click(screen.getByRole('tab', { name: '发布的服务 1' }));
+    expect(screen.getByText('环工学院作品集封面微调')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /环工学院作品集封面微调/ }));
+    expect(mocks.navigate).toHaveBeenCalledWith('/campus-services/702');
+  });
+
   it('shows a missing profile for invalid ids', async () => {
     mockedUserId = '0';
 

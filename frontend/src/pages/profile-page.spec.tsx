@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { ProfilePage } from './ProfilePage';
+import { normalizeProfileFormValues, ProfilePage } from './ProfilePage';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -818,6 +818,30 @@ describe('ProfilePage', () => {
       expect(mocks.cancelCampusServiceOrder).toHaveBeenCalledWith(701);
       expect(mocks.fetchCampusServiceListings.mock.calls.length).toBeGreaterThan(listingsReloadAfterComplete);
       expect(mocks.fetchCampusServiceOrders.mock.calls.length).toBeGreaterThan(ordersReloadAfterComplete);
+    });
+  });
+
+  it('normalizes profile form values before submitting', () => {
+    expect(normalizeProfileFormValues({
+      displayName: '张同学',
+      studentId: ' 20260008 ',
+      email: 'zhang@example.com',
+      realName: ' 张三 ',
+      college: ' 待填写 ',
+      graduationYear: 2028,
+      phone: ' 待填写 ',
+      avatarUrl: ' /avatar.png ',
+      avatarFrame: 'none'
+    })).toEqual({
+      displayName: '张同学',
+      studentId: '20260008',
+      email: 'zhang@example.com',
+      realName: '张三',
+      college: undefined,
+      graduationYear: 2028,
+      phone: undefined,
+      avatarUrl: '/avatar.png',
+      avatarFrame: undefined
     });
   });
 });

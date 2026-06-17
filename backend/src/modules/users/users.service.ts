@@ -84,6 +84,8 @@ const collegeOptions = [
   '国际学院'
 ];
 
+const PROFILE_PLACEHOLDER_TEXT = '待填写';
+
 const campusServiceCategoryLabelMap: Record<CampusServiceCategory, string> = {
   ERRAND: '跑腿',
   AGENCY: '代办',
@@ -908,11 +910,14 @@ export class UsersService {
     const nextStudentId = payload.studentId?.trim();
     const nextEmail = payload.email?.trim();
     const nextRealName = payload.realName?.trim();
-    const nextCollege = payload.college?.trim();
+    const rawNextCollege = payload.college?.trim();
+    const nextCollege = rawNextCollege && rawNextCollege !== PROFILE_PLACEHOLDER_TEXT ? rawNextCollege : undefined;
     const nextGraduationYear = typeof payload.graduationYear === 'number' ? payload.graduationYear : null;
-    const nextPhone = payload.phone?.trim();
+    const rawNextPhone = payload.phone?.trim();
+    const nextPhone = rawNextPhone && rawNextPhone !== PROFILE_PLACEHOLDER_TEXT ? rawNextPhone : undefined;
     const nextAvatarUrl = payload.avatarUrl?.trim();
-    const nextAvatarFrame = payload.avatarFrame?.trim();
+    const rawNextAvatarFrame = payload.avatarFrame?.trim();
+    const nextAvatarFrame = rawNextAvatarFrame && rawNextAvatarFrame !== 'none' ? rawNextAvatarFrame : undefined;
     const nextStudentCardPhotoUrl = payload.studentCardPhotoUrl?.trim();
 
     if (payload.displayName !== undefined && !nextDisplayName) {
@@ -923,8 +928,8 @@ export class UsersService {
       throw new BadRequestException('学号不能为空');
     }
 
-    if (payload.studentId !== undefined && nextStudentId && !/^\d{9}$/.test(nextStudentId)) {
-      throw new BadRequestException('学号必须为 9 位数字');
+    if (payload.studentId !== undefined && nextStudentId && !/^\d{8,9}$/.test(nextStudentId)) {
+      throw new BadRequestException('学号必须为 8 到 9 位数字');
     }
 
     if (payload.email !== undefined) {

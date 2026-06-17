@@ -73,6 +73,36 @@ describe('JwtAuthGuard', () => {
     }));
   });
 
+  it('prefers the dev auth user over an existing session when the header is present', async () => {
+    const request: any = { headers: { 'x-dev-auth-user-id': '94' } };
+    const session = {
+      getAccessTokenPayload: () => ({
+        userId: 95,
+        studentId: '202600001',
+        displayName: 'user01',
+        email: 'user01@swapcampus.local',
+        role: UserRole.USER
+      }),
+      getUserId: () => 'supertokens-user-95'
+    };
+    (resolveDevFallbackUser as jest.Mock).mockResolvedValue({
+      id: 94,
+      displayName: 'ADMIN',
+      email: 'admin@swapcampus.local',
+      role: UserRole.ADMIN,
+      authSource: 'dev-fallback'
+    });
+    (Session.getSession as jest.Mock).mockResolvedValue(session);
+
+    await expect(new JwtAuthGuard({} as any).canActivate(createContext(request))).resolves.toBe(true);
+    expect(request.user).toEqual(expect.objectContaining({
+      id: 94,
+      role: UserRole.ADMIN,
+      authSource: 'dev-fallback'
+    }));
+    expect(request.session).toBeUndefined();
+  });
+
   it('throws when neither a session nor a dev fallback user is available', async () => {
     const request: any = { headers: {} };
     (Session.getSession as jest.Mock).mockRejectedValue(new Error('no session'));

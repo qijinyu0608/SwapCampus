@@ -292,4 +292,32 @@ describe('PublishImageManager', () => {
 
     revokeSpy.mockRestore();
   });
+
+  it('does not revoke blob preview urls just because the manager unmounts', () => {
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const onChange = vi.fn();
+    const onUpload = vi.fn();
+    const { unmount } = render(
+      <PublishImageManager
+        title="商品图片"
+        modalTitle="裁剪图片"
+        items={[
+          {
+            key: 'cover',
+            url: 'https://cdn.example.com/cover.png',
+            previewUrl: 'blob:cover',
+            width: 1200,
+            height: 1200
+          }
+        ]}
+        onChange={onChange}
+        onUpload={onUpload}
+      />
+    );
+
+    unmount();
+
+    expect(revokeSpy).not.toHaveBeenCalled();
+    revokeSpy.mockRestore();
+  });
 });

@@ -14,9 +14,9 @@ describe('demo seed plan', () => {
   it('should build a substantial demo dataset with products and campus services', () => {
     const plan = buildDemoSeedPlan(new Date('2026-06-14T08:00:00.000Z'));
 
-    expect(plan.users.length).toBeGreaterThanOrEqual(43);
+    expect(plan.users.length).toBeGreaterThanOrEqual(49);
     expect(plan.products.length).toBeGreaterThanOrEqual(28);
-    expect(plan.campusServices.length).toBeGreaterThanOrEqual(46);
+    expect(plan.campusServices.length).toBeGreaterThanOrEqual(52);
     expect(plan.productOrders.length).toBeGreaterThanOrEqual(6);
     expect(plan.campusServiceOrders.length).toBeGreaterThanOrEqual(4);
     expect(plan.reports.length).toBeGreaterThanOrEqual(4);

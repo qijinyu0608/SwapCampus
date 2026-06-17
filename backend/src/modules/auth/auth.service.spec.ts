@@ -153,4 +153,25 @@ describe('AuthService', () => {
       }
     });
   });
+
+  it('should revoke an existing session during logout even when dev auth fallback is enabled', async () => {
+    process.env.ENABLE_DEV_AUTH_FALLBACK = 'true';
+    const prisma = {} as any;
+    const authSyncService = {} as any;
+    const mediaService = {} as any;
+    const service = new AuthService(prisma, authSyncService, mediaService);
+    const revokeSession = jest.fn().mockResolvedValue(undefined);
+
+    (Session.getSession as jest.Mock).mockResolvedValue({
+      revokeSession
+    });
+
+    await expect(service.logout({} as any, {} as any)).resolves.toEqual({
+      message: '已退出登录'
+    });
+    expect(Session.getSession).toHaveBeenCalledWith({} as any, {} as any, {
+      sessionRequired: false
+    });
+    expect(revokeSession).toHaveBeenCalled();
+  });
 });

@@ -116,9 +116,32 @@ export function resolveProfileOrdersSection(orderScope: unknown) {
 
 const PRESET_AVATAR_URLS = new Set<string>(AVATAR_OPTIONS.map((item) => item.src));
 const AVATAR_FRAME_KEYS = new Set<AvatarFrameKey | 'none'>(['none', ...AVATAR_FRAMES.map((item) => item.key)]);
+const PROFILE_PLACEHOLDER_TEXT = '待填写';
 
 function isPresetAvatarUrl(url?: string | null) {
   return Boolean(url?.trim()) && PRESET_AVATAR_URLS.has(url!.trim());
+}
+
+export function normalizeProfileFormValues(values: {
+  displayName: string;
+  studentId?: string;
+  email: string;
+  realName: string;
+  college: string;
+  graduationYear: number;
+  phone: string;
+  avatarUrl?: string;
+  avatarFrame?: string;
+}) {
+  return {
+    ...values,
+    studentId: values.studentId?.trim() || undefined,
+    realName: values.realName?.trim(),
+    college: values.college?.trim() === PROFILE_PLACEHOLDER_TEXT ? undefined : values.college?.trim(),
+    phone: values.phone?.trim() === PROFILE_PLACEHOLDER_TEXT ? undefined : values.phone?.trim(),
+    avatarUrl: values.avatarUrl?.trim() || undefined,
+    avatarFrame: values.avatarFrame === 'none' ? undefined : values.avatarFrame
+  };
 }
 
 const activeOrderStatuses = new Set(['PENDING', 'IN_PROGRESS', 'WAITING_REVIEW']);
@@ -1109,9 +1132,11 @@ export function ProfilePage() {
       return;
     }
 
+    const normalizedValues = normalizeProfileFormValues(values);
+
     setProfileSaving(true);
     try {
-      const result = await updateUserProfile(currentUser.id, values);
+      const result = await updateUserProfile(currentUser.id, normalizedValues);
       const trustResult = await fetchUserTrustSummary(currentUser.id);
       setProfile(result);
       setTrustSummary(trustResult);
@@ -1122,8 +1147,11 @@ export function ProfilePage() {
           : 'none'
       );
       form.setFieldsValue({
-        ...values,
+        ...normalizedValues,
         studentId: result.studentId ?? undefined,
+        realName: result.realName,
+        college: result.college,
+        phone: result.phone,
         avatarUrl: result.avatarUrl ?? '',
         avatarFrame: result.avatarFrame ?? 'none'
       });
@@ -1315,8 +1343,8 @@ export function ProfilePage() {
           <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入正确邮箱' }]}>
             <Input placeholder="例如：student@campus.edu.cn" />
           </Form.Item>
-          <Form.Item label="学号" name="studentId" rules={[{ pattern: /^\d{9}$/, message: '学号必须为 9 位数字' }]}>
-            <Input placeholder="选填，例如：202600001" maxLength={9} />
+          <Form.Item label="学号" name="studentId" rules={[{ pattern: /^\d{8,9}$/, message: '学号必须为 8 到 9 位数字' }]}>
+            <Input placeholder="选填，例如：20260001" maxLength={9} />
           </Form.Item>
           <Form.Item label="真实姓名" name="realName" rules={[{ required: true, message: '请输入真实姓名' }]}>
             <Input placeholder="例如：王小明" />

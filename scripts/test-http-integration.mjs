@@ -5,6 +5,13 @@ import { getCampusServiceLocalImage } from './campus-service-local-images.mjs';
 const API_BASE_URL = process.env.SWAPCAMPUS_API_BASE_URL ?? 'http://127.0.0.1:3001/api';
 const LOGIN_ACCOUNT = process.env.SWAPCAMPUS_TEST_ACCOUNT ?? 'user';
 const LOGIN_PASSWORD = process.env.SWAPCAMPUS_TEST_PASSWORD ?? 'user';
+function sanitizePublishTitle(rawTitle) {
+  return rawTitle
+    .replace(/^HTTP 集成主账号拼单/, '校内午餐拼单')
+    .replace(/^HTTP 集成/, '')
+    .trim();
+}
+
 const CAMPUS_SERVICE_TEST_ACCOUNTS = [
   {
     account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_0 ?? 'user',
@@ -489,8 +496,77 @@ const CAMPUS_SERVICE_TEST_ACCOUNTS = [
     priceMode: 'FIXED',
     amount: 2,
     locationNote: '群里确认品类后统一下单'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_44 ?? 'user43@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_44 ?? 'user43',
+    intent: 'REQUEST',
+    category: 'ERRAND',
+    title: `HTTP 集成环工学院实验耗材代拿 ${Date.now()}`,
+    description: '实验课前需要把已预约的小件耗材从材料点带到实验楼。',
+    priceMode: 'FIXED',
+    amount: 6,
+    locationNote: '实验耗材领取点到实验楼大厅'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_45 ?? 'user44@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_45 ?? 'user44',
+    intent: 'OFFER',
+    category: 'SKILL',
+    title: `HTTP 集成设艺学院作品集封面微调 ${Date.now()}`,
+    description: '今晚可帮忙做作品集封面、目录页和统一字体层级微调。',
+    priceMode: 'FIXED',
+    amount: 22,
+    locationNote: '线上沟通后交付'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_46 ?? 'user45@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_46 ?? 'user45',
+    intent: 'OFFER',
+    category: 'EVENT',
+    title: `HTTP 集成马院清晨操场晨跑搭子 ${Date.now()}`,
+    description: '早上可一起晨跑打卡，互相提醒出门和记录配速。',
+    priceMode: 'FREE',
+    amount: 0,
+    locationNote: '操场 / 林荫路'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_47 ?? 'user46@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_47 ?? 'user46',
+    intent: 'REQUEST',
+    category: 'AGENCY',
+    title: `HTTP 集成草业学院温室样本送签 ${Date.now()}`,
+    description: '温室观察记录表和样本登记单需要顺路送到学院老师办公室。',
+    priceMode: 'FIXED',
+    amount: 10,
+    locationNote: '温室实验区到学院办公室'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_48 ?? 'user47@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_48 ?? 'user47',
+    intent: 'OFFER',
+    category: 'HELP',
+    title: `HTTP 集成林学院清晨自习室占位互助 ${Date.now()}`,
+    description: '早上可顺路提醒、占位或一起去教学楼晨读。',
+    priceMode: 'FREE',
+    amount: 0,
+    locationNote: '教学楼 / 自习室'
+  },
+  {
+    account: process.env.SWAPCAMPUS_SERVICE_TEST_ACCOUNT_49 ?? 'user48@swapcampus.local',
+    password: process.env.SWAPCAMPUS_SERVICE_TEST_PASSWORD_49 ?? 'user48',
+    intent: 'OFFER',
+    category: 'TUTORING',
+    title: `HTTP 集成外语学院演讲稿润色陪练 ${Date.now()}`,
+    description: '今晚可线上梳理英语演讲稿表达节奏、停顿和开场衔接。',
+    priceMode: 'FIXED',
+    amount: 24,
+    locationNote: '线上语音或站内消息约时间'
   }
-];
+].map((seed) => ({
+  ...seed,
+  title: sanitizePublishTitle(seed.title)
+}));
 
 function assert(condition, message) {
   if (!condition) {

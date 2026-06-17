@@ -1,5 +1,5 @@
 @startuml
-title SwapCampus Core Subgraph: Campus Service
+title SwapCampus 核心实体子图：校园服务
 
 skinparam shadowing false
 skinparam backgroundColor white
@@ -17,54 +17,54 @@ skinparam nodesep 80
 hide methods
 top to bottom direction
 
-class "User" as User {
-  +id
-  +name
-  +credit
+package "供需信息" {
+  class "用户" as User {
+    +用户ID
+    +昵称
+    +信用分
+  }
+
+  class "服务发布" as CampusServiceListing {
+    +发布ID
+    +意向
+    +标题
+    +金额
+    +状态
+  }
+
+  class "服务图片" as CampusServiceImage {
+    +图片ID
+    +图片地址
+  }
 }
 
-class "Service Listing" as CampusServiceListing {
-  +id
-  +intent
-  +title
-  +amount
-  +status
-}
-
-class "Service Image" as CampusServiceImage {
-  +image
-}
-
-class "Service Order" as CampusServiceOrder {
-  +id
-  +status
-  +note
-  +amount
+package "履约过程" {
+  class "服务订单" as CampusServiceOrder {
+    +订单ID
+    +状态
+    +申请说明
+    +成交金额
+  }
 }
 
 User -[hidden]down- CampusServiceListing
 CampusServiceListing -[hidden]down- CampusServiceOrder
 CampusServiceListing -[hidden]right- CampusServiceImage
 
-User "1" -down- "0..*" CampusServiceListing : publishes / offers
-CampusServiceListing "1" -down- "0..*" CampusServiceOrder : turns into
-User "1" -[norank]right- "0..*" CampusServiceOrder : requester / provider
-CampusServiceListing "1" -right- "0..*" CampusServiceImage : has
+User "1" -down- "0..*" CampusServiceListing : 发布 / 提供
+CampusServiceListing "1" -down- "0..*" CampusServiceOrder : 转化为
+User "1" -[norank]right- "0..*" CampusServiceOrder : 委托方 / 服务方
+CampusServiceListing "1" -right- "0..*" CampusServiceImage : 包含
 
 note right of CampusServiceListing
-The listing is the
-information layer.
-It supports two-way
-supply and demand.
+服务发布属于信息层。
+同时支持双向供需。
 end note
 
 note right of CampusServiceOrder
-The order is the
-fulfillment layer.
-It records matching
-and completion.
-Favorites and behavior
-records are omitted.
+服务订单属于履约层。
+记录匹配与完成过程。
+收藏、行为记录在本图省略。
 end note
 
 @enduml

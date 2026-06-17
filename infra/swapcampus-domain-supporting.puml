@@ -1,5 +1,5 @@
 @startuml
-title SwapCampus Core Subgraph: Supporting Domains
+title SwapCampus 核心实体子图：支撑域
 
 skinparam shadowing false
 skinparam backgroundColor white
@@ -17,62 +17,62 @@ skinparam nodesep 90
 hide methods
 left to right direction
 
-class "User" as User {
-  +id
-  +name
-  +credit
+class "用户" as User {
+  +用户ID
+  +昵称
+  +信用分
 }
 
-package "Messaging and Governance" {
-  class "Conversation" as Conversation {
-    +id
-    +updatedAt
+package "消息与治理" {
+  class "会话" as Conversation {
+    +会话ID
+    +更新时间
   }
 
-  class "Message" as Message {
-    +id
-    +type
-    +content
+  class "消息" as Message {
+    +消息ID
+    +类型
+    +内容
   }
 
-  class "Report" as Report {
-    +id
-    +reason
-    +status
+  class "举报" as Report {
+    +举报ID
+    +原因
+    +状态
   }
 
-  class "Audit Log" as AuditLog {
-    +id
-    +action
-    +target
+  class "审计日志" as AuditLog {
+    +日志ID
+    +动作
+    +目标
   }
 }
 
-package "Credit and Async" {
-  class "Credit Asset" as UserCreditAsset {
-    +userId
-    +availablePoints
-    +totalPoints
+package "信用与异步" {
+  class "积分资产" as UserCreditAsset {
+    +用户ID
+    +可用积分
+    +累计积分
   }
 
-  class "Point Ledger" as CreditPointLedger {
-    +id
-    +change
-    +source
-    +balance
+  class "积分流水" as CreditPointLedger {
+    +流水ID
+    +变动
+    +来源
+    +余额
   }
 
-  class "Redeem Order" as CreditRedeemOrder {
-    +id
-    +reward
-    +status
+  class "兑换订单" as CreditRedeemOrder {
+    +兑换ID
+    +奖励
+    +状态
   }
 
-  class "Outbox Event" as OutboxEvent {
-    +id
-    +topic
-    +type
-    +status
+  class "出站事件" as OutboxEvent {
+    +事件ID
+    +主题
+    +类型
+    +状态
   }
 }
 
@@ -85,38 +85,32 @@ UserCreditAsset -[hidden]down- CreditPointLedger
 UserCreditAsset -[hidden]right- CreditRedeemOrder
 CreditRedeemOrder -[hidden]down- OutboxEvent
 
-User "1" -right- "0..*" Conversation : initiates / joins
-Conversation "1" -down- "0..*" Message : contains
-User "1" -[norank]right- "0..*" Report : reporter / target / handler
-User "0..1" -[norank]right- "0..*" AuditLog : acts in
+User "1" -right- "0..*" Conversation : 发起 / 参与
+Conversation "1" -down- "0..*" Message : 包含
+User "1" -[norank]right- "0..*" Report : 发起 / 被举报 / 处理
+User "0..1" -[norank]right- "0..*" AuditLog : 执行
 
-User "1" -down- "0..1" UserCreditAsset : owns
-UserCreditAsset "1" -down- "0..*" CreditPointLedger : records
-UserCreditAsset "1" -right- "0..*" CreditRedeemOrder : creates
+User "1" -down- "0..1" UserCreditAsset : 持有
+UserCreditAsset "1" -down- "0..*" CreditPointLedger : 生成流水
+UserCreditAsset "1" -right- "0..*" CreditRedeemOrder : 产生兑换单
 
 note bottom of Conversation
-A conversation may be
-attached to a product,
-product order, or
-service order.
-Those context entities
-are omitted here.
+会话可以挂接商品、
+商品订单或服务订单。
+这些上下文实体在本图省略。
 end note
 
 note bottom of Report
-Reports may target
-users, products, or
-service listings.
-Polymorphic targets
-are not expanded here.
+举报既可以指向用户，
+也可以指向商品或服务发布。
+这里不展开多态目标。
 end note
 
 note bottom of OutboxEvent
-Outbox events capture
-asynchronous side effects.
-Products, orders, users,
-and service listings may
-all write here.
+出站事件承接异步副作用。
+商品、订单、用户、
+服务发布等领域事件
+都会写入这里。
 end note
 
 @enduml
